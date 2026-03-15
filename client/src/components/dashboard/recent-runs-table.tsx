@@ -2,12 +2,15 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, Filter, MoreHorizontal, Eye, Target, TestTube, Baseline, RotateCcw } from "lucide-react";
+import { Search, Filter, MoreHorizontal, Eye, Target, TestTube, Baseline, RotateCcw, Zap } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 interface Run {
   id: string;
@@ -40,6 +43,12 @@ export function RecentRunsTable({
   onTestPolicies 
 }: RecentRunsTableProps) {
   const [, setLocation] = useLocation();
+  const [quickViewRunId, setQuickViewRunId] = useState<string | null>(null);
+
+  const { data: quickViewSamples } = useQuery({
+    queryKey: [`/api/runs/${quickViewRunId}/samples`],
+    enabled: !!quickViewRunId,
+  });
 
   const handleViewDetails = (runId: string) => {
     setLocation(`/runs/${runId}`);
@@ -257,47 +266,66 @@ export function RecentRunsTable({
                       </div>
                     </td>
                     <td className="py-4 px-6">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            data-testid={`actions-${run.id}`}
-                          >
-                            <MoreHorizontal className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem 
-                            onClick={() => handleViewDetails(run.id)}
-                            data-testid={`button-view-details-${run.id}`}
-                          >
-                            <Eye className="w-4 h-4 mr-2" />
-                            View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => onRerun?.(run.id)}
-                            data-testid={`button-rerun-${run.id}`}
-                          >
-                            <RotateCcw className="w-4 h-4 mr-2" />
-                            Rerun Evaluation
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => onSetBaseline?.(run.id)}
-                            data-testid={`button-set-baseline-${run.id}`}
-                          >
-                            <Target className="w-4 h-4 mr-2" />
-                            Set as Baseline
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => onTestPolicies?.(run.id)}
-                            data-testid={`button-test-policies-${run.id}`}
-                          >
-                            <TestTube className="w-4 h-4 mr-2" />
-                            Test Policies
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <div className="flex items-center gap-2">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setQuickViewRunId(run.id)}
+                                data-testid={`button-quick-view-${run.id}`}
+                              >
+                                <Zap className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Quick view outputs</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              data-testid={`actions-${run.id}`}
+                            >
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem 
+                              onClick={() => handleViewDetails(run.id)}
+                              data-testid={`button-view-details-${run.id}`}
+                            >
+                              <Eye className="w-4 h-4 mr-2" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => onRerun?.(run.id)}
+                              data-testid={`button-rerun-${run.id}`}
+                            >
+                              <RotateCcw className="w-4 h-4 mr-2" />
+                              Rerun Evaluation
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => onSetBaseline?.(run.id)}
+                              data-testid={`button-set-baseline-${run.id}`}
+                            >
+                              <Target className="w-4 h-4 mr-2" />
+                              Set as Baseline
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => onTestPolicies?.(run.id)}
+                              data-testid={`button-test-policies-${run.id}`}
+                            >
+                              <TestTube className="w-4 h-4 mr-2" />
+                              Test Policies
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -338,6 +366,105 @@ export function RecentRunsTable({
         ) : null}
       </CardContent>
       
+      {/* Quick View Dialog */}
+      <Dialog open={!!quickViewRunId} onOpenChange={(open) => !open && setQuickViewRunId(null)}>
+        <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Quick Output Preview</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {quickViewSamples && quickViewSamples.length > 0 ? (
+              <>
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div className="bg-muted p-3 rounded-lg">
+                    <p className="text-xs text-muted-foreground mb-1">Total Samples</p>
+                    <p className="text-xl font-bold">{quickViewSamples.length}</p>
+                  </div>
+                  <div className="bg-muted p-3 rounded-lg">
+                    <p className="text-xs text-muted-foreground mb-1">With Outputs</p>
+                    <p className="text-xl font-bold">
+                      {quickViewSamples.filter((s: any) => s.actualOutput && s.actualOutput !== 'N/A').length}
+                    </p>
+                  </div>
+                  <div className="bg-muted p-3 rounded-lg">
+                    <p className="text-xs text-muted-foreground mb-1">Average Score</p>
+                    <p className="text-xl font-bold">
+                      {(() => {
+                        const allScores = quickViewSamples.flatMap((s: any) => {
+                          const results = s.evaluationResults || {};
+                          return Object.entries(results)
+                            .filter(([_, v]: [string, any]) => typeof v === 'number' && !['cost', 'latency', 'tokens'].some(k => v.toString().includes(k)))
+                            .map(([_, v]: [string, any]) => v);
+                        });
+                        const avg = allScores.length > 0 
+                          ? allScores.reduce((a: number, b: number) => a + b, 0) / allScores.length 
+                          : 0;
+                        return avg > 0 ? `${(avg * 100).toFixed(1)}%` : 'N/A';
+                      })()}
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-3 max-h-[50vh] overflow-y-auto">
+                  <p className="text-sm font-medium">Sample Outputs (First 5)</p>
+                  {quickViewSamples.slice(0, 5).map((sample: any, idx: number) => {
+                    const actualOutput = sample.actualOutput || 'N/A';
+                    const preview = typeof actualOutput === 'string' 
+                      ? (actualOutput.length > 150 ? actualOutput.substring(0, 150) + '...' : actualOutput)
+                      : JSON.stringify(actualOutput).substring(0, 150) + '...';
+                    
+                    return (
+                      <div key={idx} className="border rounded-lg p-3 bg-muted/50">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium">Sample {sample.sampleIndex + 1}</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setQuickViewRunId(null);
+                              handleViewDetails(sample.runId || quickViewRunId || '');
+                            }}
+                            className="h-7 text-xs"
+                          >
+                            View Full Details
+                          </Button>
+                        </div>
+                        <pre className="text-xs font-mono whitespace-pre-wrap break-words bg-background p-2 rounded border">
+                          {preview}
+                        </pre>
+                      </div>
+                    );
+                  })}
+                  {quickViewSamples.length > 5 && (
+                    <p className="text-xs text-muted-foreground text-center">
+                      + {quickViewSamples.length - 5} more samples. Click "View Full Details" to see all.
+                    </p>
+                  )}
+                </div>
+                <div className="flex justify-end gap-2 pt-4 border-t">
+                  <Button
+                    variant="outline"
+                    onClick={() => setQuickViewRunId(null)}
+                  >
+                    Close
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setQuickViewRunId(null);
+                      if (quickViewRunId) handleViewDetails(quickViewRunId);
+                    }}
+                  >
+                    View All Details
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">Loading sample outputs...</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

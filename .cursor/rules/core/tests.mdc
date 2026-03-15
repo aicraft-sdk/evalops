@@ -1,0 +1,294 @@
+---
+description: Comprehensive testing protocol for unit, integration, and security tests with mandatory coverage requirements
+globs: ["**/*.{ts,tsx,spec.ts,e2e.ts}"]
+alwaysApply: true
+---
+# MDC Rule: Comprehensive Testing Protocol for Apps Platform
+
+## Overview
+
+This MDC rule ensures that every new feature or change is thoroughly tested with unit tests, integration tests, and proper error handling validation. The model must write and run tests until they pass, with a maximum retry limit of 3 attempts. Don't write irrelevant comments like `// Assert` `// Act` or similar ones.
+
+## Testing Requirements
+
+### 1. Mandatory Test Coverage
+
+For every new feature or change, the model MUST:
+
+- **Write unit tests** for all new functions, classes, and modules
+- **Write integration tests** for new API endpoints, gRPC services, or external service interactions
+- **Write error handling tests** for all error scenarios and edge cases
+- **Write validation tests** for input validation and schema compliance
+- **Write security tests** for data redaction, authentication, and authorization
+- **Sonarqube coverage** follow the sonarqube-mcp-testing.mdc rule (.cursor/rules/specialized/sonarqube-mcp-testing.mdc) in order to get a sonarqube scan when available to assure the coverage.
+- **Practices** be sure that you don't use the same string multiple times, create a constant instead to avoid lint issues
+
+### 2. Test Structure Standards
+
+All tests must follow the existing project patterns:
+
+```typescript
+import { Test } from '@nestjs/testing';
+import { createMock } from '@golevelup/ts-jest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from '@jest/globals';
+
+describe('FeatureName', () => {
+  let service: FeatureService;
+  let module: TestingModule;
+
+  beforeAll(async () => {
+    // Global setup
+  });
+
+  afterAll(async () => {
+    // Global cleanup
+    jest.clearAllMocks();
+  });
+
+  beforeEach(async () => {
+    // Test-specific setup
+  });
+
+  afterEach(() => {
+    // Test-specific cleanup
+  });
+
+  describe('Happy Path', () => {
+    it('should handle valid input correctly', () => {
+      // Test implementation
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should handle invalid input gracefully', () => {
+      // Error test implementation
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('should handle boundary conditions', () => {
+      // Edge case test implementation
+    });
+  });
+});
+```
+
+### 3. Test Categories Required
+
+#### Unit Tests (`**/*.spec.ts`)
+
+- Test individual functions and methods in isolation
+- Mock external dependencies using `@golevelup/ts-jest` and `createMock`
+- Test all code paths and branches
+- Validate input/output behavior
+- Test error conditions and exceptions
+- Use proper TypeScript typing with `TestingModule`
+
+#### Integration Tests (`test/integration/*.e2e.ts`)
+
+- Test component interactions
+- Test API endpoints and gRPC services
+- Test external service integrations (Redis, PostgreSQL, SQL Server)
+- Test end-to-end workflows
+- Test configuration loading and validation
+- Use `supertest` for HTTP testing
+- Use `nock` for external API mocking
+
+#### Security Tests
+
+- Test data redaction patterns
+- Test authentication and authorization
+- Test input sanitization
+- Test sensitive data handling
+- Test JWT token validation
+
+### 4. Test Execution Protocol
+
+#### Step 1: Write Tests
+
+1. Create test files following the naming convention: `*.spec.ts` for unit tests, `*.e2e.ts` for integration tests
+2. Write comprehensive test cases covering:
+   - Happy path scenarios
+   - Error conditions
+   - Edge cases
+   - Boundary conditions
+   - Security scenarios
+
+#### Step 2: Run Tests
+
+Execute tests using the project's test commands:
+
+```bash
+# Run unit tests for specific project
+nx test <project-name>
+
+# Run integration tests for specific project
+nx test <project-name> --config=jest.config.e2e.ts
+
+# Run all tests with coverage
+nx test <project-name> --coverage
+
+# Run tests for all affected projects
+nx affected:test
+```
+
+#### Step 3: Retry Logic (Maximum 3 Attempts)
+
+If tests fail:
+
+**Attempt 1**: Fix obvious issues (syntax errors, import problems, basic logic errors)
+**Attempt 2**: Debug and fix test logic, mock setup, or assertion issues
+**Attempt 3**: Comprehensive debugging and refactoring
+
+#### Step 4: Failure Report (After 3 Failed Attempts)
+
+If tests still fail after 3 attempts, provide a detailed failure report:
+
+````markdown
+## Test Failure Report
+
+### Feature/Change Description
+
+[Brief description of what was implemented]
+
+### Test Files Created
+
+- [List all test files created with their purposes]
+
+### Test Execution Results
+
+```bash
+[Paste the complete test output showing failures]
+```
+````
+
+### Failure Analysis
+
+1. **Primary Failures**: [List main test failures]
+2. **Root Causes**: [Analyze why tests are failing]
+3. **Error Patterns**: [Identify common error patterns]
+4. **Dependencies**: [List any missing dependencies or setup issues]
+
+### Debugging Attempts
+
+1. **Attempt 1**: [What was tried and results]
+2. **Attempt 2**: [What was tried and results]
+3. **Attempt 3**: [What was tried and results]
+
+### Recommendations
+
+1. **Immediate Actions**: [What needs to be done to fix tests]
+2. **Code Changes**: [Any code changes needed]
+3. **Test Improvements**: [How tests could be improved]
+4. **Alternative Approaches**: [Alternative testing strategies]
+
+### Test Coverage Summary
+
+- **Unit Tests**: [Number created, coverage percentage]
+- **Integration Tests**: [Number created, coverage percentage]
+- **Security Tests**: [Number created, coverage percentage]
+- **Total Test Cases**: [Total number of test cases written]
+
+
+### 5. Test Quality Standards
+
+#### Test Completeness
+- All public methods must have tests
+- All error paths must be tested
+- All edge cases must be covered
+- All configuration options must be tested
+
+#### Test Reliability
+- Tests must be deterministic (no flaky tests)
+- Tests must be independent (can run in any order)
+- Tests must clean up after themselves
+- Tests must use proper mocking for external dependencies
+
+#### Test Maintainability
+- Tests must be readable and well-documented
+- Tests must use descriptive names
+- Tests must follow the AAA pattern (Arrange, Act, Assert)
+- Tests must be organized logically
+
+### 6. Mock and Test Utilities
+
+#### Required Mocking
+- Mock external API calls using `nock`
+- Mock gRPC services using `@golevelup/ts-jest`
+- Mock database operations (Redis, PostgreSQL, SQL Server)
+- Mock file system operations
+- Mock network requests
+- Mock timers and async operations
+
+#### Test Utilities
+Use existing test utilities and create new ones as needed:
+- Mock data factories using `@faker-js/faker`
+- Test configuration helpers
+- Assertion helpers
+- Setup/teardown utilities
+- Database test helpers
+
+### 7. Project-Specific Testing Patterns
+
+#### NestJS Services
+- Use `Test.createTestingModule()` for service testing
+- Mock dependencies with `createMock` from `@golevelup/ts-jest`
+- Test service methods with proper dependency injection
+- Test error handling and validation
+
+#### gRPC Services
+- Test gRPC controllers and services
+- Mock gRPC clients and servers
+- Test protobuf message handling
+- Test error responses and status codes
+
+#### React Components (UI Projects)
+- Use `@testing-library/react` for component testing
+- Test component rendering and user interactions
+- Test state management and props
+- Test error boundaries and loading states
+
+#### API Endpoints
+- Use `supertest` for HTTP endpoint testing
+- Test request/response handling
+- Test authentication and authorization
+- Test input validation and error responses
+
+### 8. Continuous Integration
+Tests must pass in the CI environment:
+- All tests must pass on clean environment
+- Tests must not depend on external services being available
+- Tests must be fast and efficient
+- Tests must provide clear failure messages
+
+### 9. Documentation Requirements
+For each test file, include:
+- Purpose and scope of tests
+- Dependencies and setup requirements
+- Known limitations or assumptions
+- Examples of usage
+
+## Enforcement
+This rule is MANDATORY for all code changes. The model must:
+1. Never commit code without corresponding tests
+2. Always run tests before considering work complete
+3. Provide detailed failure reports when tests cannot be made to pass
+4. Follow the retry protocol exactly
+5. Maintain test quality standards
+
+## Exceptions
+The only acceptable exceptions are:
+- Documentation-only changes
+- Configuration file changes that don't affect functionality
+- Test file changes themselves
+
+All functional code changes MUST include comprehensive tests.
+
+## Integration
+
+- [sonarqube-mcp-testing.mdc](.cursor/rules/specialized/sonarqube-mcp-testing.mdc) - SonarQube testing integration
+- [sonarqube-scan-relationship-rule.mdc](.cursor/rules/specialized/sonarqube-scan-relationship-rule.mdc) - Scan relationships
+- [nestjs.mdc](.cursor/rules/language-framework/nestjs.mdc) - NestJS testing patterns
+- [react-patterns.mdc](.cursor/rules/language-framework/react-patterns.mdc) - React testing patterns
+- [general.mdc](.cursor/rules/core/general.mdc) - General testing requirements
+- [mcp.mdc](.cursor/rules/core/mcp.mdc) - MCP server tools for testing

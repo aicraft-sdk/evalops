@@ -1,0 +1,74 @@
+---
+description: Async/await, Promise, and RxJS patterns and best practices
+globs: ["**/*.ts"]
+alwaysApply: false
+---
+
+# Async Patterns
+
+## Overview
+Best practices for async/await, Promise patterns, RxJS operators, and error handling in async code.
+
+## Async/Await
+
+**✅ CORRECT - Proper error handling:**
+```typescript
+async getUser(userId: string) {
+  try {
+    const user = await this.repository.findById(userId);
+    return user;
+  } catch (error) {
+    this.logger.error('Failed to get user', { userId, error });
+    throw error;
+  }
+}
+```
+
+## Promise Patterns
+
+### Parallel Execution
+**✅ CORRECT:**
+```typescript
+const [users, orders] = await Promise.all([
+  this.userService.getUsers(),
+  this.orderService.getOrders(),
+]);
+```
+
+### Sequential with Error Handling
+**✅ CORRECT:**
+```typescript
+try {
+  const user = await this.userService.getUser(userId);
+  const orders = await this.orderService.getOrders(userId);
+  return { user, orders };
+} catch (error) {
+  // Handle error
+}
+```
+
+## RxJS Patterns
+
+### Observable Cleanup
+**✅ CORRECT:**
+```typescript
+private subscription: Subscription;
+
+ngOnInit() {
+  this.subscription = this.dataService.getData().subscribe({
+    next: (data) => this.handleData(data),
+    error: (error) => this.handleError(error),
+  });
+}
+
+ngOnDestroy() {
+  this.subscription?.unsubscribe();
+}
+```
+
+## Integration
+
+- [performance.mdc](.cursor/rules/performance/performance.mdc) - Performance optimization
+- [general.mdc](.cursor/rules/core/general.mdc) - Error handling
+- [caching.mdc](.cursor/rules/data/caching.mdc) - Caching strategies
+- [database.mdc](.cursor/rules/data/database.mdc) - Database patterns

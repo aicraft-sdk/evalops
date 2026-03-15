@@ -1,0 +1,49 @@
+---
+description: Structured logging standards with data redaction and context propagation
+globs: ["**/*.{ts,tsx}"]
+alwaysApply: true
+---
+
+# Logging Standards
+
+## Overview
+Structured logging standards, data redaction patterns, and context propagation.
+
+## Log Levels
+- Debug: Detailed debugging (development only)
+- Info: General informational messages
+- Warn: Warning messages
+- Error: Error events with stack traces
+
+## Structured Logging
+**✅ CORRECT:**
+```typescript
+this.logger.log({
+  message: 'Fetching user',
+  userId,
+  operation: 'getUser',
+});
+```
+
+## Context Propagation
+**✅ CORRECT:**
+```typescript
+this.logger.log({
+  requestId: this.cls.get('requestId'),
+  userId: this.cls.get('userId'),
+});
+```
+
+## Data Redaction
+**✅ CORRECT:**
+```typescript
+import { redactSensitiveData } from '@microservices-shared/logging';
+this.logger.info('User login', {
+  email: redactSensitiveData(user.email),
+  password: '[REDACTED]',
+});
+```
+
+## Integration
+- [security.mdc](.cursor/rules/core/security.mdc)
+- [general.mdc](.cursor/rules/core/general.mdc)

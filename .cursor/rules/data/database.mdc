@@ -1,0 +1,66 @@
+---
+description: Database query optimization, transaction management, and repository patterns
+globs: ["**/*.{service,repository,entity,module}.ts"]
+alwaysApply: false
+---
+
+# Database Patterns
+
+## Overview
+Database query optimization, transaction management, migration patterns, and repository organization.
+
+## Query Optimization
+
+### Indexes
+**✅ CORRECT - Use indexes for frequently queried fields:**
+```typescript
+@Index(['email'])
+@Index(['createdAt'])
+export class User {
+  @Column()
+  email: string;
+  
+  @Column()
+  createdAt: Date;
+}
+```
+
+### Avoid N+1 Queries
+**✅ CORRECT - Use joins:**
+```typescript
+const users = await this.repository.find({
+  relations: ['orders', 'profile'],
+});
+```
+
+## Transaction Management
+
+**✅ CORRECT - Use transactions:**
+```typescript
+await this.dataSource.transaction(async (manager) => {
+  await manager.save(user);
+  await manager.save(order);
+});
+```
+
+## Error Handling
+
+**✅ CORRECT - Use handleDatabaseError:**
+```typescript
+import { handleDatabaseError } from '@microservices-shared/common/exceptions';
+
+try {
+  const result = await this.repository.find();
+  timer.stop(PredefinedTags.SUCCESS);
+  return result;
+} catch (error) {
+  handleDatabaseError(error, timer, this.logger, 'Query failed', 'Database error');
+}
+```
+
+## Integration
+
+- [performance.mdc](.cursor/rules/performance/performance.mdc) - Query optimization
+- [general.mdc](.cursor/rules/core/general.mdc) - Error handling
+- [caching.mdc](.cursor/rules/data/caching.mdc) - Caching strategies
+- [nestjs.mdc](.cursor/rules/language-framework/nestjs.mdc) - NestJS patterns

@@ -1,0 +1,145 @@
+---
+description: Central index of all Cursor rules with descriptions and when to apply
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# Cursor Rules Index
+
+## Overview
+This is the central index of all Cursor rules. Each rule is documented with its purpose and when it applies.
+
+## Core Rules (Always Applied)
+
+### [general.mdc](.cursor/rules/core/general.mdc)
+Core coding principles including file structure, SOLID principles, error handling, and general best practices.
+- **Applies to**: All files (`**/*`)
+- **Always applied**: Yes
+
+### [security.mdc](.cursor/rules/core/security.mdc)
+Security best practices for authentication, authorization, secrets management, and data protection.
+- **Applies to**: TypeScript/TSX files (`**/*.{ts,tsx}`)
+- **Always applied**: Yes
+
+### [logging.mdc](.cursor/rules/core/logging.mdc)
+Structured logging standards with data redaction and context propagation.
+- **Applies to**: TypeScript/TSX files (`**/*.{ts,tsx}`)
+- **Always applied**: Yes
+
+### [mcp.mdc](.cursor/rules/core/mcp.mdc)
+MCP server priority rules and feature validation guidelines, particularly for Tilt integration.
+- **Applies to**: All files (`**/*`)
+- **Always applied**: Yes
+
+## Testing Rules
+
+### [tests.mdc](.cursor/rules/core/tests.mdc)
+Comprehensive testing protocol for unit, integration, and security tests with mandatory coverage requirements.
+- **Applies to**: TypeScript and test files (`**/*.{ts,tsx,spec.ts,e2e.ts}`)
+- **Always applied**: Yes
+
+### [sonarqube-mcp-testing.mdc](.cursor/rules/specialized/sonarqube-mcp-testing.mdc)
+SonarQube integration with testing workflow via MCP server.
+- **Applies to**: All files
+- **Always applied**: No
+
+### [sonarqube-scan-relationship-rule.mdc](.cursor/rules/specialized/sonarqube-scan-relationship-rule.mdc)
+Git-to-SonarQube scan relationships and access patterns for PRs, branches, and commits.
+- **Applies to**: TypeScript/TSX files (`**/*.{ts,tsx}`)
+- **Always applied**: No
+
+## Language-Specific Rules
+
+### [typescript.mdc](.cursor/rules/language-framework/typescript.mdc)
+TypeScript coding conventions and best practices.
+- **Applies to**: TypeScript/TSX files (`**/*.{ts,tsx}`)
+- **Always applied**: No
+
+### [nestjs.mdc](.cursor/rules/language-framework/nestjs.mdc)
+NestJS-specific patterns and architecture guidelines for modules, controllers, services, and testing.
+- **Applies to**: NestJS files (`**/*.{module,controller,service,guard,interceptor,filter}.ts`)
+- **Always applied**: No
+
+## API and Communication Rules
+
+### [api-design.mdc](.cursor/rules/api/api-design.mdc)
+REST and gRPC API design patterns and conventions.
+- **Applies to**: API-related TypeScript files (`**/*.{controller,service,module,gateway}.ts`)
+- **Always applied**: No
+
+### [grpc-patterns.mdc](.cursor/rules/api/grpc-patterns.mdc)
+gRPC service patterns, error handling, and proto definitions.
+- **Applies to**: Proto and TypeScript files (`**/*.{proto,ts}`)
+- **Always applied**: No
+
+## Performance and Optimization Rules
+
+### [performance.mdc](.cursor/rules/performance/performance.mdc)
+Performance optimization strategies for database, caching, and async operations.
+- **Applies to**: TypeScript files (`**/*.ts`)
+- **Always applied**: No
+
+### [token-optimization.mdc](.cursor/rules/performance/token-optimization.mdc)
+Token optimization strategies including model selection, tool optimization, MCP replacement, and modular codebase patterns.
+- **Applies to**: All files (`**/*`)
+- **Always applied**: Yes
+
+### [database.mdc](.cursor/rules/data/database.mdc)
+Database query optimization, transaction management, and repository patterns.
+- **Applies to**: Database-related TypeScript files (`**/*.{service,repository,entity,module}.ts`)
+- **Always applied**: No
+
+### [caching.mdc](.cursor/rules/data/caching.mdc)
+Caching strategies for Redis and in-memory caching.
+- **Applies to**: Service and module files (`**/*.{service,module}.ts`)
+- **Always applied**: No
+
+### [async-patterns.mdc](.cursor/rules/data/async-patterns.mdc)
+Async/await, Promise, and RxJS patterns and best practices.
+- **Applies to**: TypeScript files (`**/*.ts`)
+- **Always applied**: No
+
+## Frontend Rules
+
+### [react-patterns.mdc](.cursor/rules/language-framework/react-patterns.mdc)
+React-specific patterns for components, hooks, and state management.
+- **Applies to**: TSX/JSX files (`**/*.{tsx,jsx}`)
+- **Always applied**: No
+
+## Workspace Rules
+
+### [nx-rules.mdc](.cursor/rules/core/nx-rules.mdc)
+Nx workspace guidelines and generator workflows for monorepo management.
+- **Applies to**: All files (`**/*`)
+- **Always applied**: Yes
+
+### [git-conventions.mdc](.cursor/rules/specialized/git-conventions.mdc)
+Conventional commits format for Git commit messages.
+- **Applies to**: All files (`**/*`)
+- **Always applied**: No
+
+## Rule Dependencies
+
+### Security and Logging
+- [security.mdc](.cursor/rules/core/security.mdc) ↔ [logging.mdc](.cursor/rules/core/logging.mdc)
+- Both handle data redaction and sensitive information
+
+### API Design
+- [api-design.mdc](.cursor/rules/api/api-design.mdc) ↔ [grpc-patterns.mdc](.cursor/rules/api/grpc-patterns.mdc)
+- Both define API communication patterns
+
+### Performance
+- [performance.mdc](.cursor/rules/performance/performance.mdc) ↔ [token-optimization.mdc](.cursor/rules/performance/token-optimization.mdc) ↔ [database.mdc](.cursor/rules/data/database.mdc) ↔ [caching.mdc](.cursor/rules/data/caching.mdc)
+- All related to performance optimization
+
+## Usage
+
+Rules are automatically applied based on their `alwaysApply` setting and `globs` patterns. Rules with `alwaysApply: true` are always active. Rules with `alwaysApply: false` are applied when their file patterns match.
+
+## Contributing
+
+When adding new rules:
+1. Add proper frontmatter with description, globs, and alwaysApply
+2. Include integration section linking to related rules
+3. Update this index
+4. Follow the rule structure template in the plan

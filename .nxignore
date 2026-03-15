@@ -1,0 +1,14 @@
+node_modules
+dist
+build
+.nx
+coverage
+*.log
+.env
+.env.local
+.env.*.local
+.DS_Store
+*.swp
+*.swo
+*~
+

@@ -1,0 +1,27 @@
+{
+  "name": "evaluators",
+  "projectType": "library",
+  "sourceRoot": "libs/evaluators/src",
+  "prefix": "evalops",
+  "tags": ["scope:shared", "type:lib", "domain:evaluation"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/evaluators",
+        "main": "libs/evaluators/src/index.ts",
+        "tsConfig": "libs/evaluators/tsconfig.lib.json"
+      }
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "options": {
+        "jestConfig": "libs/evaluators/jest.config.cts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

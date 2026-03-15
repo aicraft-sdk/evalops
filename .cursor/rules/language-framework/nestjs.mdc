@@ -1,0 +1,54 @@
+---
+description: NestJS-specific patterns and architecture guidelines for modules, controllers, services, and testing
+globs: ["**/*.{module,controller,service,guard,interceptor,filter}.ts"]
+alwaysApply: false
+---
+
+# NestJS Patterns
+
+## Overview
+NestJS-specific patterns and architecture guidelines for modules, controllers, services, guards, interceptors, filters, and testing. This rule complements TypeScript general guidelines with NestJS framework-specific conventions.
+
+## TypeScript General Guidelines
+[typescript.mdc](mdc:.cursor/rules/language-framework/typescript.mdc)
+
+## Specific to NestJS
+
+### Basic Principles
+
+- Use modular architecture
+- Encapsulate the API in modules.
+  - One module per main domain/route.
+  - One controller for its route.
+  - And other controllers for secondary routes.
+  - A models folder with data types.
+  - DTOs validated with class-validator for inputs.
+  - Declare simple types for outputs.
+  - A services module with business logic and persistence.
+  - Entities with MikroORM for data persistence.
+  - One service per entity.
+- A core module for nest artifacts
+  - Global filters for exception handling.
+  - Global middlewares for request management.
+  - Guards for permission management.
+  - Interceptors for request management.
+- A shared module for services shared between modules.
+  - Utilities
+  - Shared business logic
+
+### Testing
+
+- Use the standard Jest framework for testing.
+- Write tests for each controller and service.
+- Write end to end tests for each api module.
+- Add a admin/test method to each controller as a smoke test.
+
+## Integration
+
+- [typescript.mdc](.cursor/rules/language-framework/typescript.mdc) - TypeScript conventions
+- [api-design.mdc](.cursor/rules/api/api-design.mdc) - API design patterns
+- [grpc-patterns.mdc](.cursor/rules/api/grpc-patterns.mdc) - gRPC service patterns
+- [database.mdc](.cursor/rules/data/database.mdc) - Database patterns
+- [tests.mdc](.cursor/rules/core/tests.mdc) - Testing protocol
+- [security.mdc](.cursor/rules/core/security.mdc) - Security practices
+- [logging.mdc](.cursor/rules/core/logging.mdc) - Logging standards

@@ -1,0 +1,163 @@
+# EvalOps API Documentation for LLMs
+
+This file provides machine-readable information about the EvalOps API for AI agents.
+
+## API Overview
+
+EvalOps is a microservices platform built as an Nx monorepo with seven NestJS microservices plus a React frontend.
+
+## API Gateway
+
+**Base URL**: `http://localhost:3000/api` (development)  
+**Swagger Docs**: `http://localhost:3000/api/docs`
+
+All requests go through the API Gateway, which routes by path prefix:
+
+- `/api/auth/*` → auth-service (port 3001)
+- `/api/core/*` → core-service (port 3002)
+- `/api/evaluation/*` → evaluation-service (port 3003)
+- `/api/integration/*` → integration-service (port 3004)
+- `/api/analytics/*` → analytics-service (port 3005)
+
+## Authentication
+
+All endpoints (except `/api/auth/login`, `/api/auth/register`, `/api/auth/logout`, and health checks) require a JWT Bearer token.
+
+**Get token:**
+```bash
+POST /api/auth/login
+Content-Type: application/json
+{
+  "email": "user@example.com",
+  "password": "password"
+}
+```
+
+**Use token:**
+```bash
+Authorization: Bearer <token>
+```
+
+## Service Endpoints
+
+### Auth Service (port 3001)
+- `POST /api/auth/register` - Register new user
+- `POST /api/auth/login` - Login and get JWT token
+- `GET /api/auth/user` - Get current user
+- `GET|POST /api/auth/users` - User management (admin only)
+- `GET|POST /api/auth/organizations` - Organization management
+
+**Swagger**: `http://localhost:3001/api/docs`
+
+### Core Service (port 3002)
+- `GET /api/core/prompts` - List prompts
+- `POST /api/core/prompts` - Create prompt
+- `GET /api/core/datasets` - List datasets
+- `POST /api/core/datasets` - Create dataset
+- `GET /api/core/agents` - List agents (AgentMD format)
+- `POST /api/core/agents` - Create agent
+- `GET /api/core/eval-specs` - List evaluation specs
+- `POST /api/core/eval-specs` - Create evaluation spec
+
+**Swagger**: `http://localhost:3002/api/docs`
+
+### Evaluation Service (port 3003)
+- `POST /api/evaluation/runs` - Create evaluation run
+- `GET /api/evaluation/runs/:id` - Get run details
+- `POST /api/evaluation/ingestion/events` - Ingest trace events (rate-limited: 100/min)
+- `GET /api/evaluation/policies` - List policies
+- `POST /api/evaluation/policies` - Create policy
+
+**Swagger**: `http://localhost:3003/api/docs`
+
+### Integration Service (port 3004)
+- `GET /api/integration/artifacts/:runId/:file` - Get artifact download URL
+- `POST /api/integration/webhooks` - Create webhook
+- `GET /api/integration/webhooks` - List webhooks
+
+**Swagger**: `http://localhost:3004/api/docs`
+
+### Analytics Service (port 3005)
+- `GET /api/analytics/dashboard` - Dashboard metrics
+- `GET /api/analytics/audit-trail` - Audit trail
+- `GET /api/analytics/cost-analytics` - Cost breakdown
+
+**Swagger**: `http://localhost:3005/api/docs`
+
+## OpenAPI Specifications
+
+Each service exposes OpenAPI/Swagger documentation at `/api/docs`:
+
+- API Gateway: http://localhost:3000/api/docs
+- Auth Service: http://localhost:3001/api/docs
+- Core Service: http://localhost:3002/api/docs
+- Evaluation Service: http://localhost:3003/api/docs
+- Integration Service: http://localhost:3004/api/docs
+- Analytics Service: http://localhost:3005/api/docs
+
+To get OpenAPI JSON spec:
+- Add `/api/docs-json` to any service URL (e.g., `http://localhost:3000/api/docs-json`)
+
+## Data Models
+
+### Evaluation Run
+```typescript
+{
+  id: string;
+  evalSpecId: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  results: {
+    passRate: number;
+    scores: Record<string, number>;
+  };
+  costUsd: number;
+  traceEvents?: any[]; // JSONB, max 10MB
+}
+```
+
+### Agent (AgentMD format)
+```yaml
+---
+name: my-agent
+version: "1.0.0"
+description: Agent description
+model:
+  provider: openai
+  name: gpt-4o
+  temperature: 0.1
+tools:
+  - tool1
+  - tool2
+---
+System prompt here...
+```
+
+### Evaluation Spec
+```typescript
+{
+  id: string;
+  name: string;
+  datasetId: string;
+  promptId?: string;
+  agentId?: string;
+  evaluators: Array<{
+    type: 'exact' | 'llm_judge' | 'rule';
+    config: any;
+  }>;
+}
+```
+
+## Rate Limiting
+
+- Trace ingestion endpoint: 100 requests per user per minute
+- Other endpoints: No rate limiting (handled by gateway)
+
+## Multi-Tenant Isolation
+
+All data is isolated by organization via Row Level Security (RLS). The `TenantInterceptor` automatically sets `app.org_id` from the JWT payload.
+
+## Related Documentation
+
+- [AGENTS.md](AGENTS.md) - Agent instructions for this repository
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - Detailed architecture
+- [README.md](README.md) - Getting started guide

@@ -1,0 +1,27 @@
+{
+  "name": "agent-md",
+  "projectType": "library",
+  "sourceRoot": "libs/agent-md/src",
+  "prefix": "evalops",
+  "tags": ["scope:shared", "type:lib", "domain:agent"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/agent-md",
+        "main": "libs/agent-md/src/index.ts",
+        "tsConfig": "libs/agent-md/tsconfig.lib.json"
+      }
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "options": {
+        "jestConfig": "libs/agent-md/jest.config.cts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

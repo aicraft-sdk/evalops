@@ -1,0 +1,135 @@
+---
+description: Performance optimization strategies for database, caching, and async operations
+globs: ["**/*.ts"]
+alwaysApply: false
+---
+
+# Performance Optimization
+
+## Overview
+Performance optimization strategies for database queries, caching, async operations, and memory management.
+
+## Database Optimization
+
+### Query Optimization
+**✅ CORRECT - Use indexes and avoid N+1:**
+```typescript
+// Use joins instead of multiple queries
+const users = await this.repository.find({
+  relations: ['orders'], // Eager load
+});
+```
+
+**❌ WRONG - N+1 query problem:**
+```typescript
+// ❌ WRONG - Multiple queries
+const users = await this.repository.find();
+for (const user of users) {
+  user.orders = await this.orderRepository.find({ userId: user.id });
+}
+```
+
+## Caching
+
+### Redis Caching
+**✅ CORRECT - Cache expensive operations:**
+```typescript
+async getUser(userId: string) {
+  const cacheKey = `user:${userId}`;
+  const cached = await this.redis.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+  
+  const user = await this.repository.findById(userId);
+  await this.redis.setex(cacheKey, 3600, JSON.stringify(user));
+  return user;
+}
+```
+
+## Async Operations
+
+### Parallel Execution
+**✅ CORRECT - Execute in parallel:**
+```typescript
+const [users, orders, products] = await Promise.all([
+  this.userService.getUsers(),
+  this.orderService.getOrders(),
+  this.productService.getProducts(),
+]);
+```
+
+## Model Selection Strategy
+
+### Model Tiers
+
+Use **model tiers** that map to your available models via `.cursor/model-config.json`:
+
+- **Fast Tier** (`fast`): Fastest, most cost-effective model for simple tasks
+- **Balanced Tier** (`balanced`): Best balance of capability and cost (default for 90% of tasks)
+- **Powerful Tier** (`powerful`): Most capable model for complex architecture and security
+
+See [model-abstraction.md](../../docs/model-abstraction.md) for details on configuring tiers for your provider.
+
+### When to Use Each Tier
+
+**Fast Tier** (Fastest, Cost-Effective):
+- Lightweight tasks and quick edits
+- Simple code generation
+- High-frequency operations
+- When speed is more important than depth
+
+**Balanced Tier** (Balanced, Recommended):
+- Main development work
+- Complex coding tasks
+- Most day-to-day development
+- Best balance of capability and cost
+
+**Powerful Tier** (Most Capable):
+- Complex architectural decisions
+- Deep reasoning requirements
+- Research and analysis tasks
+- Maximum capability needed
+
+**Note**: Configure tier mappings in `.cursor/model-config.json` based on your available models and provider. Default Claude mappings: fast=haiku, balanced=sonnet, powerful=opus.
+
+### Context Window Management
+
+**Avoid using last 20% of context window for:**
+- Large-scale refactoring
+- Feature implementation spanning multiple files
+- Debugging complex interactions
+
+**Lower context sensitivity tasks (can use end of window):**
+- Single-file edits
+- Independent utility creation
+- Documentation updates
+- Simple bug fixes
+
+### MCP Impact on Context Window
+
+**Rule of Thumb**: Have 20-30 MCPs configured, but keep under 10 enabled / under 80 tools active.
+
+- More MCPs = Less available context window
+- Disable unused MCPs to preserve context
+- Enable MCPs only when needed for specific tasks
+- See [mcp.mdc](.cursor/rules/core/mcp.mdc) for detailed MCP management
+
+## Token Optimization
+
+For advanced token optimization strategies including model selection, tool optimization, MCP replacement, and modular codebase patterns, see [token-optimization.mdc](token-optimization.mdc).
+
+Key strategies:
+- **Model Selection**: Default to balanced tier (90% of tasks), use fast tier for simple tasks, powerful tier for complex architecture
+- **Tool Optimization**: Replace grep with mgrep for ~50% token reduction
+- **MCP Replacement**: Use CLI + skills/commands instead of MCPs when possible
+- **Modular Codebase**: Keep files in hundreds of lines, not thousands
+- **Model Configuration**: Configure tier mappings in `.cursor/model-config.json` for your provider
+
+## Integration
+
+- [token-optimization.mdc](token-optimization.mdc) - Token optimization and model selection strategies
+- [database.mdc](.cursor/rules/data/database.mdc) - Database patterns
+- [caching.mdc](.cursor/rules/data/caching.mdc) - Caching strategies
+- [async-patterns.mdc](.cursor/rules/data/async-patterns.mdc) - Async patterns
+- [general.mdc](.cursor/rules/core/general.mdc) - General best practices
+- [mcp.mdc](.cursor/rules/core/mcp.mdc) - MCP and context window management
+- [model-abstraction.md](../../docs/model-abstraction.md) - Model tier system and configuration

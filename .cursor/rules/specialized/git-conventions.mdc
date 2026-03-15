@@ -1,0 +1,28 @@
+---
+description: Conventional commits format for Git commit messages
+globs: ["**/*"]
+alwaysApply: false
+---
+
+# Git Conventions
+
+## Overview
+Conventional commits format for Git commit messages following the Conventional Commits specification. This rule ensures consistent commit message formatting across the workspace.
+
+## Basic Conventions
+Implement conventional commits using Conventional commits. You can use the doc you already have registered.
+
+## Rules
+
+Based on that conventions the git commit message should have the following format:
+
+```
+feat(microservices-shared): whatever the message is.
+```
+
+You can get the available projects from Nx.
+
+## Integration
+
+- [nx-rules.mdc](.cursor/rules/core/nx-rules.mdc) - Nx workspace guidelines
+- [general.mdc](.cursor/rules/core/general.mdc) - General conventions

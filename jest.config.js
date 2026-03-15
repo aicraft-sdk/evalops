@@ -1,24 +1,44 @@
 export default {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  roots: ['<rootDir>/server', '<rootDir>/client'],
+  roots: ['<rootDir>/apps', '<rootDir>/libs'],
   testMatch: ['**/__tests__/**/*.test.ts', '**/?(*.)+(spec|test).ts'],
   transform: {
     '^.+\\.tsx?$': 'ts-jest',
   },
-  moduleNameMapping: {
-    '^@/(.*)$': '<rootDir>/client/src/$1',
-    '^@shared/(.*)$': '<rootDir>/shared/$1',
+  moduleNameMapper: {
+    '^@evalops/shared$': '<rootDir>/libs/shared/src/index.ts',
+    '^@evalops/shared-db$': '<rootDir>/libs/shared-db/src/index.ts',
+    '^@evalops/sdk$': '<rootDir>/libs/sdk/src/index.ts',
+    '^@evalops/evaluators$': '<rootDir>/libs/evaluators/src/index.ts',
+    '^@evalops/agent-md$': '<rootDir>/libs/agent-md/src/index.ts',
+    '^@evalops/shared-auth$': '<rootDir>/libs/shared-auth/src/index.ts',
+    '^@/(.*)$': '<rootDir>/apps/frontend/src/$1',
   },
-  setupFilesAfterEnv: ['<rootDir>/server/__tests__/setup.ts'],
   collectCoverageFrom: [
-    'server/**/*.ts',
-    'client/src/**/*.{ts,tsx}',
+    'apps/**/*.ts',
+    'libs/**/*.ts',
     '!**/*.d.ts',
     '!**/node_modules/**',
-    '!server/__tests__/**',
-    '!client/src/__tests__/**',
+    '!**/__tests__/**',
+    '!**/dist/**',
+    '!**/index.ts',
+    '!**/*.spec.ts',
   ],
+  coverageThresholds: {
+    './libs/sdk/**': {
+      branches: 70,
+      lines: 75,
+    },
+    './libs/evaluators/**': {
+      branches: 70,
+      lines: 75,
+    },
+    './libs/agent-md/**': {
+      branches: 70,
+      lines: 75,
+    },
+  },
   coverageReporters: ['text', 'lcov', 'html'],
   testTimeout: 30000,
 };

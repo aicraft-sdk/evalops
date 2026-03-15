@@ -1,0 +1,71 @@
+---
+description: React-specific patterns for components, hooks, and state management
+globs: ["**/*.{tsx,jsx}"]
+alwaysApply: false
+---
+
+# React Patterns
+
+## Overview
+React-specific patterns for component composition, custom hooks, state management, and performance optimization.
+
+## Component Composition
+
+**✅ CORRECT - Compose components:**
+```typescript
+function UserList({ users }: { users: User[] }) {
+  return (
+    <div>
+      {users.map(user => (
+        <UserCard key={user.id} user={user} />
+      ))}
+    </div>
+  );
+}
+```
+
+## Custom Hooks
+
+**✅ CORRECT:**
+```typescript
+function useUser(userId: string) {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    fetchUser(userId).then(setUser).finally(() => setLoading(false));
+  }, [userId]);
+  
+  return { user, loading };
+}
+```
+
+## Performance Optimization
+
+**✅ CORRECT - Use memoization:**
+```typescript
+const MemoizedComponent = React.memo(ExpensiveComponent);
+
+const expensiveValue = useMemo(() => computeExpensiveValue(data), [data]);
+const callback = useCallback(() => handleClick(id), [id]);
+```
+
+## State Management
+
+**✅ CORRECT - Use Zustand or React Query:**
+```typescript
+import { useQuery } from '@tanstack/react-query';
+
+function useUsers() {
+  return useQuery({
+    queryKey: ['users'],
+    queryFn: () => fetchUsers(),
+  });
+}
+```
+
+## Integration
+
+- [general.mdc](.cursor/rules/core/general.mdc) - General patterns
+- [typescript.mdc](.cursor/rules/language-framework/typescript.mdc) - TypeScript conventions
+- [tests.mdc](.cursor/rules/core/tests.mdc) - Testing protocol

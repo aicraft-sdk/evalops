@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { mapApiRoute } from './api-routes';
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -7,16 +8,35 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+// Get JWT token from localStorage
+export function getAuthToken(): string | null {
+  return localStorage.getItem('auth_token');
+}
+
 export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const res = await fetch(url, {
+  const token = getAuthToken();
+  const mappedUrl = mapApiRoute(url);
+  const baseUrl = process.env.VITE_API_URL || 'http://localhost:3000';
+  const fullUrl = mappedUrl.startsWith('http')
+    ? mappedUrl
+    : `${baseUrl}${mappedUrl}`;
+  const headers: HeadersInit = data
+    ? { 'Content-Type': 'application/json' }
+    : {};
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(fullUrl, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers,
     body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
+    credentials: 'include',
   });
 
   await throwIfResNotOk(res);
@@ -29,8 +49,22 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
-      credentials: "include",
+    const token = getAuthToken();
+    const originalPath = queryKey.join('/') as string;
+    const mappedPath = mapApiRoute(originalPath);
+    const baseUrl = process.env.VITE_API_URL || 'http://localhost:3000';
+    const fullUrl = mappedPath.startsWith('http')
+      ? mappedPath
+      : `${baseUrl}${mappedPath}`;
+    const headers: HeadersInit = {};
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(fullUrl, {
+      headers,
+      credentials: 'include',
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

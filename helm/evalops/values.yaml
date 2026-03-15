@@ -1,0 +1,104 @@
+# EvalOps Helm Chart — Default Values
+# Suitable for local/staging development (1 replica per service, no resource limits)
+
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+
+image:
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Service replicas (override in values.production.yaml)
+# ──────────────────────────────────────────────────────────────────────────────
+replicaCount:
+  apiGateway: 1
+  authService: 1
+  coreService: 1
+  evaluationService: 1
+  integrationService: 1
+  analyticsService: 1
+  frontend: 1
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Ingress
+# ──────────────────────────────────────────────────────────────────────────────
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations: {}
+  host: "evalops.local"
+  tls: []
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Services (internal ClusterIP ports)
+# ──────────────────────────────────────────────────────────────────────────────
+services:
+  apiGateway:
+    port: 3000
+  authService:
+    port: 3001
+  coreService:
+    port: 3002
+  evaluationService:
+    port: 3003
+  integrationService:
+    port: 3004
+  analyticsService:
+    port: 3005
+  frontend:
+    port: 80
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Environment variables (non-sensitive — use secrets for sensitive values)
+# ──────────────────────────────────────────────────────────────────────────────
+env:
+  NODE_ENV: production
+  REDIS_HOST: "evalops-redis-master"
+  REDIS_PORT: "6379"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger-collector:4317"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Secrets (referenced from Kubernetes Secret "evalops-secrets")
+# ──────────────────────────────────────────────────────────────────────────────
+secretName: "evalops-secrets"
+secretKeys:
+  - DATABASE_URL
+  - JWT_SECRET
+  - SERVICE_SECRET
+  - REDIS_PASSWORD
+  - AZURE_STORAGE_CONNECTION_STRING
+  - AZURE_STORAGE_ACCOUNT_NAME
+  - AZURE_STORAGE_CONTAINER_NAME
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PostgreSQL subchart
+# ──────────────────────────────────────────────────────────────────────────────
+postgresql:
+  enabled: true
+  auth:
+    database: evalops
+    existingSecret: evalops-secrets
+    secretKeys:
+      adminPasswordKey: POSTGRES_PASSWORD
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Redis subchart
+# ──────────────────────────────────────────────────────────────────────────────
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    existingSecret: evalops-secrets
+    existingSecretPasswordKey: REDIS_PASSWORD
+  architecture: standalone
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Horizontal Pod Autoscalers
+# ──────────────────────────────────────────────────────────────────────────────
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80

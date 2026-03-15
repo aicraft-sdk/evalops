@@ -1,0 +1,416 @@
+---
+description: SonarQube integration with testing workflow via MCP server
+globs: ["**/*.{ts,tsx,spec.ts,e2e.ts}"]
+alwaysApply: false
+---
+
+# SonarQube MCP Testing Rule
+
+## Overview
+
+This rule ensures that SonarQube analysis is automatically run after every test execution when the SonarQube MCP server is available. This provides immediate feedback on code quality, coverage, and security issues without waiting for GitHub Actions to complete.
+
+## Mandatory Testing Protocol
+
+### 1. Test Execution with SonarQube Analysis
+
+**When SonarQube MCP server is available:**
+
+1. **Run unit tests with coverage**
+2. **Run E2E tests with coverage (if applicable)**
+3. **Merge coverage reports**
+4. **Execute SonarQube analysis via MCP server**
+5. **Report quality metrics and issues**
+
+### 2. SonarQube MCP Server Detection
+
+**Check for SonarQube MCP server availability:**
+```bash
+# Check if SonarQube MCP server is configured
+if command -v docker &> /dev/null; then
+  # Check if MCP server is running
+  docker ps | grep -q sonarqube || echo "SonarQube MCP server not running"
+fi
+```
+
+**Environment variables required:**
+- `SONARQUBE_TOKEN`: SonarQube authentication token
+- `SONARQUBE_ORG`: SonarQube organization (default: biocatchltd)
+
+### 3. Test Coverage Analysis
+
+**Coverage Generation:**
+```bash
+# Unit tests with coverage
+npx nx test <project> --coverage
+
+# E2E tests with coverage (if applicable)
+npx nx e2e <project> --coverage
+```
+
+**Coverage Merging:**
+```bash
+# Merge unit and E2E coverage
+lcov --ignore-errors inconsistent --ignore-errors corrupt \
+  -a coverage/<project>/unit/lcov.info \
+  -a coverage/<project>/e2e/lcov.info \
+  -o coverage-reports/<project>/full-lcov.info
+```
+
+### 4. SonarQube Analysis via MCP
+
+**Run SonarQube analysis:**
+```bash
+# Use SonarQube MCP server for analysis
+docker run -i --rm \
+  -e SONARQUBE_TOKEN="$SONARQUBE_TOKEN" \
+  -e SONARQUBE_ORG="$SONARQUBE_ORG" \
+  mcp/sonarqube \
+  --project-key="biocatchltd_apps-platform_<project>" \
+  --action="analyze"
+```
+
+**Alternative: Direct SonarQube scanner:**
+```bash
+# Run SonarQube scanner directly
+sonar-scanner \
+  -Dsonar.projectKey="biocatchltd_apps-platform_<project>" \
+  -Dsonar.organization="biocatchltd" \
+  -Dsonar.host.url="https://sonarcloud.io" \
+  -Dsonar.token="$SONARQUBE_TOKEN"
+```
+
+## Implementation Steps
+
+### 1. Pre-Test Setup
+
+**Check prerequisites:**
+```bash
+# Verify SonarQube MCP server availability
+if ! command -v docker &> /dev/null; then
+  echo "Docker not available, skipping SonarQube analysis"
+  exit 0
+fi
+
+# Check if SonarQube MCP server is configured
+if [ -z "$SONARQUBE_TOKEN" ]; then
+  echo "SONARQUBE_TOKEN not set, skipping SonarQube analysis"
+  exit 0
+fi
+```
+
+### 2. Test Execution
+
+**Run tests with coverage:**
+```bash
+# Unit tests
+npx nx test <project> --coverage
+
+# E2E tests (if applicable)
+if npx nx show project <project> | grep -q '"e2e"'; then
+  npx nx e2e <project> --coverage || echo "E2E tests failed, continuing with available coverage"
+fi
+```
+
+### 3. Coverage Processing
+
+**Merge coverage reports:**
+```bash
+# Create coverage directory
+mkdir -p coverage-reports/<project>
+
+# Check coverage files
+UNIT_COV="coverage/<project>/unit/lcov.info"
+E2E_COV="coverage/<project>/e2e/lcov.info"
+MERGED_COV="coverage-reports/<project>/full-lcov.info"
+
+# Merge coverage
+if [[ -f $UNIT_COV && -f $E2E_COV ]]; then
+  # Fix paths and merge
+  sed -i '' 's|.*\(src/.*\)|SF:\1|g' $UNIT_COV
+  sed -i '' 's|.*\(src/.*\)|SF:\1|g' $E2E_COV
+  lcov --ignore-errors inconsistent --ignore-errors corrupt \
+    -a "$UNIT_COV" -a "$E2E_COV" -o "$MERGED_COV"
+elif [[ -f $UNIT_COV ]]; then
+  sed -i '' 's|.*\(src/.*\)|SF:\1|g' $UNIT_COV
+  cp "$UNIT_COV" "$MERGED_COV"
+elif [[ -f $E2E_COV ]]; then
+  sed -i '' 's|.*\(src/.*\)|SF:\1|g' $E2E_COV
+  cp "$E2E_COV" "$MERGED_COV"
+else
+  echo "No coverage files found!"
+  exit 1
+fi
+```
+
+### 4. SonarQube Analysis
+
+**Execute analysis:**
+```bash
+# Get project key from sonar-project.properties
+PROJECT_KEY=$(grep "sonar.projectKey" "platform/<project>/sonar-project.properties" | cut -d'=' -f2)
+
+# Run SonarQube analysis
+sonar-scanner \
+  -Dsonar.projectKey="$PROJECT_KEY" \
+  -Dsonar.organization="biocatchltd" \
+  -Dsonar.host.url="https://sonarcloud.io" \
+  -Dsonar.token="$SONARQUBE_TOKEN"
+```
+
+### 5. Results Reporting
+
+**Display analysis results:**
+```bash
+echo "✅ SonarQube analysis completed for <project>"
+echo "📊 Check results at: https://sonarcloud.io/project/overview?id=$PROJECT_KEY"
+echo "📈 Coverage: $(grep -o '[0-9.]*%' coverage-reports/<project>/full-lcov.info | head -1)"
+```
+
+## Quality Standards
+
+### 1. Coverage Thresholds
+
+**Minimum Requirements:**
+- **Statements**: ≥ 85%
+- **Branches**: ≥ 75%
+- **Functions**: ≥ 80%
+- **Lines**: ≥ 85%
+
+### 2. Quality Gates
+
+**Mandatory Checks:**
+- No new critical issues
+- Coverage above threshold
+- No security hotspots
+- Duplicated code ≤ 15%
+
+### 3. Issue Resolution
+
+**Blocking Conditions:**
+- Critical security issues
+- Coverage below threshold
+- Major code quality problems
+- Quality gate failures
+
+## Error Handling
+
+### 1. SonarQube MCP Server Unavailable
+
+**Fallback behavior:**
+```bash
+if ! docker ps | grep -q sonarqube; then
+  echo "⚠️  SonarQube MCP server not available, skipping analysis"
+  echo "📊 Coverage report available at: coverage-reports/<project>/full-lcov.info"
+  exit 0
+fi
+```
+
+### 2. Test Failures
+
+**E2E test failures:**
+```bash
+if ! npx nx e2e <project> --coverage; then
+  echo "⚠️  E2E tests failed, but continuing with available coverage"
+  # Continue with unit test coverage only
+fi
+```
+
+### 3. Coverage Issues
+
+**LCOV format problems:**
+```bash
+# Use ignore-errors flags for LCOV merging
+lcov --ignore-errors inconsistent --ignore-errors corrupt \
+  -a "$UNIT_COV" -a "$E2E_COV" -o "$MERGED_COV"
+```
+
+## Integration with Testing Rules
+
+### 1. Test Execution Protocol
+
+**Enhanced test workflow:**
+1. Run unit tests with coverage
+2. Run E2E tests with coverage (if applicable)
+3. Merge coverage reports
+4. **If SonarQube MCP available**: Run SonarQube analysis
+5. Report quality metrics and issues
+
+### 2. Quality Validation
+
+**Post-test validation:**
+- Coverage above threshold
+- No critical issues
+- Security standards met
+- Quality gates pass
+
+### 3. Reporting
+
+**Test results summary:**
+- Test execution status
+- Coverage metrics
+- SonarQube analysis results
+- Quality gate status
+- Issue count and severity
+
+## Usage Examples
+
+### 1. Basic Test Execution
+
+```bash
+# Standard test with SonarQube analysis
+nx test bff --coverage
+# SonarQube analysis runs automatically if MCP server available
+```
+
+### 2. Manual SonarQube Analysis
+
+```bash
+# Run SonarQube analysis manually
+docker run -i --rm \
+  -e SONARQUBE_TOKEN="$SONARQUBE_TOKEN" \
+  -e SONARQUBE_ORG="biocatchltd" \
+  mcp/sonarqube \
+  --project-key="biocatchltd_apps-platform_bff" \
+  --action="analyze"
+```
+
+### 3. Coverage Analysis
+
+```bash
+# Check coverage results
+cat coverage-reports/bff/full-lcov.info | grep -E "LF:|LH:"
+# LF: 270 (lines found)
+# LH: 263 (lines hit)
+# Coverage: 97.4%
+```
+
+## Benefits
+
+### 1. Immediate Feedback
+
+**Local Development:**
+- Instant quality feedback
+- No waiting for CI
+- Faster development cycle
+
+### 2. Quality Assurance
+
+**Consistent Analysis:**
+- Same as CI pipeline
+- Reliable results
+- Accurate metrics
+
+### 3. Team Productivity
+
+**Faster Development:**
+- Immediate feedback
+- Reduced CI wait times
+- Better code quality
+
+## Enforcement
+
+### 1. Mandatory Requirements
+
+**Test Execution:**
+- All tests must pass
+- Coverage above threshold
+- No critical issues
+- Security standards met
+
+### 2. Quality Gates
+
+**Blocking Conditions:**
+- Quality gate failures
+- Coverage below threshold
+- Critical security issues
+- Major code quality problems
+
+### 3. Process Integration
+
+**Development Workflow:**
+- Pre-commit analysis
+- PR quality checks
+- Release validation
+
+## Troubleshooting
+
+### 1. Common Issues
+
+**SonarQube MCP Server:**
+```bash
+# Check if server is running
+docker ps | grep sonarqube
+
+# Check environment variables (without exposing secret values)
+if [ -z "$SONARQUBE_TOKEN" ]; then
+  echo "SONARQUBE_TOKEN is not set"
+else
+  echo "SONARQUBE_TOKEN is set (length: ${#SONARQUBE_TOKEN} characters)"
+fi
+
+if [ -z "$SONARQUBE_ORG" ]; then
+  echo "SONARQUBE_ORG is not set"
+else
+  echo "SONARQUBE_ORG is set to: $SONARQUBE_ORG"
+fi
+```
+
+**⚠️ SECURITY NOTE**: When troubleshooting in production, avoid echoing sensitive values.
+Use validation checks instead of direct echo statements for secrets.
+
+**Coverage Files:**
+```bash
+# Check coverage files
+ls -la coverage/<project>/
+ls -la coverage-reports/<project>/
+
+# Regenerate coverage
+nx test <project> --coverage
+```
+
+**Analysis Failures:**
+```bash
+# Check project configuration
+cat platform/<project>/sonar-project.properties
+
+# Verify dependencies
+npm list sonar-scanner
+```
+
+### 2. Debug Mode
+
+**Verbose Output:**
+```bash
+# Enable debug mode
+DEBUG=sonarqube nx test <project> --coverage
+
+# Check logs
+tail -f coverage-reports/<project>/sonarqube.log
+```
+
+### 3. Recovery
+
+**Failed Analysis:**
+```bash
+# Clean and retry
+rm -rf coverage-reports/<project>/
+nx test <project> --coverage
+```
+
+**Coverage Issues:**
+```bash
+# Regenerate coverage
+rm -rf coverage/<project>/
+nx test <project> --coverage
+```
+
+## Integration
+
+- [tests.mdc](.cursor/rules/core/tests.mdc) - Testing protocol
+- [sonarqube-scan-relationship-rule.mdc](.cursor/rules/specialized/sonarqube-scan-relationship-rule.mdc) - Scan relationship patterns
+- [nx-rules.mdc](.cursor/rules/core/nx-rules.mdc) - Nx workspace guidelines
+
+## Conclusion
+
+This rule ensures that SonarQube analysis is seamlessly integrated into the testing workflow when the MCP server is available, providing immediate feedback on code quality, coverage, and security issues. By automating this process, teams can maintain high quality standards while improving development velocity.

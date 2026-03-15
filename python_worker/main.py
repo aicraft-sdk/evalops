@@ -36,9 +36,14 @@ from fastapi.security import APIKeyHeader, HTTPBearer
 import hashlib
 import hmac
 from pydantic import BaseModel, Field, field_validator
+from typing import Literal
 import openai
 import uvicorn
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+# Import sandbox client and code detection utilities
+from sandbox_client import get_sandbox_client
+from code_detection import detect_code_blocks, get_executable_code_blocks
 
 # Enhanced logging configuration
 logging.basicConfig(
@@ -646,6 +651,41 @@ class TaskStatus(BaseModel):
     created_at: str
     updated_at: str
 
+class CodeExecutionRequest(BaseModel):
+    """Request model for code execution"""
+    code: str = Field(..., description="Code to execute")
+    language: Literal["python", "javascript"] = Field(..., description="Programming language")
+    input_data: Optional[Dict[str, Any]] = Field(None, description="Input data for code execution")
+    sandbox_config: Optional[Dict[str, Any]] = Field(None, description="Optional sandbox configuration")
+    timeout_seconds: Optional[int] = Field(300, description="Execution timeout in seconds")
+    
+    @field_validator('code')
+    @classmethod
+    def validate_code(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Code cannot be empty")
+        if len(v) > 100000:  # 100KB limit
+            raise ValueError("Code exceeds maximum length (100KB)")
+        return v
+    
+    @field_validator('timeout_seconds')
+    @classmethod
+    def validate_timeout(cls, v):
+        if v and (v < 1 or v > 3600):
+            raise ValueError("Timeout must be between 1 and 3600 seconds")
+        return v
+
+class CodeExecutionResponse(BaseModel):
+    """Response model for code execution"""
+    task_id: str
+    status: str
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+    execution_time_ms: Optional[float] = None
+    stdout: Optional[str] = None
+    stderr: Optional[str] = None
+    exit_code: Optional[int] = None
+
 @app.get("/")
 async def root():
     """Basic health check endpoint"""
@@ -792,6 +832,106 @@ async def list_tasks(status: Optional[str] = None, limit: int = 50):
     tasks.sort(key=lambda x: x["created_at"], reverse=True)
     
     return [TaskStatus(**task) for task in tasks[:limit]]
+
+@app.post("/execute-code", response_model=CodeExecutionResponse)
+async def execute_code(request: CodeExecutionRequest):
+    """
+    Execute code in an isolated sandbox.
+    
+    This endpoint creates a sandbox, executes the provided code,
+    captures output and errors, then cleans up the sandbox.
+    """
+    task_id = str(uuid.uuid4())
+    sandbox_id = None
+    
+    try:
+        logger.info(f"Code execution request {task_id} for {request.language} code")
+        
+        # Get sandbox client
+        sandbox_client = get_sandbox_client()
+        
+        # Create sandbox with provided config or defaults
+        try:
+            sandbox_id = await sandbox_client.create_sandbox(
+                config=request.sandbox_config
+            )
+            logger.debug(f"Created sandbox {sandbox_id[:8]} for task {task_id}")
+        except Exception as e:
+            logger.error(f"Failed to create sandbox: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to create sandbox: {str(e)}"
+            )
+        
+        # Execute code in sandbox
+        try:
+            execution_result = await sandbox_client.execute_code(
+                sandbox_id=sandbox_id,
+                code=request.code,
+                language=request.language,
+                input_data=request.input_data,
+                timeout=request.timeout_seconds,
+            )
+            
+            # Determine status based on execution result
+            if execution_result.error or execution_result.exit_code != 0:
+                response_status = "failed"
+            else:
+                response_status = "completed"
+            
+            # Build response
+            response = CodeExecutionResponse(
+                task_id=task_id,
+                status=response_status,
+                result={
+                    "output": execution_result.output,
+                    "stdout": execution_result.stdout,
+                    "stderr": execution_result.stderr,
+                    "exit_code": execution_result.exit_code,
+                } if execution_result.output is not None else None,
+                error=execution_result.error,
+                execution_time_ms=execution_result.execution_time_ms,
+                stdout=execution_result.stdout,
+                stderr=execution_result.stderr,
+                exit_code=execution_result.exit_code,
+            )
+            
+            logger.info(
+                f"Code execution {task_id} completed: status={response_status}, "
+                f"time={execution_result.execution_time_ms:.2f}ms"
+            )
+            
+            return response
+            
+        except asyncio.TimeoutError:
+            logger.warning(f"Code execution {task_id} timed out")
+            raise HTTPException(
+                status_code=status.HTTP_408_REQUEST_TIMEOUT,
+                detail=f"Code execution timed out after {request.timeout_seconds}s"
+            )
+        except Exception as e:
+            logger.error(f"Code execution {task_id} failed: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Code execution failed: {str(e)}"
+            )
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in code execution {task_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {str(e)}"
+        )
+    finally:
+        # Always clean up sandbox
+        if sandbox_id:
+            try:
+                await sandbox_client.delete_sandbox(sandbox_id)
+            except Exception as e:
+                logger.warning(f"Failed to cleanup sandbox {sandbox_id[:8]}: {e}")
 
 async def run_openai_evaluation_enhanced(task_id: str, request: EvaluationRequest):
     """Enhanced evaluation runner with robust error handling, recovery, and cancellation support"""

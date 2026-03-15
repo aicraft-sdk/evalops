@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -22,7 +24,12 @@ import {
   Search,
   Gauge,
   Info,
-  HelpCircle
+  HelpCircle,
+  Copy,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  EyeOff
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -31,6 +38,33 @@ export default function RunDetails() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
   const [showGuide, setShowGuide] = useState(false);
+  const [expandedSamples, setExpandedSamples] = useState<Set<number>>(new Set());
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({
+        title: "Copied!",
+        description: `${label} copied to clipboard`,
+      });
+    } catch (err) {
+      toast({
+        title: "Failed to copy",
+        description: "Could not copy to clipboard",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const toggleSampleExpansion = (idx: number) => {
+    const newExpanded = new Set(expandedSamples);
+    if (newExpanded.has(idx)) {
+      newExpanded.delete(idx);
+    } else {
+      newExpanded.add(idx);
+    }
+    setExpandedSamples(newExpanded);
+  };
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -40,7 +74,7 @@ export default function RunDetails() {
         variant: "destructive",
       });
       setTimeout(() => {
-        window.location.href = "/api/login";
+        window.location.href = "/login";
       }, 500);
       return;
     }
@@ -322,6 +356,128 @@ export default function RunDetails() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Quick Output Preview Section */}
+          {sampleResults && sampleResults.length > 0 && (
+            <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-800">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Eye className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                      Output Summary
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Quick preview of test outputs and results
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const samplesTab = document.querySelector('[value="samples"]') as HTMLElement;
+                      if (samplesTab) samplesTab.click();
+                    }}
+                    className="gap-2"
+                  >
+                    View All Samples
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div className="bg-white dark:bg-gray-900 p-4 rounded-lg border">
+                    <p className="text-sm text-muted-foreground mb-1">Total Samples</p>
+                    <p className="text-2xl font-bold">{sampleResults.length}</p>
+                  </div>
+                  <div className="bg-white dark:bg-gray-900 p-4 rounded-lg border">
+                    <p className="text-sm text-muted-foreground mb-1">Average Score</p>
+                    <p className="text-2xl font-bold">
+                      {(() => {
+                        const allScores = sampleResults.flatMap((s: any) => {
+                          const results = s.evaluationResults || {};
+                          return Object.entries(results)
+                            .filter(([_, v]: [string, any]) => typeof v === 'number' && !['cost', 'latency', 'tokens'].some(k => v.toString().includes(k)))
+                            .map(([_, v]: [string, any]) => v);
+                        });
+                        const avg = allScores.length > 0 
+                          ? allScores.reduce((a: number, b: number) => a + b, 0) / allScores.length 
+                          : 0;
+                        return avg > 0 ? `${(avg * 100).toFixed(1)}%` : 'N/A';
+                      })()}
+                    </p>
+                  </div>
+                  <div className="bg-white dark:bg-gray-900 p-4 rounded-lg border">
+                    <p className="text-sm text-muted-foreground mb-1">Samples with Outputs</p>
+                    <p className="text-2xl font-bold">
+                      {sampleResults.filter((s: any) => s.actualOutput && s.actualOutput !== 'N/A').length} / {sampleResults.length}
+                    </p>
+                  </div>
+                </div>
+                
+                {/* Preview of first 3 samples */}
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-muted-foreground">Sample Previews</p>
+                  <div className="space-y-2">
+                    {sampleResults.slice(0, 3).map((sample: any, idx: number) => {
+                      const actualOutput = sample.actualOutput || 'N/A';
+                      const preview = typeof actualOutput === 'string' 
+                        ? (actualOutput.length > 100 ? actualOutput.substring(0, 100) + '...' : actualOutput)
+                        : JSON.stringify(actualOutput).substring(0, 100) + '...';
+                      
+                      const evalResults = sample.evaluationResults || {};
+                      const scores = Object.entries(evalResults)
+                        .filter(([_, v]: [string, any]) => typeof v === 'number' && !['cost', 'latency', 'tokens'].some(k => v.toString().includes(k)))
+                        .map(([_, v]: [string, any]) => v);
+                      const avgScore = scores.length > 0 ? scores.reduce((a: number, b: number) => a + b, 0) / scores.length : 0;
+                      const status = avgScore >= 0.8 ? 'pass' : avgScore >= 0.6 ? 'warn' : 'fail';
+                      
+                      return (
+                        <div 
+                          key={idx} 
+                          className="bg-white dark:bg-gray-900 p-3 rounded-lg border cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
+                          onClick={() => {
+                            const samplesTab = document.querySelector('[value="samples"]') as HTMLElement;
+                            if (samplesTab) samplesTab.click();
+                            setTimeout(() => {
+                              const sampleElement = document.querySelector(`[data-sample-index="${sample.sampleIndex}"]`);
+                              if (sampleElement) {
+                                sampleElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                toggleSampleExpansion(idx);
+                              }
+                            }, 100);
+                          }}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium">Sample {sample.sampleIndex + 1}</span>
+                              {status === 'pass' && <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />}
+                              {status === 'warn' && <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />}
+                              {status === 'fail' && <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />}
+                            </div>
+                            {avgScore > 0 && (
+                              <Badge variant={status === 'pass' ? 'default' : status === 'warn' ? 'secondary' : 'destructive'}>
+                                {(avgScore * 100).toFixed(0)}%
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground font-mono line-clamp-2">
+                            {preview}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {sampleResults.length > 3 && (
+                    <p className="text-xs text-muted-foreground text-center pt-2">
+                      + {sampleResults.length - 3} more samples. Click "View All Samples" to see all outputs.
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Tabs defaultValue="evaluators" className="w-full">
             <TabsList className="grid w-full grid-cols-4">
@@ -608,91 +764,282 @@ export default function RunDetails() {
                 <CardHeader>
                   <CardTitle>Sample-by-Sample Results</CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    Detailed breakdown of each test sample across all evaluators
+                    Detailed breakdown of each test sample across all evaluators. Click to expand and view full outputs.
                   </p>
                 </CardHeader>
                 <CardContent>
                   {sampleResults && sampleResults.length > 0 ? (
                     <div className="space-y-4">
-                      {sampleResults.map((sample: any, idx: number) => (
-                        <div key={idx} className="border rounded-lg p-4 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-medium">Sample {sample.sampleIndex + 1}</h4>
-                            <Badge variant="outline">Rep {sample.repetition + 1}</Badge>
-                          </div>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <p className="text-muted-foreground mb-1">Input</p>
-                              <div className="bg-muted p-2 rounded text-xs font-mono">
-                                {typeof sample.input === 'string' ? sample.input : JSON.stringify(sample.input, null, 2)}
-                              </div>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground mb-1">Expected Output</p>
-                              <div className="bg-muted p-2 rounded text-xs font-mono">
-                                {sample.expectedOutput || 'N/A'}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div>
-                            <p className="text-muted-foreground mb-2">Actual Output</p>
-                            <div className="bg-muted p-2 rounded text-xs font-mono max-h-32 overflow-y-auto">
-                              {sample.actualOutput || 'N/A'}
-                            </div>
-                          </div>
-
-                          <div>
-                            <p className="text-muted-foreground mb-2">Evaluator Scores</p>
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                              {Object.entries(sample.evaluationResults || {}).map(([key, value]: [string, any]) => {
-                                if (typeof value !== 'number') return null;
-                                
-                                // Handle different metric types
-                                const isLatencyMetric = key.toLowerCase().includes('latency') || key.toLowerCase().includes('duration');
-                                const isPercentageMetric = !isLatencyMetric && !key.includes('cost') && !key.includes('tokens');
-                                
-                                let displayValue: string;
-                                let colorClass: string;
-                                
-                                if (isLatencyMetric) {
-                                  // Display latency in milliseconds with proper thresholds
-                                  displayValue = `${value.toFixed(1)}ms`;
-                                  // P50: <200ms good, <500ms medium, >500ms bad
-                                  // P95: <500ms good, <1000ms medium, >1000ms bad
-                                  if (key.includes('P95') || key.includes('p95')) {
-                                    colorClass = value < 500 ? 'text-green-600' : value < 1000 ? 'text-yellow-600' : 'text-red-600';
-                                  } else {
-                                    colorClass = value < 200 ? 'text-green-600' : value < 500 ? 'text-yellow-600' : 'text-red-600';
-                                  }
-                                } else if (isPercentageMetric) {
-                                  // Display as percentage
-                                  const score = value * 100;
-                                  displayValue = `${score.toFixed(1)}%`;
-                                  colorClass = score >= 80 ? 'text-green-600' : score >= 60 ? 'text-yellow-600' : 'text-red-600';
-                                } else {
-                                  // Display raw value for cost, tokens, etc.
-                                  displayValue = value.toFixed(4);
-                                  colorClass = 'text-gray-600';
-                                }
-                                
-                                return (
-                                  <div key={key} className="flex justify-between text-xs">
-                                    <span className="text-muted-foreground">{formatEvaluatorName(key)}:</span>
-                                    <span className={`font-semibold ${colorClass}`}>
-                                      {displayValue}
-                                    </span>
+                      {sampleResults.map((sample: any, idx: number) => {
+                        const isExpanded = expandedSamples.has(idx);
+                        const actualOutput = sample.actualOutput || 'N/A';
+                        const expectedOutput = sample.expectedOutput || 'N/A';
+                        const inputText = typeof sample.input === 'string' ? sample.input : JSON.stringify(sample.input, null, 2);
+                        
+                        // Calculate overall score for this sample
+                        const evalResults = sample.evaluationResults || {};
+                        const scores = Object.entries(evalResults)
+                          .filter(([_, v]: [string, any]) => typeof v === 'number' && !['cost', 'latency', 'tokens'].some(k => v.toString().includes(k)))
+                          .map(([_, v]: [string, any]) => v);
+                        const avgScore = scores.length > 0 ? scores.reduce((a: number, b: number) => a + b, 0) / scores.length : 0;
+                        const overallStatus = avgScore >= 0.8 ? 'pass' : avgScore >= 0.6 ? 'warn' : 'fail';
+                        
+                        return (
+                          <Card key={idx} data-sample-index={sample.sampleIndex} className={`border-l-4 ${
+                            overallStatus === 'pass' ? 'border-l-green-500' : 
+                            overallStatus === 'warn' ? 'border-l-yellow-500' : 
+                            'border-l-red-500'
+                          }`}>
+                            <CardContent className="pt-6">
+                              <div className="space-y-4">
+                                {/* Header */}
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`p-2 rounded-full ${
+                                      overallStatus === 'pass' ? 'bg-green-100 dark:bg-green-900/20' :
+                                      overallStatus === 'warn' ? 'bg-yellow-100 dark:bg-yellow-900/20' :
+                                      'bg-red-100 dark:bg-red-900/20'
+                                    }`}>
+                                      {overallStatus === 'pass' ? (
+                                        <CheckCircle className={`h-5 w-5 ${
+                                          overallStatus === 'pass' ? 'text-green-600 dark:text-green-400' : ''
+                                        }`} />
+                                      ) : overallStatus === 'warn' ? (
+                                        <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                                      ) : (
+                                        <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                                      )}
+                                    </div>
+                                    <div>
+                                      <h4 className="font-semibold text-lg">Sample {sample.sampleIndex + 1}</h4>
+                                      <p className="text-sm text-muted-foreground">
+                                        {avgScore > 0 ? `Average Score: ${(avgScore * 100).toFixed(1)}%` : 'No scores available'}
+                                      </p>
+                                    </div>
                                   </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline">Rep {sample.repetition + 1}</Badge>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => toggleSampleExpansion(idx)}
+                                      className="gap-2"
+                                    >
+                                      {isExpanded ? (
+                                        <>
+                                          <EyeOff className="h-4 w-4" />
+                                          Collapse
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Eye className="h-4 w-4" />
+                                          Expand
+                                        </>
+                                      )}
+                                    </Button>
+                                  </div>
+                                </div>
+
+                                {/* Input Section */}
+                                <div>
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-sm font-medium">Test Input</p>
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger>
+                                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p className="max-w-xs">This is the input provided to the AI model for testing</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => copyToClipboard(inputText, 'Input')}
+                                      className="h-7 gap-1"
+                                    >
+                                      <Copy className="h-3 w-3" />
+                                      Copy
+                                    </Button>
+                                  </div>
+                                  <div className="bg-muted/50 p-4 rounded-lg border">
+                                    <pre className="text-sm font-mono whitespace-pre-wrap break-words">
+                                      {inputText}
+                                    </pre>
+                                  </div>
+                                </div>
+
+                                {/* Expected vs Actual Comparison */}
+                                <Collapsible open={isExpanded} onOpenChange={() => toggleSampleExpansion(idx)}>
+                                  <CollapsibleTrigger asChild>
+                                    <Button variant="ghost" className="w-full justify-between">
+                                      <span className="font-medium">Expected vs Actual Output</span>
+                                      {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                    </Button>
+                                  </CollapsibleTrigger>
+                                  <CollapsibleContent className="space-y-4">
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                      {/* Expected Output */}
+                                      <div>
+                                        <div className="flex items-center justify-between mb-2">
+                                          <div className="flex items-center gap-2">
+                                            <p className="text-sm font-medium">Expected Output</p>
+                                            <TooltipProvider>
+                                              <Tooltip>
+                                                <TooltipTrigger>
+                                                  <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                  <p className="max-w-xs">The expected or reference output for this test case</p>
+                                                </TooltipContent>
+                                              </Tooltip>
+                                            </TooltipProvider>
+                                          </div>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => copyToClipboard(expectedOutput, 'Expected Output')}
+                                            className="h-7 gap-1"
+                                          >
+                                            <Copy className="h-3 w-3" />
+                                            Copy
+                                          </Button>
+                                        </div>
+                                        <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800 min-h-[100px]">
+                                          <pre className="text-sm font-mono whitespace-pre-wrap break-words">
+                                            {expectedOutput}
+                                          </pre>
+                                        </div>
+                                      </div>
+
+                                      {/* Actual Output */}
+                                      <div>
+                                        <div className="flex items-center justify-between mb-2">
+                                          <div className="flex items-center gap-2">
+                                            <p className="text-sm font-medium">Actual Output</p>
+                                            <TooltipProvider>
+                                              <Tooltip>
+                                                <TooltipTrigger>
+                                                  <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                  <p className="max-w-xs">This is the AI's response to your test input</p>
+                                                </TooltipContent>
+                                              </Tooltip>
+                                            </TooltipProvider>
+                                          </div>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => copyToClipboard(actualOutput, 'Actual Output')}
+                                            className="h-7 gap-1"
+                                          >
+                                            <Copy className="h-3 w-3" />
+                                            Copy
+                                          </Button>
+                                        </div>
+                                        <div className={`p-4 rounded-lg border min-h-[100px] ${
+                                          expectedOutput !== 'N/A' && actualOutput !== 'N/A' && expectedOutput === actualOutput
+                                            ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800'
+                                            : 'bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800'
+                                        }`}>
+                                          <pre className="text-sm font-mono whitespace-pre-wrap break-words">
+                                            {actualOutput}
+                                          </pre>
+                                        </div>
+                                        {expectedOutput !== 'N/A' && actualOutput !== 'N/A' && expectedOutput !== actualOutput && (
+                                          <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2 flex items-center gap-1">
+                                            <AlertTriangle className="h-3 w-3" />
+                                            Output differs from expected
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </CollapsibleContent>
+                                </Collapsible>
+
+                                {/* Evaluator Scores */}
+                                <div>
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <p className="text-sm font-medium">Evaluator Scores</p>
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger>
+                                          <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p className="max-w-xs">Scores from different evaluators measuring various quality aspects</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  </div>
+                                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                    {Object.entries(evalResults).map(([key, value]: [string, any]) => {
+                                      if (typeof value !== 'number') return null;
+                                      
+                                      // Handle different metric types
+                                      const isLatencyMetric = key.toLowerCase().includes('latency') || key.toLowerCase().includes('duration');
+                                      const isPercentageMetric = !isLatencyMetric && !key.includes('cost') && !key.includes('tokens');
+                                      
+                                      let displayValue: string;
+                                      let colorClass: string;
+                                      let bgColorClass: string;
+                                      
+                                      if (isLatencyMetric) {
+                                        displayValue = `${value.toFixed(1)}ms`;
+                                        if (key.includes('P95') || key.includes('p95')) {
+                                          colorClass = value < 500 ? 'text-green-600 dark:text-green-400' : value < 1000 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400';
+                                          bgColorClass = value < 500 ? 'bg-green-50 dark:bg-green-950/20' : value < 1000 ? 'bg-yellow-50 dark:bg-yellow-950/20' : 'bg-red-50 dark:bg-red-950/20';
+                                        } else {
+                                          colorClass = value < 200 ? 'text-green-600 dark:text-green-400' : value < 500 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400';
+                                          bgColorClass = value < 200 ? 'bg-green-50 dark:bg-green-950/20' : value < 500 ? 'bg-yellow-50 dark:bg-yellow-950/20' : 'bg-red-50 dark:bg-red-950/20';
+                                        }
+                                      } else if (isPercentageMetric) {
+                                        const score = value * 100;
+                                        displayValue = `${score.toFixed(1)}%`;
+                                        colorClass = score >= 80 ? 'text-green-600 dark:text-green-400' : score >= 60 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400';
+                                        bgColorClass = score >= 80 ? 'bg-green-50 dark:bg-green-950/20' : score >= 60 ? 'bg-yellow-50 dark:bg-yellow-950/20' : 'bg-red-50 dark:bg-red-950/20';
+                                      } else {
+                                        displayValue = value.toFixed(4);
+                                        colorClass = 'text-gray-600 dark:text-gray-400';
+                                        bgColorClass = 'bg-gray-50 dark:bg-gray-950/20';
+                                      }
+                                      
+                                      return (
+                                        <div key={key} className={`p-3 rounded-lg border ${bgColorClass}`}>
+                                          <div className="flex items-center justify-between mb-1">
+                                            <span className="text-xs font-medium text-muted-foreground">{formatEvaluatorName(key)}</span>
+                                            {isPercentageMetric && (
+                                              <span className={`text-xs font-bold ${colorClass}`}>
+                                                {value >= 0.8 ? '✓' : value >= 0.6 ? '⚠' : '✗'}
+                                              </span>
+                                            )}
+                                          </div>
+                                          <span className={`text-sm font-semibold ${colorClass}`}>
+                                            {displayValue}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
                     </div>
                   ) : (
-                    <p className="text-muted-foreground">No sample results available</p>
+                    <div className="text-center py-12">
+                      <p className="text-muted-foreground">No sample results available</p>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Sample results will appear here once the evaluation run completes
+                      </p>
+                    </div>
                   )}
                 </CardContent>
               </Card>

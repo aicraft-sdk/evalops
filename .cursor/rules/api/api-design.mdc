@@ -1,0 +1,107 @@
+---
+description: REST and gRPC API design patterns and conventions
+globs: ["**/*.{controller,service,module,gateway}.ts"]
+alwaysApply: false
+---
+
+# API Design Patterns
+
+## Overview
+REST and gRPC API design patterns, conventions, and best practices.
+
+## REST API Conventions
+
+### Endpoints
+**✅ CORRECT - Use RESTful conventions:**
+```typescript
+@Controller('users')
+export class UsersController {
+  @Get() // GET /users
+  async getUsers() {}
+  
+  @Get(':id') // GET /users/:id
+  async getUser(@Param('id') id: string) {}
+  
+  @Post() // POST /users
+  async createUser(@Body() dto: CreateUserDto) {}
+  
+  @Put(':id') // PUT /users/:id
+  async updateUser(@Param('id') id: string, @Body() dto: UpdateUserDto) {}
+  
+  @Delete(':id') // DELETE /users/:id
+  async deleteUser(@Param('id') id: string) {}
+}
+```
+
+### Status Codes
+- 200: Success
+- 201: Created
+- 400: Bad Request
+- 401: Unauthorized
+- 403: Forbidden
+- 404: Not Found
+- 500: Internal Server Error
+
+### Pagination
+**✅ CORRECT:**
+```typescript
+@Get()
+async getUsers(@Query() query: PaginationDto) {
+  const { page = 1, limit = 10 } = query;
+  return {
+    data: users,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+}
+```
+
+## gRPC Patterns
+
+### Error Handling
+**✅ CORRECT - Use RpcException:**
+```typescript
+import { RpcException } from '@nestjs/microservices';
+import { GrpcStatusCode } from '@microservices-shared/grpc-exceptions';
+
+@MessagePattern('getUser')
+async getUser(data: { id: string }) {
+  if (!data.id) {
+    throw new RpcException({
+      code: GrpcStatusCode.INVALID_ARGUMENT,
+      message: 'User ID is required',
+    });
+  }
+  // ...
+}
+```
+
+**❌ WRONG - Never use HTTP exceptions in gRPC:**
+```typescript
+// ❌ WRONG
+throw new BadRequestException('Invalid'); // Use RpcException instead
+```
+
+## Request/Response Validation
+**✅ CORRECT - Validate DTOs:**
+```typescript
+import { IsString, IsEmail } from 'class-validator';
+
+export class CreateUserDto {
+  @IsString()
+  @IsEmail()
+  email: string;
+}
+```
+
+## Integration
+
+- [security.mdc](.cursor/rules/core/security.mdc) - API security
+- [grpc-patterns.mdc](.cursor/rules/api/grpc-patterns.mdc) - gRPC specifics
+- [general.mdc](.cursor/rules/core/general.mdc) - Error handling
+- [nestjs.mdc](.cursor/rules/language-framework/nestjs.mdc) - NestJS patterns
+- [logging.mdc](.cursor/rules/core/logging.mdc) - Logging standards

@@ -1,0 +1,81 @@
+---
+description: Tilt MCP server priority rules and feature validation guidelines for local development
+globs: ["**/*"]
+alwaysApply: false
+---
+
+# Tilt MCP Server Rules for Cursor
+
+## Overview
+This rule defines Tilt MCP server priority rules for log queries and feature validation guidelines for local development. When Tilt is running, Tilt MCP tools should be prioritized over alternative log sources for real-time, service-attributed logs.
+
+## Tilt MCP Server Priority Rules
+
+### Primary Rule: Log Query Priority
+
+**When a user asks for logs of any service or resource:**
+
+1. **First, check if Tilt is running** using the `check_tilt_status` tool
+2. **If Tilt is running and accessible:**
+   - **ALWAYS use Tilt MCP tools first** for log queries
+   - Use `get_logs`, `tail_logs`, or `search_logs` from the Tilt MCP server
+   - This provides real-time, live logs from the actual running services
+3. **If Tilt is not running:**
+   - Fall back to alternative log sources (NX MCP, file system, etc.)
+
+### Available Tilt MCP Tools
+
+When Tilt is running, use these tools in order of preference:
+
+1. **`check_tilt_status`** - Verify Tilt is running before any log operations
+2. **`list_resources`** - Get available Tilt resources
+3. **`get_logs`** - Retrieve logs from a specific resource
+4. **`tail_logs`** - Stream real-time logs
+5. **`search_logs`** - Search logs for specific patterns
+6. **`get_status`** - Get resource status information
+
+### Usage Examples
+
+**For log queries, always start with:**
+
+```
+tilt check if Tilt is running
+```
+
+**Then proceed with:**
+
+```
+tilt get logs for [service-name]
+tilt tail logs for [service-name]
+tilt search logs for "error" in [service-name]
+```
+
+### Why Tilt MCP Takes Priority
+
+- **Real-time data**: Tilt MCP provides live logs from actual running services
+- **Service context**: Logs are properly attributed to specific Tilt resources
+- **Integrated workflow**: Part of the active development environment
+- **Comprehensive coverage**: Covers all services managed by Tilt
+
+### Fallback Strategy
+
+Only use alternative log sources when:
+
+- Tilt is not running (`tiltRunning: false`)
+- Tilt MCP server is not accessible
+- User explicitly requests a different log source
+
+### Implementation Notes
+
+- Always call `check_tilt_status` first when user asks for logs
+- Respect the `recommendation` field in the status response
+- Use the Tilt MCP tools for all log-related queries when Tilt is available
+- Provide clear feedback about which log source is being used
+
+## Feature Validation
+
+After finish each implementation check that the Tilt resources (All the enabled ones) are working and that we don't have errors on the resources located under 'services' category, check the logs always before tell me that the implementation is finished. If you detect some error, try to fix it, at least, three times. If you can't, put an advise and detailed summary of the issue on the last message so we can review it.
+
+## Integration
+- [mcp.mdc](.cursor/rules/core/mcp.mdc) - MCP server management
+- [general.mdc](.cursor/rules/core/general.mdc) - Core coding principles

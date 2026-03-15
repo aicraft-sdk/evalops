@@ -1,0 +1,52 @@
+# EvalOps Helm Chart — Production Overrides
+# Apply with: helm upgrade --install evalops ./helm/evalops -f values.production.yaml
+
+replicaCount:
+  apiGateway: 2
+  authService: 2
+  coreService: 2
+  evaluationService: 3
+  integrationService: 2
+  analyticsService: 2
+  frontend: 2
+
+image:
+  pullPolicy: Always
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  host: "evalops.yourdomain.com"
+  tls:
+    - secretName: evalops-tls
+      hosts:
+        - evalops.yourdomain.com
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+resources:
+  apiGateway:
+    requests: { cpu: "250m", memory: "256Mi" }
+    limits: { cpu: "500m", memory: "512Mi" }
+  evaluationService:
+    requests: { cpu: "500m", memory: "512Mi" }
+    limits: { cpu: "2000m", memory: "2Gi" }
+  default:
+    requests: { cpu: "250m", memory: "256Mi" }
+    limits: { cpu: "500m", memory: "512Mi" }
+
+postgresql:
+  enabled: false  # Use external managed PostgreSQL in production
+
+redis:
+  enabled: true
+  architecture: replication
+  replica:
+    replicaCount: 2

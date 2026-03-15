@@ -1,0 +1,123 @@
+---
+description: Universal MCP server management rules for context window optimization and configuration best practices
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# MCP Server Rules for Cursor
+
+## Overview
+This rule defines MCP (Model Context Protocol) server management strategies for optimizing context window usage and maintaining optimal performance. It covers configuration best practices, context window management, and selective MCP enablement.
+
+## Context Window Management
+
+### CRITICAL: Context Window Optimization
+
+**Rule of Thumb**: Have 20-30 MCPs configured, but keep under 10 enabled / under 80 tools active.
+
+Your 200k context window before compacting might only be 70k with too many tools enabled. Performance degrades significantly.
+
+### MCP Management Strategy
+
+1. **Configure Many, Enable Few**
+   - Configure all MCPs you might need at user/project level
+   - Enable only the ones actively needed for current work
+   - Disable unused MCPs to preserve context window
+
+2. **Check Enabled MCPs**
+   ```bash
+   # Use MCP tools to check what's enabled
+   # Or check Cursor settings for MCP server status
+   ```
+
+3. **Disable Unused MCPs**
+   - Navigate to Cursor settings
+   - Find MCP server configuration
+   - Disable servers not currently needed
+   - Re-enable when needed for specific tasks
+
+### Context Window Impact
+
+**Before Optimization:**
+- 20+ MCPs enabled
+- 100+ tools active
+- Effective context: ~70k tokens
+- Performance: Slow, degraded
+
+**After Optimization:**
+- 5-8 MCPs enabled
+- 40-60 tools active
+- Effective context: ~150k tokens
+- Performance: Fast, responsive
+
+### MCP Selection Guidelines
+
+**Always Enable:**
+- Core development tools (Git, File System)
+- Project-specific tools (Tilt, Nx if using)
+
+**Enable When Needed:**
+- Database MCPs (PostgreSQL, MongoDB)
+- Cloud MCPs (AWS, Vercel, Railway)
+- API MCPs (GitHub, Jira)
+- Testing MCPs (SonarQube, Test Orchestrator)
+
+**Disable When Not Needed:**
+- Language-specific MCPs (if not working in that language)
+- Cloud MCPs (if not deploying)
+- External API MCPs (if not integrating)
+
+### Model Selection for MCP-Heavy Workloads
+
+Use **model tiers** based on task complexity:
+
+- **Fast tier**: Fast, good for simple tasks with many MCPs
+- **Balanced tier**: Balanced, good for moderate MCP usage (default)
+- **Powerful tier**: Most capable, use when context window allows
+
+**Remember**: More MCPs = Less context window = Slower performance. Be selective.
+
+**Note**: Configure tier mappings in `.cursor/model-config.json` for your provider. Default Claude mappings: fast=haiku, balanced=sonnet, powerful=opus.
+
+## MCP Configuration Best Practices
+
+### User vs Project Level
+
+- **User Level**: Configure MCPs you use across projects (GitHub, general tools)
+- **Project Level**: Configure project-specific MCPs (Tilt, Nx, project databases)
+
+### MCP Server Examples
+
+**Common MCPs to Consider:**
+- GitHub MCP - PR management, issue tracking
+- Tilt MCP - Local development
+- Nx MCP - Monorepo operations
+- MongoDB/PostgreSQL MCPs - Database operations
+- Memory MCP - Context persistence
+- Sequential Thinking MCP - Complex reasoning
+
+**Configuration Pattern:**
+```json
+{
+  "mcpServers": {
+    "github": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-github"] },
+    "tilt": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-tilt"] },
+    "nx": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-nx"] }
+  }
+}
+```
+
+### Performance Monitoring
+
+Monitor context window usage:
+- Check Cursor's context indicator
+- If approaching limits, disable unused MCPs
+- Prefer disabling over compacting when possible
+- Compact only when necessary
+
+**This rule maintains optimal context window usage through selective MCP enablement.**
+
+## Integration
+- [code-intelligence.mdc](.cursor/rules/core/code-intelligence.mdc) - GitNexus MCP usage
+- [tilt-mcp.mdc](.cursor/rules/devops/tilt-mcp.mdc) - Tilt MCP priority rules
+- [token-optimization.mdc](.cursor/rules/performance/token-optimization.mdc) - Token optimization strategies

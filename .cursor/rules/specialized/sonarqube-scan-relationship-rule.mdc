@@ -1,0 +1,135 @@
+---
+description: Git-to-SonarQube scan relationships and access patterns for PRs, branches, and commits
+globs: ["**/*.{ts,tsx}"]
+alwaysApply: false
+---
+
+# SonarQube Scan Relationship MDC Rule
+
+## Overview
+
+This rule defines how to relate Git operations (commits, pushes, branches, PRs) to specific SonarQube scans and how to access scan data using the available SonarQube MCP tools.
+
+## Git-to-SonarQube Relationships
+
+### 1. Pull Request Scans
+
+- **Relationship**: Each PR gets its own SonarQube analysis
+- **Access Method**: Use `pullRequest` parameter with PR number
+- **Tools**: `get_project_quality_gate_status`, `search_sonar_issues_in_projects`
+- **Example**: PR #787 → `pullRequest: "787"`
+
+### 2. Branch Scans
+
+- **Relationship**: Each branch can have its own quality gate analysis
+- **Access Method**: Use `branch` parameter with branch name
+- **Tools**: `get_project_quality_gate_status`, `get_component_measures`
+- **Example**: feature/my-branch → `branch: "feature/my-branch"`
+
+### 3. Commit/SCM Information
+
+- **Relationship**: Commits are tracked in SCM info with analysis IDs
+- **Access Method**: Use `get_scm_info` with file keys
+- **Tools**: `get_scm_info`, `get_raw_source`
+- **Example**: File changes → SCM history → Analysis correlation
+
+### 4. Analysis ID Tracking
+
+- **Relationship**: Each scan generates a unique analysis ID
+- **Access Method**: Use `analysisId` parameter when available
+- **Tools**: `get_project_quality_gate_status`
+- **Example**: Analysis ID → Direct scan lookup
+
+## Required Information for Scan Access
+
+### For PR Scans:
+
+- Project key (e.g., `biocatchltd_apps-platform_microservices-shared`)
+- Pull request number (e.g., `787`)
+
+### For Branch Scans:
+
+- Project key
+- Branch name (e.g., `main`, `develop`, `feature/name`)
+
+### For Commit Analysis:
+
+- Project key
+- File path (e.g., `src/modules/context/unified-context.module.ts`)
+- Line range (optional)
+
+## Available Scan Data
+
+### Quality Gate Status
+
+- Overall status (OK/ERROR)
+- Specific condition results (coverage, reliability, security, maintainability)
+- Threshold vs actual values
+- New code metrics
+
+### Issues and Metrics
+
+- Code issues with severity, status, location
+- Coverage metrics (overall and new code)
+- Technical debt, bugs, vulnerabilities
+- Code smells and duplications
+
+### SCM Integration
+
+- Commit history per file
+- Author information
+- Revision tracking
+- Date/time correlation
+
+## Usage Patterns
+
+### 1. Finding Failed Scans
+
+```typescript
+// Check PR quality gate
+get_project_quality_gate_status(projectKey, pullRequest: "787")
+
+// Search for issues in specific PR
+search_sonar_issues_in_projects(projects: [projectKey], pullRequestId: "787")
+```
+
+### 2. Coverage Analysis
+
+```typescript
+// Get coverage metrics
+get_component_measures(component: projectKey, metricKeys: ["coverage", "new_coverage"])
+
+// Check quality gate conditions
+get_project_quality_gate_status(projectKey, pullRequest: "787")
+```
+
+### 3. Issue Investigation
+
+```typescript
+// Find specific issues
+search_sonar_issues_in_projects(projects: [projectKey], pullRequestId: "787")
+
+// Get SCM info for changed files
+get_scm_info(key: "project:file/path.ts", from: 1, to: 50)
+```
+
+## Local Scan Capabilities
+
+- **Current Status**: Cannot run SonarQube scans locally via MCP tools
+- **Available**: Read-only access to existing scan results
+- **Limitation**: No `sonar-scanner` or analysis execution capabilities
+- **Workaround**: Use existing scan data to identify issues and provide remediation guidance
+
+## Best Practices
+
+1. Always specify project key when accessing scan data
+2. Use PR numbers for pull request analysis
+3. Use branch names for branch-specific analysis
+4. Check both overall and new code metrics
+5. Correlate SCM info with scan results for complete picture
+6. Focus on quality gate conditions that are failing (ERROR status)
+
+## Integration
+
+- [sonarqube-mcp-testing.mdc](.cursor/rules/specialized/sonarqube-mcp-testing.mdc) - SonarQube testing integration
+- [tests.mdc](.cursor/rules/core/tests.mdc) - Testing protocol

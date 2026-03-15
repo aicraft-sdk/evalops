@@ -1,0 +1,55 @@
+---
+description: Caching strategies for Redis and in-memory caching
+globs: ["**/*.{service,module}.ts"]
+alwaysApply: false
+---
+
+# Caching Strategies
+
+## Overview
+When and how to use caching (Redis, in-memory) for performance optimization.
+
+## When to Cache
+
+- Read-heavy operations
+- Expensive computations
+- External API responses
+- Database query results
+
+## Redis Caching
+
+**✅ CORRECT:**
+```typescript
+async getUser(userId: string) {
+  const cacheKey = `user:${userId}`;
+  const cached = await this.redis.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+  
+  const user = await this.repository.findById(userId);
+  await this.redis.setex(cacheKey, 3600, JSON.stringify(user));
+  return user;
+}
+```
+
+## Cache Invalidation
+
+**✅ CORRECT - Invalidate on updates:**
+```typescript
+async updateUser(userId: string, data: UpdateUserDto) {
+  const user = await this.repository.update(userId, data);
+  await this.redis.del(`user:${userId}`);
+  return user;
+}
+```
+
+## TTL Strategies
+
+- Short TTL (5-15 min): Frequently changing data
+- Medium TTL (1 hour): Moderately changing data
+- Long TTL (24 hours): Rarely changing data
+
+## Integration
+
+- [performance.mdc](.cursor/rules/performance/performance.mdc) - Performance optimization
+- [database.mdc](.cursor/rules/data/database.mdc) - Database patterns
+- [async-patterns.mdc](.cursor/rules/data/async-patterns.mdc) - Async patterns

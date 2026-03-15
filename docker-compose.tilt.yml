@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: evalops-postgres
+    environment:
+      POSTGRES_DB: evalops
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "15432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - evalops-network
+    labels:
+      - "tilt.dev/resource=postgres"
+      - "tilt.dev/manage=true"
+
+  redis:
+    image: redis:7-alpine
+    container_name: evalops-redis
+    ports:
+      - "16379:6379"
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - evalops-network
+    labels:
+      - "tilt.dev/resource=redis"
+      - "tilt.dev/manage=true"
+
+volumes:
+  postgres_data:
+
+networks:
+  evalops-network:
+    driver: bridge

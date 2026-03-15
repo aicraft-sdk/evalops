@@ -1,0 +1,55 @@
+---
+description: Use GitNexus impact and context tools before cross-package refactors and public interface changes
+globs: ["**/*.{ts,js,py,go,java,kt}"]
+alwaysApply: false
+---
+
+# Code Intelligence
+
+## Overview
+This rule defines when and how to use GitNexus MCP tools for impact analysis and context understanding before making cross-package refactors or modifying public interfaces. These tools help assess blast radius and understand dependencies before making changes.
+
+## Before Renaming or Moving Anything Referenced Across Packages
+
+Run `impact` before renaming functions, changing method signatures, or moving modules that are exported or referenced by more than one package.
+
+```
+impact({ repo: "<repo-id>", symbol: "<SymbolName>" })
+```
+
+- If `riskLevel` is **high** or **critical**: open a tracking issue / PR before proceeding and document in AGENTS.md.
+- If blast radius crosses package boundaries: update all affected call sites in a single PR or a coordinated multi-PR plan.
+- If GitNexus is unavailable: use "Find All References" and `grep -r` as fallback.
+
+## Before Modifying a Public Interface or Shared Type
+
+Run `context` before editing any exported interface, DTO, proto definition, or type that other modules depend on.
+
+```
+context({ repo: "<repo-id>", symbol: "<InterfaceName>" })
+```
+
+- Read the **callers** list — any entry prefixed with `pkg:` indicates a cross-package dependency.
+- If callers span >2 packages: consider a backward-compatible migration (add new method, deprecate old).
+
+## Quick Reference — GitNexus MCP Tools
+
+| Tool      | Use for                                          |
+|-----------|--------------------------------------------------|
+| `context` | Understanding call graph before any change       |
+| `impact`  | Blast radius before rename / signature change    |
+| `query`   | Finding where a concept/domain lives in the repo |
+| `rename`  | AI-assisted rename with automatic call-site updates |
+| `cypher`  | Custom graph queries for advanced analysis       |
+
+## Fallback (GitNexus Not Running)
+
+If the MCP server is not available, proceed with standard heuristics and note the limitation:
+
+```
+# GitNexus not available — manual context analysis used
+```
+
+## Integration
+- [general.mdc](.cursor/rules/core/general.mdc) - Core coding principles
+- [mcp.mdc](.cursor/rules/core/mcp.mdc) - MCP server management

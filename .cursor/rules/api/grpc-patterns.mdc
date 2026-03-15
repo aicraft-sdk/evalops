@@ -1,0 +1,52 @@
+---
+description: gRPC service patterns, error handling, and proto definitions
+globs: ["**/*.{proto,ts}"]
+alwaysApply: false
+---
+
+# gRPC Patterns
+
+## Overview
+gRPC-specific patterns for service definitions, error handling, streaming, and client management.
+
+## Error Handling
+
+**✅ CORRECT - Use RpcException:**
+```typescript
+import { RpcException } from '@nestjs/microservices';
+import { GrpcStatusCode } from '@microservices-shared/grpc-exceptions';
+
+@MessagePattern('getUser')
+async getUser(data: { id: string }) {
+  if (!data.id) {
+    throw new RpcException({
+      code: GrpcStatusCode.INVALID_ARGUMENT,
+      message: 'User ID is required',
+    });
+  }
+  // ...
+}
+```
+
+**❌ WRONG - Never use HTTP exceptions:**
+```typescript
+// ❌ WRONG
+throw new BadRequestException('Invalid'); // Use RpcException
+```
+
+## Proto File Organization
+
+**✅ CORRECT - Organize by service:**
+```
+user-service/
+  proto/
+    user.proto
+    user_service.proto
+```
+
+## Integration
+
+- [api-design.mdc](.cursor/rules/api/api-design.mdc) - API design patterns
+- [general.mdc](.cursor/rules/core/general.mdc) - Error handling
+- [nestjs.mdc](.cursor/rules/language-framework/nestjs.mdc) - NestJS patterns
+- [security.mdc](.cursor/rules/core/security.mdc) - Security practices

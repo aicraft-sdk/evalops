@@ -17,6 +17,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import { 
   Activity, 
   DollarSign, 
@@ -28,7 +32,13 @@ import {
   Target,
   Baseline,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  Copy,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  EyeOff,
+  HelpCircle
 } from "lucide-react";
 
 interface RunDetailsModalProps {
@@ -39,6 +49,34 @@ interface RunDetailsModalProps {
 
 export function RunDetailsModal({ runId, open, onOpenChange }: RunDetailsModalProps) {
   const [activeTab, setActiveTab] = useState("overview");
+  const [expandedSamples, setExpandedSamples] = useState<Set<number>>(new Set());
+  const { toast } = useToast();
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({
+        title: "Copied!",
+        description: `${label} copied to clipboard`,
+      });
+    } catch (err) {
+      toast({
+        title: "Failed to copy",
+        description: "Could not copy to clipboard",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const toggleSampleExpansion = (idx: number) => {
+    const newExpanded = new Set(expandedSamples);
+    if (newExpanded.has(idx)) {
+      newExpanded.delete(idx);
+    } else {
+      newExpanded.add(idx);
+    }
+    setExpandedSamples(newExpanded);
+  };
   
   const { data: runDetails, isLoading } = useQuery({
     queryKey: ["/api/runs", runId, "details"],
@@ -407,87 +445,241 @@ export function RunDetailsModal({ runId, open, onOpenChange }: RunDetailsModalPr
                   <CardHeader>
                     <CardTitle>Sample Evaluation Results</CardTitle>
                     <p className="text-sm text-muted-foreground">
-                      Individual inputs, AI responses, and evaluation scores
+                      Individual inputs, AI responses, and evaluation scores. Click to expand and view full outputs.
                     </p>
                   </CardHeader>
                   <CardContent>
                     {runDetails?.sampleResults?.length ? (
                       <div className="space-y-4">
                         {runDetails.sampleResults.map((sample: any, index: number) => {
+                          const isExpanded = expandedSamples.has(index);
                           const evalResults = sample.evaluationResults || {};
-                          const renderEvaluatorScore = (evaluator: string, score: number) => {
-                            const scoreValue = typeof score === 'number' ? score : 0;
-                            const scorePercentage = Math.round(scoreValue * 100);
-                            const badgeVariant = scoreValue >= 0.8 ? 'default' : scoreValue >= 0.5 ? 'secondary' : 'destructive';
-                            
-                            return (
-                              <div key={evaluator} className="flex items-center gap-2">
-                                <span className="text-sm font-medium min-w-[120px]">{evaluator}:</span>
-                                <Badge variant={badgeVariant} className="text-xs">
-                                  {scorePercentage}%
-                                </Badge>
-                                <span className="text-xs text-muted-foreground">
-                                  ({scoreValue.toFixed(3)})
-                                </span>
-                              </div>
-                            );
-                          };
+                          const actualOutput = sample.actualOutput || 'N/A';
+                          const expectedOutput = sample.expectedOutput || 'N/A';
+                          const inputText = typeof sample.input === 'string' ? sample.input : JSON.stringify(sample.input, null, 2);
+                          
+                          // Calculate overall score
+                          const scores = Object.entries(evalResults)
+                            .filter(([_, v]: [string, any]) => typeof v === 'number' && !['cost', 'latency', 'tokens'].some(k => v.toString().includes(k)))
+                            .map(([_, v]: [string, any]) => v);
+                          const avgScore = scores.length > 0 ? scores.reduce((a: number, b: number) => a + b, 0) / scores.length : 0;
+                          const overallStatus = avgScore >= 0.8 ? 'pass' : avgScore >= 0.6 ? 'warn' : 'fail';
 
                           return (
-                            <Card key={index} className="border-l-4 border-l-blue-500">
+                            <Card key={index} className={`border-l-4 ${
+                              overallStatus === 'pass' ? 'border-l-green-500' : 
+                              overallStatus === 'warn' ? 'border-l-yellow-500' : 
+                              'border-l-red-500'
+                            }`}>
                               <CardContent className="pt-4">
                                 <div className="space-y-3">
-                                  <div className="flex items-center justify-between mb-2">
-                                    <p className="text-sm font-semibold text-muted-foreground">
-                                      Sample {sample.sampleIndex + 1} {sample.repetition > 0 && `(Rep ${sample.repetition + 1})`}
-                                    </p>
-                                    <div className="flex gap-2 text-xs text-muted-foreground">
-                                      {evalResults.cost && (
-                                        <span>Cost: ${evalResults.cost.toFixed(4)}</span>
-                                      )}
-                                      {evalResults.latency && (
-                                        <span>Latency: {evalResults.latency}ms</span>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  <div>
-                                    <p className="text-sm font-medium">Input:</p>
-                                    <p className="text-sm bg-muted p-2 rounded font-mono text-xs">
-                                      {typeof sample.input === 'string' ? sample.input : JSON.stringify(sample.input, null, 2)}
-                                    </p>
-                                  </div>
-                                  
-                                  <div>
-                                    <p className="text-sm font-medium">AI Response:</p>
-                                    <p className="text-sm bg-muted p-2 rounded text-xs">
-                                      {typeof sample.actualOutput === 'string' ? sample.actualOutput : JSON.stringify(sample.actualOutput, null, 2)}
-                                    </p>
-                                  </div>
-                                  
-                                  {sample.expectedOutput && (
-                                    <div>
-                                      <p className="text-sm font-medium">Expected Output:</p>
-                                      <p className="text-sm bg-muted p-2 rounded text-xs">
-                                        {typeof sample.expectedOutput === 'string' ? sample.expectedOutput : JSON.stringify(sample.expectedOutput, null, 2)}
-                                      </p>
-                                    </div>
-                                  )}
-
-                                  {Object.keys(evalResults).length > 0 && (
-                                    <div className="pt-2 border-t">
-                                      <p className="text-sm font-medium mb-2">Evaluator Scores:</p>
-                                      <div className="space-y-2">
-                                        {Object.entries(evalResults).map(([evaluator, score]) => {
-                                          if (evaluator === 'cost' || evaluator === 'latency') return null;
-                                          if (typeof score === 'number') {
-                                            return renderEvaluatorScore(evaluator, score);
-                                          }
-                                          return null;
-                                        })}
-                                        {Object.keys(evalResults).filter(k => k !== 'cost' && k !== 'latency' && typeof evalResults[k] === 'number').length === 0 && (
-                                          <p className="text-xs text-muted-foreground">No evaluator scores recorded</p>
+                                  {/* Header */}
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <div className={`p-1.5 rounded-full ${
+                                        overallStatus === 'pass' ? 'bg-green-100 dark:bg-green-900/20' :
+                                        overallStatus === 'warn' ? 'bg-yellow-100 dark:bg-yellow-900/20' :
+                                        'bg-red-100 dark:bg-red-900/20'
+                                      }`}>
+                                        {overallStatus === 'pass' ? (
+                                          <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                                        ) : overallStatus === 'warn' ? (
+                                          <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                                        ) : (
+                                          <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
                                         )}
+                                      </div>
+                                      <div>
+                                        <p className="text-sm font-semibold">
+                                          Sample {sample.sampleIndex + 1} {sample.repetition > 0 && `(Rep ${sample.repetition + 1})`}
+                                        </p>
+                                        {avgScore > 0 && (
+                                          <p className="text-xs text-muted-foreground">
+                                            Average Score: {(avgScore * 100).toFixed(1)}%
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      {evalResults.cost && (
+                                        <Badge variant="outline" className="text-xs">
+                                          ${evalResults.cost.toFixed(4)}
+                                        </Badge>
+                                      )}
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => toggleSampleExpansion(index)}
+                                        className="h-7 gap-1"
+                                      >
+                                        {isExpanded ? (
+                                          <>
+                                            <EyeOff className="h-3 w-3" />
+                                            Collapse
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Eye className="h-3 w-3" />
+                                            Expand
+                                          </>
+                                        )}
+                                      </Button>
+                                    </div>
+                                  </div>
+
+                                  {/* Input Section */}
+                                  <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <div className="flex items-center gap-2">
+                                        <p className="text-sm font-medium">Test Input</p>
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger>
+                                              <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                              <p className="max-w-xs">This is the input provided to the AI model for testing</p>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      </div>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => copyToClipboard(inputText, 'Input')}
+                                        className="h-7 gap-1"
+                                      >
+                                        <Copy className="h-3 w-3" />
+                                        Copy
+                                      </Button>
+                                    </div>
+                                    <div className="bg-muted/50 p-3 rounded-lg border">
+                                      <pre className="text-xs font-mono whitespace-pre-wrap break-words max-h-32 overflow-y-auto">
+                                        {inputText}
+                                      </pre>
+                                    </div>
+                                  </div>
+
+                                  {/* Expected vs Actual Comparison */}
+                                  <Collapsible open={isExpanded} onOpenChange={() => toggleSampleExpansion(index)}>
+                                    <CollapsibleTrigger asChild>
+                                      <Button variant="ghost" className="w-full justify-between h-8">
+                                        <span className="text-sm font-medium">Expected vs Actual Output</span>
+                                        {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                      </Button>
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent className="space-y-3">
+                                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                                        {/* Expected Output */}
+                                        <div>
+                                          <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-2">
+                                              <p className="text-xs font-medium">Expected Output</p>
+                                              <TooltipProvider>
+                                                <Tooltip>
+                                                  <TooltipTrigger>
+                                                    <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                                                  </TooltipTrigger>
+                                                  <TooltipContent>
+                                                    <p className="max-w-xs">The expected or reference output for this test case</p>
+                                                  </TooltipContent>
+                                                </Tooltip>
+                                              </TooltipProvider>
+                                            </div>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() => copyToClipboard(expectedOutput, 'Expected Output')}
+                                              className="h-6 gap-1"
+                                            >
+                                              <Copy className="h-3 w-3" />
+                                            </Button>
+                                          </div>
+                                          <div className="bg-blue-50 dark:bg-blue-950/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800 min-h-[80px]">
+                                            <pre className="text-xs font-mono whitespace-pre-wrap break-words">
+                                              {expectedOutput}
+                                            </pre>
+                                          </div>
+                                        </div>
+
+                                        {/* Actual Output */}
+                                        <div>
+                                          <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-2">
+                                              <p className="text-xs font-medium">Actual Output</p>
+                                              <TooltipProvider>
+                                                <Tooltip>
+                                                  <TooltipTrigger>
+                                                    <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                                                  </TooltipTrigger>
+                                                  <TooltipContent>
+                                                    <p className="max-w-xs">This is the AI's response to your test input</p>
+                                                  </TooltipContent>
+                                                </Tooltip>
+                                              </TooltipProvider>
+                                            </div>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() => copyToClipboard(actualOutput, 'Actual Output')}
+                                              className="h-6 gap-1"
+                                            >
+                                              <Copy className="h-3 w-3" />
+                                            </Button>
+                                          </div>
+                                          <div className={`p-3 rounded-lg border min-h-[80px] ${
+                                            expectedOutput !== 'N/A' && actualOutput !== 'N/A' && expectedOutput === actualOutput
+                                              ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800'
+                                              : 'bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800'
+                                          }`}>
+                                            <pre className="text-xs font-mono whitespace-pre-wrap break-words">
+                                              {actualOutput}
+                                            </pre>
+                                          </div>
+                                          {expectedOutput !== 'N/A' && actualOutput !== 'N/A' && expectedOutput !== actualOutput && (
+                                            <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1 flex items-center gap-1">
+                                              <AlertTriangle className="h-3 w-3" />
+                                              Output differs from expected
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </CollapsibleContent>
+                                  </Collapsible>
+
+                                  {/* Evaluator Scores */}
+                                  {Object.keys(evalResults).filter(k => k !== 'cost' && k !== 'latency' && typeof evalResults[k] === 'number').length > 0 && (
+                                    <div className="pt-2 border-t">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <p className="text-sm font-medium">Evaluator Scores</p>
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger>
+                                              <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                              <p className="max-w-xs">Scores from different evaluators measuring various quality aspects</p>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      </div>
+                                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                        {Object.entries(evalResults).map(([evaluator, score]) => {
+                                          if (evaluator === 'cost' || evaluator === 'latency' || typeof score !== 'number') return null;
+                                          
+                                          const scoreValue = score;
+                                          const scorePercentage = Math.round(scoreValue * 100);
+                                          const badgeVariant = scoreValue >= 0.8 ? 'default' : scoreValue >= 0.5 ? 'secondary' : 'destructive';
+                                          
+                                          return (
+                                            <div key={evaluator} className="flex items-center justify-between p-2 bg-muted/50 rounded text-xs">
+                                              <span className="font-medium truncate">{evaluator}:</span>
+                                              <Badge variant={badgeVariant} className="text-xs ml-2">
+                                                {scorePercentage}%
+                                              </Badge>
+                                            </div>
+                                          );
+                                        })}
                                       </div>
                                     </div>
                                   )}
@@ -498,7 +690,12 @@ export function RunDetailsModal({ runId, open, onOpenChange }: RunDetailsModalPr
                         })}
                       </div>
                     ) : (
-                      <p className="text-muted-foreground">No sample data available for this run</p>
+                      <div className="text-center py-8">
+                        <p className="text-muted-foreground">No sample data available for this run</p>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Sample results will appear here once the evaluation run completes
+                        </p>
+                      </div>
                     )}
                   </CardContent>
                 </Card>
