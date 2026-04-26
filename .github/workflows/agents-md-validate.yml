@@ -1,0 +1,22 @@
+name: agents-md-validate
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: AGENTS.md lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run agents-md-lint
+        run: npx @bcai/ai-resources-cli tools linter/agents-md-lint

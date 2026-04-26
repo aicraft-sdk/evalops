@@ -38,3 +38,7 @@ yarn-error.log*
 # TypeScript
 *.tsbuildinfo
 
+
+# @bcai/recall learning extraction
+.recall/
+docs/learnings/personal/

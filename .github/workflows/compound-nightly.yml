@@ -1,0 +1,46 @@
+name: Compound Learnings
+
+on:
+  schedule:
+    - cron: "30 22 * * *" # 10:30 PM daily
+  workflow_dispatch:
+
+jobs:
+  compound:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install @bcai/recall
+        env:
+          NPM_TOKEN: ${{ secrets.JFROG_TOKEN }}
+        run: |
+          npm config set @bcai:registry https://biocatchdev.jfrog.io/biocatchdev/api/npm/npm/
+          npm config set //biocatchdev.jfrog.io/biocatchdev/api/npm/npm/:_authToken ${NPM_TOKEN}
+          npm install -g @bcai/recall
+
+      - name: Compound learnings from git history
+        env:
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
+          AZURE_OPENAI_API_VERSION: ${{ secrets.AZURE_OPENAI_API_VERSION }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: recall compound --source git --tier shared
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "chore: update learnings from git history"
+          commit_options: "--no-verify"
+          file_pattern: "docs/learnings/shared/**/*.md AGENTS.md"
