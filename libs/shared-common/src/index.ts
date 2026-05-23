@@ -20,7 +20,11 @@ export * from './lib/redis/redis.module';
 
 // Interceptors
 export * from './lib/interceptors/logging.interceptor';
-export * from './lib/interceptors/tenant.interceptor';
+export { OrgContextInterceptor } from './lib/interceptors/org-context.interceptor';
+
+// Request context (AsyncLocalStorage for per-request org isolation)
+export { requestContext } from './lib/context/request-context';
+export type { RequestContext } from './lib/context/request-context';
 
 // Telemetry
 export * from './lib/telemetry/telemetry.module';

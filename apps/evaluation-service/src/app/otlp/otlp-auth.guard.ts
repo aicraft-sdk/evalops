@@ -3,6 +3,7 @@ import {
   CanActivate,
   ExecutionContext,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from '@nestjs/passport';
@@ -15,6 +16,8 @@ import { AuthGuard } from '@nestjs/passport';
  */
 @Injectable()
 export class OtlpAuthGuard extends AuthGuard('jwt') {
+  private readonly logger = new Logger(OtlpAuthGuard.name);
+
   constructor(private readonly configService: ConfigService) {
     super();
   }
@@ -45,8 +48,10 @@ export class OtlpAuthGuard extends AuthGuard('jwt') {
       if (jwtResult) {
         return true;
       }
-    } catch (error) {
-      // JWT auth failed
+    } catch (err: unknown) {
+      this.logger.debug(
+        `JWT auth failed, checking service token: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
 
     throw new UnauthorizedException(

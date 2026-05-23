@@ -13,7 +13,10 @@ import { StorageModule } from './storage/storage.module';
 import { ArtifactsModule } from './artifacts/artifacts.module';
 import { SandboxModule } from './sandbox/sandbox.module';
 import { JwtAuthGuard } from '@evalops/shared-auth';
-import { LoggingInterceptor, TenantInterceptor } from '@evalops/shared-common';
+import {
+  LoggingInterceptor,
+  OrgContextInterceptor,
+} from '@evalops/shared-common';
 
 @Module({
   imports: [
@@ -43,7 +46,7 @@ import { LoggingInterceptor, TenantInterceptor } from '@evalops/shared-common';
     AppService,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
-    { provide: APP_INTERCEPTOR, useClass: TenantInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: OrgContextInterceptor },
   ],
 })
 export class AppModule {}

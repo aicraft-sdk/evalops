@@ -280,12 +280,12 @@ export class WebhooksService {
 
   async queueWebhookDelivery(
     url: string,
-    payload: any,
-    options?: { attempts?: number; delay?: number }
+    payload: unknown,
+    options?: { attempts?: number; delay?: number; organizationId?: string }
   ): Promise<void> {
     await this.webhookQueue.add(
       'deliver',
-      { url, payload },
+      { url, payload, organizationId: options?.organizationId ?? '' },
       {
         attempts: options?.attempts || 3,
         backoff: {

@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   BlobServiceClient,
@@ -14,11 +19,16 @@ import {
  *   AZURE_STORAGE_ACCOUNT_NAME
  *   AZURE_STORAGE_CONTAINER_NAME
  *   AZURE_STORAGE_CONNECTION_STRING  (OR account key via AZURE_STORAGE_ACCOUNT_KEY)
+ *
+ * When credentials are absent the service starts in degraded mode: all public
+ * methods throw ServiceUnavailableException (HTTP 503) instead of crashing the
+ * process at startup. This lets integration-service boot in local dev environments
+ * without Azure credentials configured.
  */
 @Injectable()
 export class AzureBlobService {
   private readonly logger = new Logger(AzureBlobService.name);
-  private readonly client: BlobServiceClient;
+  private readonly client: BlobServiceClient | null;
   private readonly containerName: string;
   private readonly accountName: string;
   private readonly accountKey: string | undefined;
@@ -49,9 +59,21 @@ export class AzureBlobService {
         credential,
       );
     } else {
-      throw new Error(
-        'Azure Blob Storage requires AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_ACCOUNT_NAME + AZURE_STORAGE_ACCOUNT_KEY',
+      this.client = null;
+      this.logger.warn(
+        'Azure Blob Storage not configured — artifact operations will return 503',
       );
+    }
+  }
+
+  /** Returns true when Azure credentials were resolved at startup. */
+  get isAvailable(): boolean {
+    return this.client !== null;
+  }
+
+  private assertAvailable(): void {
+    if (!this.isAvailable) {
+      throw new ServiceUnavailableException('Azure Blob Storage is not configured');
     }
   }
 
@@ -64,8 +86,9 @@ export class AzureBlobService {
     fileName: string,
     content: Buffer | string,
   ): Promise<string> {
+    this.assertAvailable();
     const blobPath = `${runId}/${fileName}`;
-    const containerClient = this.client.getContainerClient(this.containerName);
+    const containerClient = this.client!.getContainerClient(this.containerName);
     const blockBlobClient = containerClient.getBlockBlobClient(blobPath);
 
     const buffer = Buffer.isBuffer(content) ? content : Buffer.from(content, 'utf-8');
@@ -85,6 +108,7 @@ export class AzureBlobService {
     blobPath: string,
     expiryMinutes = 60,
   ): Promise<string> {
+    this.assertAvailable();
     if (!this.accountKey) {
       throw new Error(
         'SAS URL generation requires AZURE_STORAGE_ACCOUNT_KEY',
@@ -117,7 +141,8 @@ export class AzureBlobService {
    * Downloads blob content as a string.
    */
   async downloadBlobContent(blobPath: string): Promise<string> {
-    const containerClient = this.client.getContainerClient(this.containerName);
+    this.assertAvailable();
+    const containerClient = this.client!.getContainerClient(this.containerName);
     const blockBlobClient = containerClient.getBlockBlobClient(blobPath);
 
     const exists = await blockBlobClient.exists();
@@ -160,7 +185,8 @@ export class AzureBlobService {
    * Deletes a blob from Azure Blob Storage.
    */
   async deleteArtifact(blobPath: string): Promise<void> {
-    const containerClient = this.client.getContainerClient(this.containerName);
+    this.assertAvailable();
+    const containerClient = this.client!.getContainerClient(this.containerName);
     const blockBlobClient = containerClient.getBlockBlobClient(blobPath);
 
     const exists = await blockBlobClient.exists();

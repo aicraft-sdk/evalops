@@ -18,7 +18,10 @@ import { TracesModule } from './traces/traces.module';
 import { MigrationModule } from './migration/migration.module';
 import { SandboxExecutionModule } from './sandbox-execution/sandbox-execution.module';
 import { JwtAuthGuard } from '@evalops/shared-auth';
-import { LoggingInterceptor, TenantInterceptor } from '@evalops/shared-common';
+import {
+  LoggingInterceptor,
+  OrgContextInterceptor,
+} from '@evalops/shared-common';
 import { JwtStrategy } from './auth/jwt.strategy';
 
 @Module({
@@ -55,7 +58,7 @@ import { JwtStrategy } from './auth/jwt.strategy';
     JwtStrategy,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
-    { provide: APP_INTERCEPTOR, useClass: TenantInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: OrgContextInterceptor },
   ],
 })
 export class AppModule {}
