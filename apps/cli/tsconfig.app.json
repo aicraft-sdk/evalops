@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../dist/apps/cli",
+    "module": "CommonJS",
+    "declaration": false,
+    "types": ["node"]
+  },
+  "exclude": ["jest.config.cts", "src/**/*.spec.ts", "src/**/*.test.ts"],
+  "include": ["src/**/*.ts"]
+}

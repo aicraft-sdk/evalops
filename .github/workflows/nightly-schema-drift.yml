@@ -1,0 +1,39 @@
+name: Schema Drift Check
+
+on:
+  schedule:
+    - cron: "0 3 * * *" # 3:00 AM daily
+  workflow_dispatch:
+
+jobs:
+  drift-check:
+    name: Detect uncommitted Drizzle migrations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate migrations from current schema
+        # DATABASE_URL is required by drizzle.config.ts guard but not used by `generate`
+        env:
+          DATABASE_URL: postgresql://localhost/evalops-drift-check
+        run: npx drizzle-kit generate --config=libs/shared-db/drizzle.config.ts
+
+      - name: Fail if schema has drifted from committed migrations
+        run: |
+          if ! git diff --exit-code libs/shared-db/migrations/; then
+            echo ""
+            echo "❌ Schema drift detected."
+            echo "   The Drizzle schema has changed but no migration files were committed."
+            echo "   Run: npx drizzle-kit generate --config=libs/shared-db/drizzle.config.ts"
+            echo "   Then commit the generated files in libs/shared-db/migrations/"
+            exit 1
+          fi
+          echo "✅ No schema drift — migrations are up to date."

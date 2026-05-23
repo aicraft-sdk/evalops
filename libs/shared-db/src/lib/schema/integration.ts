@@ -42,6 +42,7 @@ export const sandboxAuditLog = pgTable(
  */
 export const insertSandboxAuditLogSchema = createInsertSchema(sandboxAuditLog, {
   operation: z.enum(['create', 'execute', 'delete', 'security_violation']),
+}).extend({
   resourceUsage: z
     .object({
       cpu: z.number().optional(),

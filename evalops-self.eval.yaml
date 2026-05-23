@@ -1,0 +1,213 @@
+# evalops-self.eval.yaml
+# EvalOps Self-Evaluation Spec — E5 (Workstream 4)
+#
+# This spec dogfoods EvalOps by evaluating the platform's own LLM-touching code.
+# It targets four core components:
+#   1. AgentMD parser (libs/agent-md/src/lib/parser.ts)
+#   2. ExactEvaluator path extraction (libs/evaluators/src/lib/exact-evaluator.ts)
+#   3. RuleEvaluator schema validation (libs/evaluators/src/lib/rule-evaluator.ts)
+#   4. Policy verdict exit-code contract (apps/evaluation-service/src/cli/run-suite.ts)
+#
+# Usage:
+#   Import this spec into the EvalOps platform (via the UI or `evalops dataset push`)
+#   to register the scenarios, then run via:
+#     npm run self-eval
+#   which calls:
+#     npm run evalops -- eval run "EvalOps Self-Evals" --watch
+#
+# Environment:
+#   EVALOPS_API_URL  — EvalOps API base URL (default: http://localhost:3000)
+#   EVALOPS_API_KEY  — JWT token for authentication
+
+name: EvalOps Self-Evals
+description: >
+  Self-evaluation suite that dogfoods EvalOps on its own core evaluation logic.
+  Covers AgentMD parsing, ExactEvaluator path extraction and tolerance,
+  RuleEvaluator schema validation, and the policy verdict exit-code contract.
+version: "1.0.0"
+
+# Dataset-style scenarios: each has an `input` (what is fed to the component)
+# and an `expected` (what the component should produce).
+# The `target` field identifies which source file/class is under test.
+# The `evaluator` field specifies which EvalOps evaluator to use for the check.
+
+scenarios:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # AgentMD Parser — libs/agent-md/src/lib/parser.ts
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  - id: agentmd-valid-parse
+    name: "AgentMD parser: valid YAML front-matter parses without errors"
+    target: agent-md/parser
+    evaluator: exact
+    input:
+      raw: |
+        ---
+        metadata:
+          name: fraud-detection-agent
+          version: "1.0.0"
+        model:
+          provider: anthropic
+          model: claude-opus-4-7
+        ---
+        You are a fraud detection specialist.
+    expected:
+      # parseErrors is absent (undefined) when parsing succeeds — not null
+      agentMD:
+        metadata:
+          name: fraud-detection-agent
+          version: "1.0.0"
+        model:
+          provider: anthropic
+          model: claude-opus-4-7
+
+  - id: agentmd-missing-name
+    name: "AgentMD parser: missing metadata.name produces a non-empty parseErrors array"
+    target: agent-md/parser
+    evaluator: rule
+    input:
+      raw: |
+        ---
+        metadata:
+          version: "1.0.0"
+        model:
+          provider: openai
+          model: gpt-4o
+        ---
+    config:
+      invariants:
+        - condition: "parseErrors.length > 0"
+          message: "Expected parseErrors to be non-empty when metadata.name is missing"
+    expected:
+      passed: true
+
+  - id: agentmd-extra-fields-tolerated
+    name: "AgentMD parser: unknown extra fields are tolerated (agentMD.metadata.name is present)"
+    target: agent-md/parser
+    evaluator: exact
+    input:
+      raw: |
+        ---
+        metadata:
+          name: test-agent
+          version: "1.0.0"
+          custom_tag: ignored
+        model:
+          provider: openai
+          model: gpt-4o
+        extra_unknown_field: some_value
+        ---
+    expected:
+      agentMD:
+        metadata:
+          name: test-agent
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # ExactEvaluator — libs/evaluators/src/lib/exact-evaluator.ts
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  - id: exact-path-extraction
+    name: "ExactEvaluator: dot-path extraction returns correct nested value"
+    target: exact-evaluator
+    evaluator: exact
+    input:
+      config:
+        path: result.decision
+      context:
+        caseId: case-001
+        expected:
+          result:
+            decision: pass
+        actual:
+          result:
+            decision: pass
+    expected:
+      passed: true
+      score: 1
+
+  - id: exact-numeric-tolerance
+    name: "ExactEvaluator: numeric tolerance allows values within threshold"
+    target: exact-evaluator
+    evaluator: exact
+    input:
+      config:
+        tolerance: 0.05
+      context:
+        caseId: case-002
+        expected: 0.95
+        actual: 0.97
+    expected:
+      passed: true
+      score: 1
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # RuleEvaluator — libs/evaluators/src/lib/rule-evaluator.ts
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  - id: rule-valid-schema
+    name: "RuleEvaluator: valid object matching schema passes"
+    target: rule-evaluator
+    evaluator: rule
+    input:
+      config:
+        schema:
+          required:
+            - decision
+            - score
+          properties:
+            decision:
+              type: string
+            score:
+              type: number
+      context:
+        caseId: case-004
+        actual:
+          decision: pass
+          score: 0.95
+    expected:
+      passed: true
+      errors: []
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Policy verdict exit-code contract — apps/evaluation-service/src/cli/run-suite.ts
+  #
+  # Note: these scenarios are specification-only; execution requires a live EvalOps
+  # instance with the spec pre-imported. The CLI command (npm run self-eval) triggers
+  # a live API run, not a static input evaluation. The `suiteDecisions` field below
+  # documents the contract intent but is not consumed by the ExactEvaluator at
+  # static-analysis time.
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # Specification-only: requires a live EvalOps instance with this spec pre-imported.
+  # Not executable as a static evaluation; documents the exit-code contract only.
+  - id: policy-verdict-pass-exit-0
+    name: "Policy verdict contract: suite with all-pass decisions exits 0"
+    target: policy-verdict/run-suite
+    evaluator: exact
+    # Note: these scenarios are specification-only; execution requires a live EvalOps
+    # instance with the spec pre-imported. The CLI command (npm run self-eval) triggers
+    # a live API run, not a static input evaluation.
+    input:
+      suiteDecisions:
+        - pass
+        - pass
+      failOnWarn: false
+    expected:
+      exitCode: 0
+
+  # Specification-only: requires a live EvalOps instance with this spec pre-imported.
+  # Not executable as a static evaluation; documents the exit-code contract only.
+  - id: policy-verdict-fail-exit-1
+    name: "Policy verdict contract: suite with any-fail decision exits 1"
+    target: policy-verdict/run-suite
+    evaluator: exact
+    # Note: these scenarios are specification-only; execution requires a live EvalOps
+    # instance with the spec pre-imported. The CLI command (npm run self-eval) triggers
+    # a live API run, not a static input evaluation.
+    input:
+      suiteDecisions:
+        - pass
+        - fail
+      failOnWarn: false
+    expected:
+      exitCode: 1

@@ -25,7 +25,13 @@ export default {
     '!**/index.ts',
     '!**/*.spec.ts',
   ],
-  coverageThresholds: {
+  coverageThreshold: {
+    global: {
+      lines: 1,
+      statements: 1,
+      functions: 1,
+      branches: 1,
+    },
     './libs/sdk/**': {
       branches: 70,
       lines: 75,

@@ -8,9 +8,26 @@ import { CoreClientService } from '../core-client/core-client.service';
 import { PoliciesService } from '../policies/policies.service';
 import { AIProviderService } from '../ai-provider/ai-provider.service';
 import { PromptFlowService } from '../prompt-flow/prompt-flow.service';
-import { EvaluatorsService } from './evaluators/evaluators.service';
+import { EvaluatorsService, EvaluatorConfig } from './evaluators/evaluators.service';
 import { ReviewsService } from '../reviews/reviews.service';
 import { SandboxExecutionService } from '../sandbox-execution/sandbox-execution.service';
+
+/**
+ * Typed shape for a single evaluator entry within an eval spec.
+ * Fields beyond those listed are allowed (open-ended index signature).
+ */
+interface EvaluatorSpec {
+  type: string;
+  config?: EvaluatorConfig;
+  schema?: Record<string, unknown>;
+  invariants?: string[];
+  expectedOutput?: Record<string, unknown>;
+  criteria?: string;
+  judgePromptId?: string;
+  judgePrompt?: string;
+  evaluatorId?: string;
+  [key: string]: unknown;
+}
 
 export interface EvaluationResult {
   exactMatch?: number;
@@ -29,13 +46,13 @@ export interface EvaluationResult {
   piiDetection?: number;
   jailbreakDetection?: number;
   customEvaluator?: number;
-  customEvaluatorMetadata?: Record<string, any>;
+  customEvaluatorMetadata?: Record<string, unknown>;
   latencyP50?: number;
   latencyP95?: number;
   cost?: number;
   errorRate?: number;
   error?: string;
-  actualOutput?: any;
+  actualOutput?: unknown;
   renderedPrompt?: string;
 }
 
@@ -120,7 +137,7 @@ export class EvaluationService {
           const sample = samples[sampleIndex];
 
           try {
-            const result = await this.evaluateSample(sample, evalSpec, seed, runId);
+            const result = await this.evaluateSample(sample, evalSpec, seed, runId, authToken);
 
             // Store sample result
             await this.storageService.createSampleResult({
@@ -182,7 +199,7 @@ export class EvaluationService {
                 )}%)`,
               });
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             this.logger.error(
               `Error evaluating sample ${sampleIndex} (rep ${rep}):`,
               error
@@ -193,7 +210,7 @@ export class EvaluationService {
       }
 
       // Calculate aggregate metrics
-      const aggregateMetrics: any = {};
+      const aggregateMetrics: Record<string, { mean: number; min: number; max: number; std: number }> = {};
       for (const [key, values] of Object.entries(metrics)) {
         if (values.length > 0) {
           aggregateMetrics[key] = {
@@ -247,12 +264,12 @@ export class EvaluationService {
             );
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         this.logger.warn(`Policy evaluation failed for run ${runId}:`, error);
       }
 
       // Trigger alert checking (fire and forget)
-      this.triggerAlertCheck(runId).catch((error: any) => {
+      this.triggerAlertCheck(runId).catch((error: unknown) => {
         this.logger.warn(
           `Failed to trigger alert check for run ${runId}:`,
           error
@@ -260,11 +277,12 @@ export class EvaluationService {
       });
 
       this.logger.log(`Completed evaluation for run ${runId} in ${duration}ms`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error(`Error executing run ${runId}:`, error);
+      const errMsg = error instanceof Error ? error.message : String(error);
       await this.storageService.updateRun(runId, {
         status: 'failed',
-        errorMessage: error.message,
+        errorMessage: errMsg,
       });
       throw error;
     }
@@ -287,23 +305,24 @@ export class EvaluationService {
           }
         )
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Log but don't throw - alert checking failure shouldn't break run completion
       this.logger.warn(
         `Alert check request failed for run ${runId}:`,
-        error.message
+        error instanceof Error ? error.message : String(error),
       );
     }
   }
 
   private async evaluateSample(
-    sample: any,
-    evalSpec: any,
+    sample: Record<string, unknown>,
+    evalSpec: Record<string, unknown>,
     seed: number,
-    runId?: string
+    runId?: string,
+    authToken?: string
   ): Promise<EvaluationResult> {
     const result: EvaluationResult = {};
-    let response: any;
+    let response: unknown;
     let cost = 0;
     const startTime = Date.now();
 
@@ -311,7 +330,7 @@ export class EvaluationService {
       // Generate response using prompt or flow
       if (evalSpec.promptId) {
         const prompt = await this.coreClient.getPrompt(
-          evalSpec.promptId,
+          evalSpec.promptId as string,
           authToken
         );
         if (prompt) {
@@ -326,7 +345,7 @@ export class EvaluationService {
             };
           }
 
-          const templateContext: any = {
+          const templateContext: Record<string, unknown> = {
             item: datasetSample,
             custom: {
               seed,
@@ -359,7 +378,7 @@ export class EvaluationService {
             typeof sample.input === 'string'
               ? sample.input
               : JSON.stringify(sample.input),
-            evalSpec.modelConfig || {},
+            (evalSpec.modelConfig as Record<string, unknown> | undefined) ?? {},
             seed
           );
 
@@ -367,7 +386,7 @@ export class EvaluationService {
           cost += generationResponse.cost;
         }
       } else if (evalSpec.flowId) {
-        const flow = await this.coreClient.getFlow(evalSpec.flowId, authToken);
+        const flow = await this.coreClient.getFlow(evalSpec.flowId as string, authToken);
         if (flow) {
           const flowResponse = await this.promptFlow.executeFlow(
             flow.flowId,
@@ -399,25 +418,27 @@ export class EvaluationService {
       }
 
       // Run evaluators
-      const evaluators = (evalSpec.evaluators || []) as any[];
+      const evaluators = (evalSpec['evaluators'] as EvaluatorSpec[] | undefined) || [];
 
       for (const evaluator of evaluators) {
         switch (evaluator.type) {
-          case 'exact_match':
+          case 'exact_match': {
             let expectedOutput = sample.expected;
-            if (typeof expectedOutput === 'object' && expectedOutput) {
+            if (typeof expectedOutput === 'object' && expectedOutput !== null) {
+              const expObj = expectedOutput as Record<string, unknown>;
               expectedOutput =
-                expectedOutput.answer ||
-                expectedOutput.output ||
-                expectedOutput.text ||
+                (expObj['answer'] as string | undefined) ||
+                (expObj['output'] as string | undefined) ||
+                (expObj['text'] as string | undefined) ||
                 JSON.stringify(expectedOutput);
             }
             result.exactMatch = this.evaluators.evaluateExactMatch(
-              response,
-              expectedOutput,
+              typeof response === 'string' ? response : JSON.stringify(response),
+              typeof expectedOutput === 'string' ? expectedOutput : String(expectedOutput ?? ''),
               evaluator.config
             );
             break;
+          }
 
           case 'schema_validity':
             result.schemaValidity = this.evaluators.evaluateSchemaValidity(
@@ -463,7 +484,7 @@ export class EvaluationService {
               typeof response === 'string'
                 ? response
                 : JSON.stringify(response),
-              sample.expected || '',
+              typeof sample.expected === 'string' ? sample.expected : (sample.expected != null ? JSON.stringify(sample.expected) : ''),
               judgePrompt,
               seed,
               sample
@@ -472,137 +493,147 @@ export class EvaluationService {
             cost += judgeResult.cost;
             break;
 
-          case 'battle':
+          case 'battle': {
             const battleResult = await this.evaluators.evaluateBattle(
               typeof response === 'string'
                 ? response
                 : JSON.stringify(response),
-              sample.expected || '',
-              evaluator.config,
+              typeof sample.expected === 'string' ? sample.expected : (sample.expected != null ? JSON.stringify(sample.expected) : ''),
+              evaluator.config ?? {},
               seed
             );
             result.battle = battleResult.score;
             cost += battleResult.cost;
             break;
+          }
 
-          case 'factuality':
+          case 'factuality': {
             const factualityResult = await this.evaluators.evaluateFactuality(
               typeof response === 'string'
                 ? response
                 : JSON.stringify(response),
               sample.input,
-              evaluator.config,
+              evaluator.config ?? {},
               seed
             );
             result.factuality = factualityResult.score;
             cost += factualityResult.cost;
             break;
+          }
 
-          case 'security':
+          case 'security': {
             const securityResult = await this.evaluators.evaluateSecurity(
               typeof response === 'string'
                 ? response
                 : JSON.stringify(response),
-              evaluator.config,
+              evaluator.config ?? {},
               seed
             );
             result.security = securityResult.score;
             cost += securityResult.cost;
             break;
+          }
 
-          case 'answer_relevancy':
+          case 'answer_relevancy': {
             const answerRelevancyResult =
               await this.evaluators.evaluateAnswerRelevancy(
                 typeof response === 'string'
                   ? response
                   : JSON.stringify(response),
                 sample.input,
-                evaluator.config,
+                evaluator.config ?? {},
                 seed
               );
             result.answerRelevancy = answerRelevancyResult.score;
             cost += answerRelevancyResult.cost;
             break;
+          }
 
-          case 'context_precision':
+          case 'context_precision': {
             const precisionResult =
               await this.evaluators.evaluateContextPrecision(
                 typeof response === 'string'
                   ? response
                   : JSON.stringify(response),
                 sample.input,
-                sample.context || [],
-                evaluator.config,
+                (sample.context as string[] | undefined) ?? [],
+                evaluator.config ?? {},
                 seed
               );
             result.contextPrecision = precisionResult.score;
             cost += precisionResult.cost;
             break;
+          }
 
-          case 'context_recall':
+          case 'context_recall': {
             const recallResult = await this.evaluators.evaluateContextRecall(
-              sample.expected || '',
-              sample.context || [],
-              evaluator.config,
+              typeof sample.expected === 'string' ? sample.expected : (sample.expected != null ? JSON.stringify(sample.expected) : ''),
+              (sample.context as string[] | undefined) ?? [],
+              evaluator.config ?? {},
               seed
             );
             result.contextRecall = recallResult.score;
             cost += recallResult.cost;
             break;
+          }
 
-          case 'context_relevancy':
+          case 'context_relevancy': {
             const contextRelevancyResult =
               await this.evaluators.evaluateContextRelevancy(
                 sample.input,
-                sample.context || [],
-                evaluator.config,
+                (sample.context as string[] | undefined) ?? [],
+                evaluator.config ?? {},
                 seed
               );
             result.contextRelevancy = contextRelevancyResult.score;
             cost += contextRelevancyResult.cost;
             break;
+          }
 
-          case 'faithfulness':
+          case 'faithfulness': {
             const faithfulnessResult =
               await this.evaluators.evaluateFaithfulness(
                 typeof response === 'string'
                   ? response
                   : JSON.stringify(response),
-                sample.context || [],
-                evaluator.config,
+                (sample.context as string[] | undefined) ?? [],
+                evaluator.config ?? {},
                 seed
               );
             result.faithfulness = faithfulnessResult.score;
             cost += faithfulnessResult.cost;
             break;
+          }
 
-          case 'answer_correctness':
+          case 'answer_correctness': {
             const correctnessResult =
               await this.evaluators.evaluateAnswerCorrectness(
                 typeof response === 'string'
                   ? response
                   : JSON.stringify(response),
-                sample.expected || '',
-                evaluator.config,
+                typeof sample.expected === 'string' ? sample.expected : (sample.expected != null ? JSON.stringify(sample.expected) : ''),
+                evaluator.config ?? {},
                 seed
               );
             result.answerCorrectness = correctnessResult.score;
             cost += correctnessResult.cost;
             break;
+          }
 
-          case 'pii_detection':
+          case 'pii_detection': {
             const piiResult = await this.evaluators.evaluatePIIDetection(
               typeof response === 'string'
                 ? response
                 : JSON.stringify(response),
-              evaluator.config,
+              evaluator.config ?? {},
               seed
             );
             result.piiDetection = piiResult.score;
             cost += piiResult.cost;
             break;
+          }
 
-          case 'jailbreak_detection':
+          case 'jailbreak_detection': {
             const jailbreakResult =
               await this.evaluators.evaluateJailbreakDetection(
                 typeof sample.input === 'string'
@@ -611,16 +642,17 @@ export class EvaluationService {
                 typeof response === 'string'
                   ? response
                   : JSON.stringify(response),
-                evaluator.config,
+                evaluator.config ?? {},
                 seed
               );
             result.jailbreakDetection = jailbreakResult.score;
             cost += jailbreakResult.cost;
             break;
+          }
 
-          case 'custom':
+          case 'custom': {
             // Get evaluator ID from config
-            const evaluatorId = evaluator.evaluatorId;
+            const evaluatorId = evaluator.evaluatorId as string | undefined;
             if (!evaluatorId) {
               this.logger.error(
                 'Custom evaluator requires evaluatorId in config',
@@ -645,16 +677,17 @@ export class EvaluationService {
             result.customEvaluator = customResult.score;
             result.customEvaluatorMetadata = customResult.metadata;
             break;
+          }
         }
       }
 
       result.cost = cost;
       result.errorRate = 0;
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Error evaluating sample:', error);
       result.errorRate = 1;
       result.cost = cost;
-      result.error = error.message || 'Unknown error';
+      result.error = (error instanceof Error ? error.message : String(error)) || 'Unknown error';
     }
 
     return result;
@@ -664,8 +697,8 @@ export class EvaluationService {
    * Detect and execute code blocks in LLM response
    */
   private async detectAndExecuteCode(
-    response: any,
-  ): Promise<any[] | null> {
+    response: unknown,
+  ): Promise<Array<Record<string, unknown>> | null> {
     try {
       // Convert response to string if needed
       const responseText =
@@ -741,26 +774,27 @@ export class EvaluationService {
           this.logger.debug(
             `Code execution completed: language=${block.language}, status=${result.status}`,
           );
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const errMsg = error instanceof Error ? error.message : String(error);
           this.logger.warn(
-            `Failed to execute code block (${block.language}): ${error.message}`,
+            `Failed to execute code block (${block.language}): ${errMsg}`,
           );
           executionResults.push({
             language: block.language,
             code: block.code.substring(0, 200) + '...',
             executionResult: {
               status: 'failed',
-              error: error.message,
+              error: errMsg,
             },
           });
         }
       }
 
       return executionResults.length > 0 ? executionResults : null;
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Don't fail evaluation if code detection/execution fails
       this.logger.warn(
-        `Code detection/execution failed: ${error.message}`,
+        `Code detection/execution failed: ${error instanceof Error ? error.message : String(error)}`,
       );
       return null;
     }

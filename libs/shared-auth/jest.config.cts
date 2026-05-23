@@ -7,4 +7,12 @@ module.exports = {
   },
   moduleFileExtensions: ['ts', 'js', 'html'],
   coverageDirectory: '../../coverage/libs/shared-auth',
+  coverageThreshold: {
+    global: {
+      lines: 1,
+      statements: 1,
+      functions: 1,
+      branches: 1,
+    },
+  },
 };

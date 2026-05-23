@@ -164,12 +164,7 @@ export type InsertCustomEvaluator = z.infer<typeof insertCustomEvaluatorSchema>;
 export type CustomEvaluator = typeof customEvaluators.$inferSelect;
 
 export type EvaluatorVersion = typeof evaluatorVersions.$inferSelect;
-export const insertEvaluatorVersionSchema = createInsertSchema(
-  evaluatorVersions
-).omit({
-  id: true,
-  createdAt: true,
-} as { id: true; createdAt: true });
+export const insertEvaluatorVersionSchema = createInsertSchema(evaluatorVersions);
 export type InsertEvaluatorVersion = z.infer<
   typeof insertEvaluatorVersionSchema
 >;

@@ -16,7 +16,7 @@ import { ReviewsService } from '../reviews/reviews.service';
 export interface PolicyResult {
   decision: 'pass' | 'warn' | 'fail';
   violations: PolicyViolation[];
-  evidence: any;
+  evidence: Record<string, unknown>;
   score: number;
   passedRules: number;
   totalRules: number;
@@ -29,7 +29,7 @@ export interface PolicyViolation {
   ruleName: string;
   severity: 'warn' | 'fail' | 'error';
   message: string;
-  evidence: any;
+  evidence: Record<string, unknown>;
   actualValue?: number;
   expectedThreshold?: number | [number, number];
   baselineComparison?: BaselineComparison;
@@ -85,16 +85,16 @@ export class PoliciesService {
 
     return this.evaluatePolicies(
       activePolicies,
-      run.metrics || {},
-      baseline?.metrics || {},
+      (run.metrics as Record<string, unknown>) || {},
+      (baseline?.metrics as Record<string, unknown>) || {},
       run
     );
   }
 
   async evaluatePolicies(
     policies: Policy[],
-    metrics: any,
-    baselineMetrics?: any,
+    metrics: Record<string, unknown>,
+    baselineMetrics?: Record<string, unknown>,
     run?: Run
   ): Promise<PolicyResult> {
     const violations: PolicyViolation[] = [];
@@ -107,9 +107,9 @@ export class PoliciesService {
       let rules: PolicyRule[] = [];
 
       if (Array.isArray(policyRules)) {
-        rules = policyRules;
+        rules = policyRules as PolicyRule[];
       } else if (policyRules && typeof policyRules === 'object') {
-        rules = this.convertRulesToArray(policyRules);
+        rules = this.convertRulesToArray(policyRules as Record<string, unknown>);
       }
 
       totalRules += rules.filter((r) => r.enabled).length;
@@ -190,15 +190,15 @@ export class PoliciesService {
 
     return {
       decision: overallDecision,
-      violations: violations as any,
-      evidence: { metrics, baselineMetrics },
+      violations,
+      evidence: { metrics, baselineMetrics } as Record<string, unknown>,
       score,
       passedRules,
       totalRules,
     };
   }
 
-  private convertRulesToArray(rulesObject: any): PolicyRule[] {
+  private convertRulesToArray(rulesObject: Record<string, unknown>): PolicyRule[] {
     const rules: PolicyRule[] = [];
 
     if (!rulesObject || typeof rulesObject !== 'object') {
@@ -207,16 +207,17 @@ export class PoliciesService {
 
     for (const [key, value] of Object.entries(rulesObject)) {
       if (value && typeof value === 'object' && 'type' in value) {
+        const v = value as Record<string, unknown>;
         rules.push({
           id: key,
-          name: (value as any).name || key,
-          type: (value as any).type || 'threshold',
-          metric: (value as any).metric || key,
-          operator: (value as any).operator,
-          threshold: (value as any).threshold,
-          severity: (value as any).severity || 'warn',
-          description: (value as any).description || '',
-          enabled: (value as any).enabled !== false,
+          name: (v['name'] as string) || key,
+          type: (v['type'] as string) || 'threshold',
+          metric: (v['metric'] as string) || key,
+          operator: v['operator'] as PolicyRule['operator'],
+          threshold: v['threshold'] as PolicyRule['threshold'],
+          severity: (v['severity'] as PolicyRule['severity']) || 'warn',
+          description: (v['description'] as string) || '',
+          enabled: v['enabled'] !== false,
         });
       }
     }
@@ -226,8 +227,8 @@ export class PoliciesService {
 
   private async evaluateRule(
     rule: PolicyRule,
-    metrics: any,
-    baselineMetrics?: any,
+    metrics: Record<string, unknown>,
+    baselineMetrics?: Record<string, unknown>,
     policyId?: string,
     policyName?: string,
     ruleIndex?: number
@@ -275,15 +276,15 @@ export class PoliciesService {
     return violation;
   }
 
-  private getMetricValue(metrics: any, metricPath: string): number | undefined {
+  private getMetricValue(metrics: Record<string, unknown>, metricPath: string): number | undefined {
     const parts = metricPath.split('.');
-    let value: any = metrics;
+    let value: unknown = metrics;
 
     for (const part of parts) {
       if (value === null || value === undefined) {
         return undefined;
       }
-      value = value[part];
+      value = (value as Record<string, unknown>)[part];
     }
 
     if (typeof value === 'number') {

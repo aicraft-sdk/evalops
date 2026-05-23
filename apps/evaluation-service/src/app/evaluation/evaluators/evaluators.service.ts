@@ -14,6 +14,30 @@ export interface EvaluatorResult {
   cost: number;
 }
 
+/** Loose config bag passed by callers for legacy evaluator methods. */
+export interface EvaluatorConfig {
+  strictness?: 'strict' | 'moderate' | 'lenient' | 'semantic';
+  schema?: Record<string, unknown>;
+  categories?: {
+    email?: boolean;
+    phone?: boolean;
+    ssn?: boolean;
+  };
+  [key: string]: unknown;
+}
+
+/** Template context built from a dataset sample and model response. */
+interface TemplateContext {
+  item: Record<string, unknown> | string | null;
+  sample: {
+    output_text: string;
+    response: unknown;
+    metadata: Record<string, unknown>;
+  };
+  expected?: Record<string, unknown> | string;
+  [key: string]: unknown;
+}
+
 @Injectable()
 export class EvaluatorsService {
   private readonly logger = new Logger(EvaluatorsService.name);
@@ -43,7 +67,7 @@ export class EvaluatorsService {
   evaluateExactMatch(
     response: string,
     expected: string,
-    config?: any,
+    config?: EvaluatorConfig,
   ): number {
     if (!expected || !response) return 0;
 
@@ -61,10 +85,10 @@ export class EvaluatorsService {
     return similarity >= threshold ? similarity : 0;
   }
 
-  evaluateSchemaValidity(response: any, schema: any): number {
+  evaluateSchemaValidity(response: unknown, schema: Record<string, unknown>): number {
     try {
       if (typeof response === 'object' && response !== null) {
-        return this.validateSchema(response, schema) ? 1 : 0;
+        return this.validateSchema(response as Record<string, unknown>, schema) ? 1 : 0;
       }
       return 0;
     } catch {
@@ -72,7 +96,7 @@ export class EvaluatorsService {
     }
   }
 
-  evaluateJsonValidity(response: string, config?: any): number {
+  evaluateJsonValidity(response: string, config?: EvaluatorConfig): number {
     try {
       JSON.parse(response);
       if (!config?.schema) return 1;
@@ -89,7 +113,7 @@ export class EvaluatorsService {
     expected: string,
     judgePrompt: string,
     seed: number,
-    datasetSample?: any,
+    datasetSample?: Record<string, unknown> | string,
   ): Promise<EvaluatorResult> {
     try {
       if (!response || response.trim() === '') {
@@ -118,7 +142,7 @@ export class EvaluatorsService {
 
       const score = this.parseJudgeScore(judgeResponse.response);
       return { score, cost: judgeResponse.cost };
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('LLM-as-judge evaluation error:', error);
       return { score: 0, cost: 0 };
     }
@@ -127,7 +151,7 @@ export class EvaluatorsService {
   async evaluateBattle(
     response: string,
     expected: string,
-    config: any,
+    config: EvaluatorConfig,
     seed: number,
   ): Promise<EvaluatorResult> {
     try {
@@ -149,7 +173,7 @@ Rate Response A (0-100). Respond with only a number.`;
         score: Math.max(0, Math.min(1, score)),
         cost: judgeResponse.cost,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Battle evaluation error:', error);
       return { score: 0.5, cost: 0 };
     }
@@ -157,8 +181,8 @@ Rate Response A (0-100). Respond with only a number.`;
 
   async evaluateFactuality(
     response: string,
-    input: any,
-    config: any,
+    input: unknown,
+    config: EvaluatorConfig,
     seed: number,
   ): Promise<EvaluatorResult> {
     try {
@@ -182,7 +206,7 @@ Rate factual accuracy 0-100. Respond with only a number.`;
         score: Math.max(0, Math.min(1, score)),
         cost: judgeResponse.cost,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Factuality evaluation error:', error);
       return { score: 0.7, cost: 0 };
     }
@@ -190,7 +214,7 @@ Rate factual accuracy 0-100. Respond with only a number.`;
 
   async evaluateSecurity(
     response: string,
-    config: any,
+    config: EvaluatorConfig,
     seed: number,
   ): Promise<EvaluatorResult> {
     try {
@@ -212,7 +236,7 @@ Rate security safety 0-100. Respond with only a number.`;
         score: Math.max(0, Math.min(1, score)),
         cost: judgeResponse.cost,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Security evaluation error:', error);
       return { score: 0.8, cost: 0 };
     }
@@ -220,8 +244,8 @@ Rate security safety 0-100. Respond with only a number.`;
 
   async evaluateAnswerRelevancy(
     response: string,
-    input: any,
-    config: any,
+    input: unknown,
+    config: EvaluatorConfig,
     seed: number,
   ): Promise<EvaluatorResult> {
     try {
@@ -245,7 +269,7 @@ Rate relevancy 0-100. Respond with only a number.`;
         score: Math.max(0, Math.min(1, score)),
         cost: judgeResponse.cost,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Answer relevancy evaluation error:', error);
       return { score: 0.7, cost: 0 };
     }
@@ -253,9 +277,9 @@ Rate relevancy 0-100. Respond with only a number.`;
 
   async evaluateContextPrecision(
     response: string,
-    query: any,
+    query: unknown,
     contexts: string[],
-    config: any,
+    config: EvaluatorConfig,
     seed: number,
   ): Promise<EvaluatorResult> {
     if (!contexts || contexts.length === 0) {
@@ -284,7 +308,7 @@ Rate precision 0-100. Respond with only a number.`;
         score: Math.max(0, Math.min(1, score)),
         cost: judgeResponse.cost,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Context precision evaluation error:', error);
       return { score: 0.6, cost: 0 };
     }
@@ -293,7 +317,7 @@ Rate precision 0-100. Respond with only a number.`;
   async evaluateContextRecall(
     expectedAnswer: string,
     contexts: string[],
-    config: any,
+    config: EvaluatorConfig,
     seed: number,
   ): Promise<EvaluatorResult> {
     if (!contexts || contexts.length === 0 || !expectedAnswer) {
@@ -321,16 +345,16 @@ Rate recall 0-100. Respond with only a number.`;
         score: Math.max(0, Math.min(1, score)),
         cost: judgeResponse.cost,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Context recall evaluation error:', error);
       return { score: 0.6, cost: 0 };
     }
   }
 
   async evaluateContextRelevancy(
-    query: any,
+    query: unknown,
     contexts: string[],
-    config: any,
+    config: EvaluatorConfig,
     seed: number,
   ): Promise<EvaluatorResult> {
     if (!contexts || contexts.length === 0) {
@@ -359,7 +383,7 @@ Rate relevancy 0-100. Respond with only a number.`;
         score: Math.max(0, Math.min(1, score)),
         cost: judgeResponse.cost,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Context relevancy evaluation error:', error);
       return { score: 0.7, cost: 0 };
     }
@@ -368,7 +392,7 @@ Rate relevancy 0-100. Respond with only a number.`;
   async evaluateFaithfulness(
     response: string,
     contexts: string[],
-    config: any,
+    config: EvaluatorConfig,
     seed: number,
   ): Promise<EvaluatorResult> {
     if (!contexts || contexts.length === 0) {
@@ -396,7 +420,7 @@ Rate faithfulness 0-100. Respond with only a number.`;
         score: Math.max(0, Math.min(1, score)),
         cost: judgeResponse.cost,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Faithfulness evaluation error:', error);
       return { score: 0.8, cost: 0 };
     }
@@ -405,7 +429,7 @@ Rate faithfulness 0-100. Respond with only a number.`;
   async evaluateAnswerCorrectness(
     response: string,
     expectedAnswer: string,
-    config: any,
+    config: EvaluatorConfig,
     seed: number,
   ): Promise<EvaluatorResult> {
     if (!expectedAnswer) {
@@ -432,7 +456,7 @@ Rate correctness 0-100. Respond with only a number.`;
         score: Math.max(0, Math.min(1, score)),
         cost: judgeResponse.cost,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Answer correctness evaluation error:', error);
       return { score: 0.7, cost: 0 };
     }
@@ -440,7 +464,7 @@ Rate correctness 0-100. Respond with only a number.`;
 
   async evaluatePIIDetection(
     response: string,
-    config: any,
+    config: EvaluatorConfig,
     seed: number,
   ): Promise<EvaluatorResult> {
     try {
@@ -451,7 +475,7 @@ Rate correctness 0-100. Respond with only a number.`;
         ssn: true,
       };
 
-      let detectedPII: string[] = [];
+      const detectedPII: string[] = [];
 
       if (categories.email) {
         const emailPattern = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
@@ -499,7 +523,7 @@ Rate PII risk 0-100. Respond with only a number.`;
 
       const score = Math.min(detectedPII.length * 0.2, 1.0);
       return { score: Math.max(0, Math.min(1, score)), cost: 0 };
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('PII detection evaluation error:', error);
       return { score: 0, cost: 0 };
     }
@@ -508,7 +532,7 @@ Rate PII risk 0-100. Respond with only a number.`;
   async evaluateJailbreakDetection(
     input: string,
     response: string,
-    config: any,
+    config: EvaluatorConfig,
     seed: number,
   ): Promise<EvaluatorResult> {
     try {
@@ -519,7 +543,7 @@ Rate PII risk 0-100. Respond with only a number.`;
         /disregard\s+(?:previous|all|the|above)/i,
       ];
 
-      let detectedPatterns: string[] = [];
+      const detectedPatterns: string[] = [];
       for (const pattern of injectionPatterns) {
         if (pattern.test(input)) {
           detectedPatterns.push('PROMPT_INJECTION');
@@ -550,7 +574,7 @@ Rate jailbreak risk 0-100. Respond with only a number.`;
         score: Math.max(0, Math.min(1, finalScore)),
         cost: judgeResponse.cost,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Jailbreak detection evaluation error:', error);
       return { score: 0, cost: 0 };
     }
@@ -678,16 +702,17 @@ Rate jailbreak risk 0-100. Respond with only a number.`;
     return stopWords.has(word.toLowerCase());
   }
 
-  private validateSchema(data: any, schema: any): boolean {
-    if (schema.type === 'object' && typeof data === 'object') {
-      if (schema.required) {
-        for (const field of schema.required) {
+  private validateSchema(data: Record<string, unknown>, schema: Record<string, unknown>): boolean {
+    if (schema['type'] === 'object' && typeof data === 'object') {
+      const required = schema['required'];
+      if (Array.isArray(required)) {
+        for (const field of required) {
           if (!(field in data)) return false;
         }
       }
       return true;
     }
-    return typeof data === schema.type;
+    return typeof data === schema['type'];
   }
 
   private parseJudgeScore(judgeResponse: string): number {
@@ -700,11 +725,11 @@ Rate jailbreak risk 0-100. Respond with only a number.`;
   }
 
   private createTemplateContext(
-    datasetSample: any,
-    response: any,
-    expected?: any,
-  ): any {
-    let normalizedSample = datasetSample;
+    datasetSample: Record<string, unknown> | string | undefined,
+    response: unknown,
+    expected?: unknown,
+  ): TemplateContext {
+    let normalizedSample: Record<string, unknown> | string | null = datasetSample ?? null;
     if (typeof datasetSample === 'string') {
       normalizedSample = {
         input: datasetSample,
@@ -713,7 +738,7 @@ Rate jailbreak risk 0-100. Respond with only a number.`;
       };
     }
 
-    const context: any = {
+    const context: TemplateContext = {
       item: normalizedSample,
       sample: {
         output_text: typeof response === 'string' ? response : JSON.stringify(response),
@@ -723,27 +748,27 @@ Rate jailbreak risk 0-100. Respond with only a number.`;
     };
 
     if (expected) {
-      context.expected =
+      context['expected'] =
         typeof expected === 'string'
           ? { answer: expected, text: expected, output: expected }
-          : expected;
+          : (expected as Record<string, unknown>);
     }
 
     return context;
   }
 
-  private renderTemplate(template: string, context: any): string {
+  private renderTemplate(template: string, context: Record<string, unknown>): string {
     // Simple template rendering - replace {{variable}} with context values
-    return template.replace(/\{\{([^}]+)\}\}/g, (match, variable) => {
-      const trimmedVar = variable.trim();
+    return template.replace(/\{\{([^}]+)\}\}/g, (_match, variable) => {
+      const trimmedVar = (variable as string).trim();
       const parts = trimmedVar.split('.');
-      let value: any = context;
+      let value: unknown = context;
 
       for (const part of parts) {
         if (value === null || value === undefined) {
           return '';
         }
-        value = value[part];
+        value = (value as Record<string, unknown>)[part];
       }
 
       if (value === null || value === undefined) {

@@ -7,7 +7,9 @@
     "composite": true,
     "types": ["node"],
     "skipLibCheck": true,
-    "paths": {}
+    "paths": {
+      "@evalops/shared-db": ["dist/libs/shared-db/src/index"]
+    }
   },
   "include": ["src/**/*.ts"],
   "exclude": [

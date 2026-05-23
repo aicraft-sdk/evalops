@@ -14,6 +14,7 @@ import {
 export class AlertsService {
   private readonly logger = new Logger(AlertsService.name);
   private activeAlerts = new Map<string, Date>(); // Track cooldown periods
+  private readonly ALERT_COOLDOWN_MINUTES = 15;
 
   constructor(
     private storageService: DatabaseStorageService,
@@ -39,7 +40,7 @@ export class AlertsService {
 
       // Check cost thresholds
       await this.checkCostAlerts(run);
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Error checking run alerts:', error);
     }
   }
@@ -62,7 +63,7 @@ export class AlertsService {
       );
 
       for (const config of policyAlertConfigs) {
-        const conditions = config.conditions as any;
+        const conditions = config.conditions as Record<string, unknown>;
 
         // Check if violations match severity thresholds
         const criticalViolations = violations.filter(
@@ -73,21 +74,28 @@ export class AlertsService {
         let shouldAlert = false;
         let alertMessage = '';
 
+        const criticalThreshold = conditions['criticalThreshold'] as number | undefined;
+        const highThreshold = conditions['highThreshold'] as number | undefined;
+        const totalThreshold = conditions['totalThreshold'] as number | undefined;
+
         if (
           criticalViolations.length > 0 &&
-          conditions.criticalThreshold <= criticalViolations.length
+          criticalThreshold !== undefined &&
+          criticalThreshold <= criticalViolations.length
         ) {
           shouldAlert = true;
           alertMessage = `${criticalViolations.length} critical policy violations detected`;
         } else if (
           highViolations.length > 0 &&
-          conditions.highThreshold <= highViolations.length
+          highThreshold !== undefined &&
+          highThreshold <= highViolations.length
         ) {
           shouldAlert = true;
           alertMessage = `${highViolations.length} high severity policy violations detected`;
         } else if (
           violations.length > 0 &&
-          conditions.totalThreshold <= violations.length
+          totalThreshold !== undefined &&
+          totalThreshold <= violations.length
         ) {
           shouldAlert = true;
           alertMessage = `${violations.length} total policy violations detected`;
@@ -113,7 +121,7 @@ export class AlertsService {
             },
           });
 
-          this.setCooldown(config.id, 15); // Default 15 minute cooldown
+          this.setCooldown(config.id, this.ALERT_COOLDOWN_MINUTES);
         }
       }
     }
@@ -133,22 +141,24 @@ export class AlertsService {
     );
 
     for (const config of performanceConfigs) {
-      const conditions = config.conditions as any;
+      const conditions = config.conditions as Record<string, unknown>;
+      const maxDurationSeconds = conditions['maxDurationSeconds'] as number | undefined;
+      const p95LatencyThreshold = conditions['p95LatencyThreshold'] as number | undefined;
 
       let shouldAlert = false;
       let alertMessage = '';
 
       // Check duration threshold
       if (
-        conditions.maxDurationSeconds &&
-        run.duration > conditions.maxDurationSeconds
+        maxDurationSeconds !== undefined &&
+        run.duration > maxDurationSeconds
       ) {
         shouldAlert = true;
-        alertMessage = `Run duration (${run.duration}s) exceeded threshold (${conditions.maxDurationSeconds}s)`;
+        alertMessage = `Run duration (${run.duration}s) exceeded threshold (${maxDurationSeconds}s)`;
       }
 
       // Check P95 latency against recent runs
-      if (conditions.p95LatencyThreshold) {
+      if (p95LatencyThreshold !== undefined) {
         const recentRuns = await this.storageService.getRunsByEvalSpec(
           run.evalSpecId,
         );
@@ -163,9 +173,9 @@ export class AlertsService {
           const p95Index = Math.floor(durations.length * 0.95);
           const p95Latency = durations[p95Index];
 
-          if (p95Latency > conditions.p95LatencyThreshold) {
+          if (p95Latency > p95LatencyThreshold) {
             shouldAlert = true;
-            alertMessage = `P95 latency (${p95Latency}s) exceeded threshold (${conditions.p95LatencyThreshold}s)`;
+            alertMessage = `P95 latency (${p95Latency}s) exceeded threshold (${p95LatencyThreshold}s)`;
           }
         }
       }
@@ -186,7 +196,7 @@ export class AlertsService {
           },
         });
 
-        this.setCooldown(config.id, (config as any).cooldownMinutes || 15);
+        this.setCooldown(config.id, this.ALERT_COOLDOWN_MINUTES);
       }
     }
   }
@@ -201,23 +211,25 @@ export class AlertsService {
       run.organizationId,
     );
     const costConfigs = alertConfigs.filter(
-      (config) => (config as any).alertType === 'cost' && config.isActive,
+      (config) => config.type === 'cost' && config.isActive,
     );
 
     for (const config of costConfigs) {
-      const conditions = config.conditions as any;
+      const conditions = config.conditions as Record<string, unknown>;
+      const maxCostPerRun = conditions['maxCostPerRun'] as number | undefined;
+      const maxDailyCost = conditions['maxDailyCost'] as number | undefined;
 
       let shouldAlert = false;
       let alertMessage = '';
 
       // Check single run cost threshold
-      if (conditions.maxCostPerRun && run.cost > conditions.maxCostPerRun) {
+      if (maxCostPerRun !== undefined && run.cost > maxCostPerRun) {
         shouldAlert = true;
-        alertMessage = `Run cost ($${run.cost.toFixed(4)}) exceeded threshold ($${conditions.maxCostPerRun})`;
+        alertMessage = `Run cost ($${run.cost.toFixed(4)}) exceeded threshold ($${maxCostPerRun})`;
       }
 
       // Check daily cost threshold
-      if (conditions.maxDailyCost) {
+      if (maxDailyCost !== undefined) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
@@ -234,9 +246,9 @@ export class AlertsService {
           )
           .reduce((sum, r) => sum + (r.cost || 0), 0);
 
-        if (todayCost > conditions.maxDailyCost) {
+        if (todayCost > maxDailyCost) {
           shouldAlert = true;
-          alertMessage = `Daily cost ($${todayCost.toFixed(2)}) exceeded threshold ($${conditions.maxDailyCost})`;
+          alertMessage = `Daily cost ($${todayCost.toFixed(2)}) exceeded threshold ($${maxDailyCost})`;
         }
       }
 
@@ -256,7 +268,7 @@ export class AlertsService {
           },
         });
 
-        this.setCooldown(config.id, (config as any).cooldownMinutes || 15);
+        this.setCooldown(config.id, this.ALERT_COOLDOWN_MINUTES);
       }
     }
   }
@@ -272,7 +284,7 @@ export class AlertsService {
     message: string;
     entityType: string;
     entityId: string;
-    metadata?: any;
+    metadata?: Record<string, unknown>;
   }): Promise<AlertEvent> {
     // Create alert event
     const alertEvent = await this.storageService.createAlertEvent({
@@ -311,14 +323,15 @@ export class AlertsService {
     alertEvent: AlertEvent,
     config: AlertConfig,
   ): Promise<void> {
-    const channels = config.channels as any;
+    const channels = config.channels as Record<string, unknown>;
 
     // Send webhook notifications
-    if (channels?.webhooks?.length > 0) {
-      for (const webhookUrl of channels.webhooks) {
+    const webhooks = channels['webhooks'];
+    if (Array.isArray(webhooks) && webhooks.length > 0) {
+      for (const webhookUrl of webhooks) {
         try {
-          await this.sendWebhookNotification(webhookUrl, alertEvent);
-        } catch (error: any) {
+          await this.sendWebhookNotification(webhookUrl as string, alertEvent);
+        } catch (error: unknown) {
           this.logger.error(
             `Failed to send webhook notification to ${webhookUrl}:`,
             error,
@@ -328,24 +341,26 @@ export class AlertsService {
     }
 
     // Send email notifications
-    if (channels?.emails?.length > 0) {
-      for (const email of channels.emails) {
+    const emails = channels['emails'];
+    if (Array.isArray(emails) && emails.length > 0) {
+      for (const email of emails) {
         try {
-          await this.sendEmailAlert(config, alertEvent, email);
-        } catch (error: any) {
+          await this.sendEmailAlert(config, alertEvent, email as string);
+        } catch (error: unknown) {
           this.logger.error(`Failed to send email to ${email}:`, error);
         }
       }
     }
 
     // Send Slack notifications
-    if (channels?.slack?.webhookUrl) {
+    const slack = channels['slack'] as Record<string, unknown> | undefined;
+    if (slack?.['webhookUrl']) {
       try {
         await this.sendSlackNotification(
-          channels.slack.webhookUrl,
+          slack['webhookUrl'] as string,
           alertEvent,
         );
-      } catch (error: any) {
+      } catch (error: unknown) {
         this.logger.error('Failed to send Slack notification:', error);
       }
     }
@@ -484,7 +499,7 @@ export class AlertsService {
         );
         this.logger.log(`Email sent to ${email} via custom service`);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error(`Failed to send email to ${email}:`, error);
       throw error;
     }
@@ -623,14 +638,14 @@ View details in EvalOps dashboard.
     if (!lastAlert) return false;
 
     const now = new Date();
-    const cooldownEnd = new Date(lastAlert.getTime() + 15 * 60 * 1000); // Default 15 minutes
+    const cooldownEnd = new Date(lastAlert.getTime() + this.ALERT_COOLDOWN_MINUTES * 60 * 1000);
     return now < cooldownEnd;
   }
 
   /**
    * Set cooldown period for alert config
    */
-  private setCooldown(configId: string, cooldownMinutes = 15): void {
+  private setCooldown(configId: string, cooldownMinutes = this.ALERT_COOLDOWN_MINUTES): void {
     this.activeAlerts.set(configId, new Date());
 
     // Clean up after cooldown period
@@ -642,7 +657,7 @@ View details in EvalOps dashboard.
   /**
    * Create alert (public method for controller)
    */
-  async createAlert(config: any): Promise<AlertEvent> {
+  async createAlert(config: Parameters<typeof this.createAndSendAlert>[0]): Promise<AlertEvent> {
     // This is a simplified version - full implementation would validate and create alert config
     return this.createAndSendAlert(config);
   }

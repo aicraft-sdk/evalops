@@ -42,3 +42,11 @@ yarn-error.log*
 # @bcai/recall learning extraction
 .recall/
 docs/learnings/personal/
+
+# Claude Code local state
+.claude/
+
+# Build artifacts and backups
+dist/
+*.backup
+.env.*.backup
