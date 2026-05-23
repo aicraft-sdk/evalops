@@ -246,7 +246,7 @@ export class DatabaseStorageService {
   ): Promise<AiProvider> {
     const [updatedProvider] = await db
       .update(aiProviders)
-      .set({ ...provider, updatedAt: new Date() })
+      .set({ ...provider })
       .where(eq(aiProviders.id, id))
       .returning();
     return updatedProvider;
@@ -281,7 +281,7 @@ export class DatabaseStorageService {
   async updateModel(id: string, model: Partial<InsertModel>): Promise<Model> {
     const [updatedModel] = await db
       .update(models)
-      .set({ ...model, updatedAt: new Date() })
+      .set({ ...model })
       .where(eq(models.id, id))
       .returning();
     return updatedModel;
@@ -319,7 +319,7 @@ export class DatabaseStorageService {
   ): Promise<void> {
     await db
       .update(agents)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...updates })
       .where(and(eq(agents.id, id), eq(agents.organizationId, organizationId)));
   }
 
