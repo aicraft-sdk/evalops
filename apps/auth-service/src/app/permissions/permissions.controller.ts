@@ -1,5 +1,5 @@
 import { Controller, Post, Body, UseGuards } from '@nestjs/common';
-import { PermissionsService } from './permissions.service';
+import { PermissionsService, type ResourceType, type PermissionAction } from './permissions.service';
 import { JwtAuthGuard } from '@evalops/shared-auth';
 
 @Controller('permissions')
@@ -18,7 +18,12 @@ export class PermissionsController {
     },
   ) {
     return {
-      hasPermission: await this.permissionsService.hasPermission(body),
+      hasPermission: await this.permissionsService.hasPermission({
+        userId: body.userId,
+        resourceType: body.resourceType as ResourceType,
+        resourceId: body.resourceId,
+        action: body.action as PermissionAction,
+      }),
     };
   }
 }

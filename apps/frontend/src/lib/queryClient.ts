@@ -20,7 +20,7 @@ export async function apiRequest(
 ): Promise<Response> {
   const token = getAuthToken();
   const mappedUrl = mapApiRoute(url);
-  const baseUrl = process.env.VITE_API_URL || 'http://localhost:3000';
+  const baseUrl = import.meta.env.VITE_API_URL || '';
   const fullUrl = mappedUrl.startsWith('http')
     ? mappedUrl
     : `${baseUrl}${mappedUrl}`;
@@ -52,7 +52,7 @@ export const getQueryFn: <T>(options: {
     const token = getAuthToken();
     const originalPath = queryKey.join('/') as string;
     const mappedPath = mapApiRoute(originalPath);
-    const baseUrl = process.env.VITE_API_URL || 'http://localhost:3000';
+    const baseUrl = import.meta.env.VITE_API_URL || '';
     const fullUrl = mappedPath.startsWith('http')
       ? mappedPath
       : `${baseUrl}${mappedPath}`;

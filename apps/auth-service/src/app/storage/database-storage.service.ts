@@ -90,7 +90,7 @@ export class DatabaseStorageService {
   ): Promise<Organization> {
     const [updatedOrg] = await db
       .update(organizations)
-      .set({ ...organization, updatedAt: new Date() })
+      .set({ ...organization })
       .where(eq(organizations.id, id))
       .returning();
     return updatedOrg;
@@ -271,7 +271,7 @@ export class DatabaseStorageService {
     return newLog;
   }
 
-  async getUsersByRole(roleId: string): Promise<User[]> {
+  async getUsersByRole(roleId: string): Promise<Omit<User, 'passwordHash'>[]> {
     return await db
       .select({
         id: users.id,

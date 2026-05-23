@@ -25,5 +25,5 @@ export * from './lib/interceptors/tenant.interceptor';
 // Telemetry
 export * from './lib/telemetry/telemetry.module';
 
-// Testing
-export * from './lib/testing/test-utils';
+// Testing utilities must be imported directly:
+// import { ... } from '@evalops/shared-common/lib/testing/test-utils'

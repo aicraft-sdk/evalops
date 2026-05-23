@@ -95,5 +95,5 @@ export function mapApiRoute(path: string): string {
 export function getApiBaseUrl(): string {
   // In development, API Gateway runs on port 3000
   // In production, this would be the API Gateway URL
-  return process.env.VITE_API_URL || '';
+  return import.meta.env.VITE_API_URL || '';
 }
