@@ -27,6 +27,6 @@ import { SandboxExecutionModule } from '../sandbox-execution/sandbox-execution.m
     ReviewsModule,
   ],
   providers: [EvaluationService],
-  exports: [EvaluationService],
+  exports: [EvaluationService, EvaluatorsModule],
 })
 export class EvaluationModule {}

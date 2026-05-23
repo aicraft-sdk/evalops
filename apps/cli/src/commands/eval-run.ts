@@ -59,7 +59,8 @@ export async function runEvalRun(args: string[]): Promise<void> {
   }
 
   console.log(`Starting eval run for spec: ${specName || specId}`);
-  const run = await api.post<RunResult>('/api/evaluation/runs', { evalSpecId: specId });
+  const runName = `${specName || 'run'} — ${new Date().toISOString()}`;
+  const run = await api.post<RunResult>('/api/evaluation/runs', { evalSpecId: specId, name: runName });
   console.log(`Run created: ${run.id}`);
 
   if (!watch) {
