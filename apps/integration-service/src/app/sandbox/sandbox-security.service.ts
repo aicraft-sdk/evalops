@@ -382,8 +382,9 @@ export class SandboxSecurityService {
   ): Promise<void> {
     try {
       // Dynamic import to avoid requiring the package if not available
-      const { parse } = await import('@typescript-eslint/parser');
-      const ast = parse(code, {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const parserMod = require('@typescript-eslint/parser') as { parse: (code: string, opts: Record<string, unknown>) => unknown };
+      const ast = parserMod.parse(code, {
         ecmaVersion: 'latest',
         sourceType: 'module',
       });

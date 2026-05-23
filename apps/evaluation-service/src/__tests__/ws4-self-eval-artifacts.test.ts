@@ -96,12 +96,12 @@ describe('WS4 — Self-Eval Artifacts', () => {
       expect(content).toContain('self-evals:');
     });
 
-    it('self-evals job has continue-on-error: true', () => {
+    it('self-evals job has continue-on-error: false (hardened gate)', () => {
       const content = fs.readFileSync(ciPath, 'utf-8');
       const selfEvalsIdx = content.indexOf('self-evals:');
       expect(selfEvalsIdx).toBeGreaterThan(-1);
       const selfEvalsSection = content.slice(selfEvalsIdx, selfEvalsIdx + 800);
-      expect(selfEvalsSection).toContain('continue-on-error: true');
+      expect(selfEvalsSection).toContain('continue-on-error: false');
     });
 
     it('self-evals job needs test or lint', () => {

@@ -1,9 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { db } from '@evalops/shared-db';
-import {
-  sandboxAuditLog,
-  type InsertSandboxAuditLog,
-} from '@evalops/shared-db';
+import { sandboxAuditLog } from '@evalops/shared-db';
 import { eq, desc } from 'drizzle-orm';
 import { createHash } from 'crypto';
 
@@ -55,7 +52,7 @@ export class SandboxAuditService {
         ? this.hashCode(context.code)
         : undefined;
 
-      const auditLog: InsertSandboxAuditLog = {
+      const auditLog = {
         sandboxId: context.sandboxId,
         operation: context.operation,
         userId: context.userId,
@@ -184,7 +181,7 @@ export class SandboxAuditService {
   async getSandboxAuditLogs(
     sandboxId: string,
     limit = 100,
-  ): Promise<Array<InsertSandboxAuditLog & { id: string; createdAt: Date }>> {
+  ): Promise<Array<typeof sandboxAuditLog.$inferSelect>> {
     try {
       const logs = await db
         .select()
@@ -209,7 +206,7 @@ export class SandboxAuditService {
   async getOrganizationAuditLogs(
     organizationId: string,
     limit = 100,
-  ): Promise<Array<InsertSandboxAuditLog & { id: string; createdAt: Date }>> {
+  ): Promise<Array<typeof sandboxAuditLog.$inferSelect>> {
     try {
       const logs = await db
         .select()
@@ -234,7 +231,7 @@ export class SandboxAuditService {
   async getAuditLogsByCodeHash(
     codeHash: string,
     limit = 100,
-  ): Promise<Array<InsertSandboxAuditLog & { id: string; createdAt: Date }>> {
+  ): Promise<Array<typeof sandboxAuditLog.$inferSelect>> {
     try {
       const logs = await db
         .select()
