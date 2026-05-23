@@ -38,8 +38,8 @@ export class ReviewsController {
   @Get('annotations')
   async listAnnotations(
     @Query('runId') runId: string,
-    @Query('spanId') spanId?: string,
-    @CurrentUser() user: any
+    @CurrentUser() user: any,
+    @Query('spanId') spanId?: string
   ) {
     if (!runId) {
       throw new Error('runId query parameter is required');
@@ -78,8 +78,8 @@ export class ReviewsController {
   @Get('runs/:runId/annotations')
   async getRunAnnotations(
     @Param('runId') runId: string,
-    @Query('spanId') spanId?: string,
-    @CurrentUser() user: any
+    @CurrentUser() user: any,
+    @Query('spanId') spanId?: string
   ) {
     return this.reviewsService.getAnnotationsForRun(
       runId,
@@ -93,13 +93,13 @@ export class ReviewsController {
   @UseGuards(JwtAuthGuard)
   @Get('queue')
   async listQueueItems(
+    @CurrentUser() user: any,
     @Query('status') status?: string,
     @Query('priority') priority?: string,
     @Query('assigneeId') assigneeId?: string,
     @Query('sourceType') sourceType?: string,
-    @Query('tags') tags?: string, // comma-separated
-    @Query('limit') limit?: string,
-    @CurrentUser() user: any
+    @Query('tags') tags?: string,
+    @Query('limit') limit?: string
   ) {
     const filters: any = {};
     if (status) filters.status = status;

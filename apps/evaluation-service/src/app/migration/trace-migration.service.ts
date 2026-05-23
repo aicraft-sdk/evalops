@@ -194,6 +194,12 @@ export class TraceMigrationService {
     return totalSpansCreated;
   }
 
+  async migrateRunById(runId: string): Promise<number> {
+    const [run] = await db.select().from(runs).where(eq(runs.id, runId)).limit(1);
+    if (!run) throw new NotFoundException(`Run ${runId} not found`);
+    return this.migrateRun(run);
+  }
+
   /**
    * Get migration status for a specific run
    */

@@ -29,6 +29,6 @@ import { RateLimitGuard } from '@evalops/shared-auth';
     TraceEventAdapterService,
     RateLimitGuard,
   ],
-  exports: [IngestionService],
+  exports: [IngestionService, TraceEventAdapterService],
 })
 export class IngestionModule {}

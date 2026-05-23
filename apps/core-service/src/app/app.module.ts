@@ -15,6 +15,7 @@ import { ModelsModule } from './models/models.module';
 import { StorageModule } from './storage/storage.module';
 import { AgentsModule } from './agents/agents.module';
 import { JwtAuthGuard } from '@evalops/shared-auth';
+import { JwtStrategy } from './jwt.strategy';
 import { LoggingInterceptor, TenantInterceptor } from '@evalops/shared-common';
 
 @Module({
@@ -45,6 +46,7 @@ import { LoggingInterceptor, TenantInterceptor } from '@evalops/shared-common';
   controllers: [AppController, HealthController],
   providers: [
     AppService,
+    JwtStrategy,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
     { provide: APP_INTERCEPTOR, useClass: TenantInterceptor },
