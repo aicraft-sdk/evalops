@@ -37,28 +37,42 @@ export const db = new Proxy(globalDb, {
 }) as NodePgDatabase<typeof schema>;
 
 /**
- * Acquires a dedicated PoolClient, sets app.org_id on it, then runs `fn`
- * inside an AsyncLocalStorage scope where `db.*` routes to that client.
+ * Context object carrying tenant-scoped identity for RLS session variables.
+ */
+export interface TenantContext {
+  orgId: string;
+  userId: string;
+  role: string;
+}
+
+/**
+ * Acquires a dedicated PoolClient, sets app.org_id / app.user_id / app.role on it,
+ * then runs `fn` inside an AsyncLocalStorage scope where `db.*` routes to that client.
  *
  * Called once per HTTP request by OrgContextInterceptor.
- * When orgId is '', the config is still set (clears any stale value from a
- * prior request that might have leaked if a connection was recycled).
+ * All three config values are set unconditionally so stale values from a prior
+ * connection in the pool are always overwritten.
  *
- * @param orgId  The tenant identifier extracted from the JWT.
- * @param fn     The request handler thunk to execute.
+ * @param ctx  The tenant context extracted from the JWT (orgId, userId, role).
+ * @param fn   The request handler thunk to execute.
  */
 export async function withTenantContext<T>(
-  orgId: string,
+  ctx: TenantContext,
   fn: () => T | Promise<T>
 ): Promise<T> {
   const client = await pool.connect();
   try {
-    await client.query(`SELECT set_config('app.org_id', $1, false)`, [orgId || '']);
+    await client.query(`SELECT set_config('app.org_id', $1, false)`, [ctx.orgId]);
+    await client.query(`SELECT set_config('app.user_id', $1, false)`, [ctx.userId]);
+    await client.query(`SELECT set_config('app.role', $1, false)`, [ctx.role]);
     const tenantDb = drizzle(client, { schema }) as NodePgDatabase<typeof schema>;
     return await requestDbStore.run(tenantDb, fn);
   } finally {
     try {
-      await client.query(`SELECT set_config('app.org_id', '', false)`, []);
+      await client.query(
+        `SELECT set_config('app.org_id', '', false), set_config('app.user_id', '', false), set_config('app.role', '', false)`,
+        [],
+      );
     } catch {
       // Best-effort cleanup; connection is released regardless.
     }

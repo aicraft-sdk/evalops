@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import * as msal from '@azure/msal-node';
 import { ConfigService } from '@nestjs/config';
 
@@ -26,6 +30,7 @@ export class MicrosoftAuthService {
       'http://localhost:3000/api/auth/microsoft/callback';
 
     if (!clientId || !clientSecret || !tenantId) {
+      // eslint-disable-next-line no-console
       console.warn(
         'Microsoft Entra ID configuration incomplete. SSO will not be available.',
       );
@@ -50,6 +55,7 @@ export class MicrosoftAuthService {
         loggerOptions: {
           loggerCallback: (level: msal.LogLevel, message: string) => {
             if (level <= msal.LogLevel.Error) {
+              // eslint-disable-next-line no-console
               console.error('MSAL Error:', message);
             }
           },
@@ -68,7 +74,7 @@ export class MicrosoftAuthService {
 
   async getLoginUrl(state?: string): Promise<string> {
     if (!this.msalInstance || !this.config) {
-      throw new Error('Microsoft Entra ID not configured');
+      throw new InternalServerErrorException('Microsoft Entra ID not configured');
     }
 
     const authCodeUrlParameters: msal.AuthorizationUrlRequest = {
@@ -96,7 +102,7 @@ export class MicrosoftAuthService {
     accessToken: string;
   }> {
     if (!this.msalInstance || !this.config) {
-      throw new Error('Microsoft Entra ID not configured');
+      throw new InternalServerErrorException('Microsoft Entra ID not configured');
     }
 
     try {
@@ -109,10 +115,11 @@ export class MicrosoftAuthService {
       const response = await this.msalInstance.acquireTokenByCode(tokenRequest);
 
       if (!response || !response.account) {
-        throw new Error('Failed to authenticate with Microsoft Entra ID');
+        throw new UnauthorizedException('Failed to authenticate with Microsoft Entra ID');
       }
 
       // Extract user information from the ID token
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const idTokenClaims = response.idTokenClaims as any;
       const account = response.account;
 
@@ -132,11 +139,13 @@ export class MicrosoftAuthService {
         user,
         accessToken: response.accessToken || '',
       };
-    } catch (error: any) {
-      throw new Error(`Microsoft Entra ID callback error: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new UnauthorizedException(`Microsoft Entra ID callback error: ${message}`);
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getUserProfile(accessToken: string): Promise<any> {
     try {
       const response = await fetch('https://graph.microsoft.com/v1.0/me', {
@@ -151,8 +160,12 @@ export class MicrosoftAuthService {
       }
 
       return await response.json();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      // eslint-disable-next-line no-console
       console.error('Error fetching user profile from Graph API:', error);
+      // TODO: Phase 3 — throw ServiceUnavailableException instead of returning null
+      // (getUserProfile currently has zero callers; changing to throw would be safe
+      // but is deferred to the Phase 3 Logger migration sweep)
       return null;
     }
   }

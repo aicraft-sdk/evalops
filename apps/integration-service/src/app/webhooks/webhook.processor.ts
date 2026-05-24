@@ -24,7 +24,7 @@ export class WebhookProcessor {
     this.logger.log(`Processing webhook delivery to ${url} (attempt ${job.attemptsMade + 1})`);
 
     try {
-      await withTenantContext(orgId, () =>
+      await withTenantContext({ orgId, userId: '', role: '' }, () =>
         this.webhooksService.deliverWebhook(url, payload as Parameters<WebhooksService['deliverWebhook']>[1])
       );
       this.logger.log(`Successfully delivered webhook to ${url}`);

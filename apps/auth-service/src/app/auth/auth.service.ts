@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { DatabaseStorageService } from '../storage/database-storage.service';
@@ -13,6 +13,7 @@ export class AuthService {
     private configService: ConfigService,
   ) {}
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async validateUser(email: string, password: string): Promise<any> {
     // Development mode: allow demo login (fallback for testing)
     if (process.env.NODE_ENV === 'development') {
@@ -30,6 +31,7 @@ export class AuthService {
             organizationId: 'default-org',
             role: 'admin',
             profileImageUrl: null,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any);
         }
         return user;
@@ -57,11 +59,13 @@ export class AuthService {
     await this.storageService.upsertUser({
       ...user,
       lastLoginAt: new Date(),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     return user;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async login(user: any) {
     const payload: JwtPayload = {
       sub: user.id,
@@ -91,7 +95,7 @@ export class AuthService {
     // Check if user already exists
     const existingUser = await this.storageService.getUserByEmail(email);
     if (existingUser) {
-      throw new Error('User with this email already exists');
+      throw new BadRequestException('User with this email already exists');
     }
 
     // Hash password with bcrypt (10 salt rounds)
@@ -117,6 +121,7 @@ export class AuthService {
       role: 'viewer', // Default role
       profileImageUrl: null,
       isActive: true,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     // Generate JWT token for immediate login
@@ -148,6 +153,7 @@ export class AuthService {
     return user;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async findUserByEmail(email: string): Promise<any> {
     return await this.storageService.getUserByEmail(email);
   }
@@ -162,6 +168,7 @@ export class AuthService {
     preferred_username?: string;
     tid: string;
     roles?: string[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }): Promise<any> {
     // Create or get default organization
     let organization = await this.storageService.getOrganization('default-org');
@@ -182,6 +189,7 @@ export class AuthService {
       organizationId: organization.id,
       role: entraUser.roles?.includes('admin') ? 'admin' : 'viewer',
       profileImageUrl: null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     return user;
@@ -200,6 +208,7 @@ export class AuthService {
       tid: string;
       roles?: string[];
     },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any> {
     // Get existing user first
     const existingUser = await this.storageService.getUser(userId);
@@ -213,6 +222,7 @@ export class AuthService {
       organizationId: existingUser?.organizationId || 'default-org',
       role: entraUser.roles?.includes('admin') ? 'admin' : existingUser?.role || 'viewer',
       profileImageUrl: null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     return user;

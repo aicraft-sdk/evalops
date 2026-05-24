@@ -8,7 +8,8 @@
     "types": ["node"],
     "skipLibCheck": true,
     "paths": {
-      "@evalops/shared-db": ["dist/libs/shared-db/src/index"]
+      "@evalops/shared-db": ["dist/libs/shared-db/src/index"],
+      "@evalops/shared-auth": ["dist/libs/shared-auth/src/index"]
     }
   },
   "include": ["src/**/*.ts"],

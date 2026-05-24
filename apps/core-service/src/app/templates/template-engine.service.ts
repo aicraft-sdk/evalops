@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
 export interface TemplateContext {
   item?: Record<string, any>;
@@ -21,6 +21,7 @@ export interface TemplateContext {
 
 @Injectable()
 export class TemplateEngine {
+  private readonly logger = new Logger(TemplateEngine.name);
   private readonly VARIABLE_REGEX = /\{\{([^}]+)\}\}/g;
 
   render(template: string, context: TemplateContext): string {
@@ -33,7 +34,7 @@ export class TemplateEngine {
         const value = this.resolveProperty(context, trimmedVar);
 
         if (value === null || value === undefined) {
-          console.warn(
+          this.logger.warn(
             `Template variable '${trimmedVar}' resolved to null/undefined`,
           );
           return '';
@@ -45,9 +46,8 @@ export class TemplateEngine {
 
         return String(value);
       } catch (error) {
-        console.warn(
-          `Failed to resolve template variable '${trimmedVar}':`,
-          error,
+        this.logger.warn(
+          `Failed to resolve template variable '${trimmedVar}': ${error instanceof Error ? error.message : String(error)}`,
         );
         return `{{${trimmedVar}}}`;
       }

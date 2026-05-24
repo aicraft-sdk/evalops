@@ -7,6 +7,7 @@ import {
   UseGuards,
   BadRequestException,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { WebhooksService } from './webhooks.service';
 import { Public } from '@evalops/shared-auth';
@@ -15,6 +16,8 @@ import { DatabaseStorageService } from '../storage/database-storage.service';
 
 @Controller('webhooks')
 export class WebhooksController {
+  private readonly logger = new Logger(WebhooksController.name);
+
   constructor(
     private webhooksService: WebhooksService,
     private storageService: DatabaseStorageService,
@@ -62,7 +65,7 @@ export class WebhooksController {
       }
     } else {
       // Log warning if no secret is configured
-      console.warn(
+      this.logger.warn(
         `No webhook secret configured for integration ${integrationId}`,
       );
     }
@@ -89,8 +92,7 @@ export class WebhooksController {
         break;
 
       default:
-        // Log unhandled events (logger is private in service)
-        console.log(`Unhandled GitHub event: ${event}`);
+        this.logger.log(`Unhandled GitHub event: ${event}`);
     }
 
     return { received: true, event };

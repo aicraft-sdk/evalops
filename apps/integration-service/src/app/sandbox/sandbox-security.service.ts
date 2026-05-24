@@ -380,27 +380,16 @@ export class SandboxSecurityService {
     errors: string[],
     warnings: string[],
   ): Promise<void> {
-    try {
-      // Dynamic import to avoid requiring the package if not available
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const parserMod = require('@typescript-eslint/parser') as { parse: (code: string, opts: Record<string, unknown>) => unknown };
-      const ast = parserMod.parse(code, {
-        ecmaVersion: 'latest',
-        sourceType: 'module',
-      });
+    // Dynamic import to avoid requiring the package if not available
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const parserMod = require('@typescript-eslint/parser') as { parse: (code: string, opts: Record<string, unknown>) => unknown };
+    const ast = parserMod.parse(code, {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+    });
 
-      // Traverse AST to find dangerous patterns
-      this.traverseJavaScriptAST(ast, errors, warnings);
-    } catch (error: any) {
-      // If parser is not available, fall back to pattern matching
-      if (error.code === 'MODULE_NOT_FOUND') {
-        this.logger.debug(
-          '@typescript-eslint/parser not available, using pattern matching',
-        );
-        throw error;
-      }
-      throw error;
-    }
+    // Traverse AST to find dangerous patterns
+    this.traverseJavaScriptAST(ast, errors, warnings);
   }
 
   /**

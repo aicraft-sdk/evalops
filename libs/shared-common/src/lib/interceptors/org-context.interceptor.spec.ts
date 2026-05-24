@@ -1,13 +1,19 @@
-import { ExecutionContext, CallHandler } from '@nestjs/common';
+import { ExecutionContext, CallHandler, UnauthorizedException } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { of, firstValueFrom } from 'rxjs';
 
+// Mock @evalops/shared-auth so IS_PUBLIC_KEY is available in tests.
+jest.mock('@evalops/shared-auth', () => ({
+  IS_PUBLIC_KEY: 'isPublic',
+}));
+
 // Mock @evalops/shared-db so the test does not require a real Postgres connection.
-// withTenantContext is the key export — it replaces the fire-and-forget db.execute.
+// withTenantContext is the key export — it now takes a context object.
 jest.mock('@evalops/shared-db', () => ({
   withTenantContext: jest
     .fn()
     .mockImplementation(
-      (_orgId: string, fn: () => unknown) => Promise.resolve(fn()),
+      (_ctx: { orgId: string; userId: string; role: string }, fn: () => unknown) => Promise.resolve(fn()),
     ),
 }));
 
@@ -19,18 +25,29 @@ const mockWithTenantContext = withTenantContext as jest.Mock;
 
 describe('OrgContextInterceptor', () => {
   let interceptor: OrgContextInterceptor;
+  let mockReflector: { get: jest.Mock };
 
   beforeEach(() => {
-    interceptor = new OrgContextInterceptor();
+    mockReflector = {
+      get: jest.fn().mockReturnValue(false),
+    };
+    interceptor = new OrgContextInterceptor(mockReflector as unknown as Reflector);
     mockWithTenantContext.mockClear();
     // Restore default implementation after each test
     mockWithTenantContext.mockImplementation(
-      (_orgId: string, fn: () => unknown) => Promise.resolve(fn()),
+      (_ctx: { orgId: string; userId: string; role: string }, fn: () => unknown) => Promise.resolve(fn()),
     );
   });
 
-  function buildContext(user?: { organizationId?: string }): ExecutionContext {
+  function buildContext(user?: {
+    organizationId?: string;
+    sub?: string;
+    userId?: string;
+    role?: string;
+  }): ExecutionContext {
     return {
+      getHandler: () => ({}),
+      getClass: () => ({}),
       switchToHttp: () => ({
         getRequest: () => ({ user }),
       }),
@@ -49,7 +66,7 @@ describe('OrgContextInterceptor', () => {
     await firstValueFrom(result$);
 
     expect(mockWithTenantContext).toHaveBeenCalledTimes(1);
-    expect(mockWithTenantContext.mock.calls[0][0]).toBe('org-abc');
+    expect(mockWithTenantContext.mock.calls[0][0]).toMatchObject({ orgId: 'org-abc' });
   });
 
   it('calls withTenantContext with empty string when orgId is absent', async () => {
@@ -60,7 +77,7 @@ describe('OrgContextInterceptor', () => {
     await firstValueFrom(result$);
 
     expect(mockWithTenantContext).toHaveBeenCalledTimes(1);
-    expect(mockWithTenantContext.mock.calls[0][0]).toBe('');
+    expect(mockWithTenantContext.mock.calls[0][0]).toMatchObject({ orgId: '' });
   });
 
   it('populates requestContext with organizationId', async () => {
@@ -125,5 +142,52 @@ describe('OrgContextInterceptor', () => {
 
     const result$ = interceptor.intercept(ctx, handler);
     await expect(firstValueFrom(result$)).rejects.toThrow('tenant ctx failed');
+  });
+
+  it('throws UnauthorizedException when user exists but organizationId is missing', async () => {
+    const ctx = buildContext({});
+    const handler = buildHandler();
+
+    // The interceptor may throw synchronously before returning an Observable,
+    // or it may wrap the error in an Observable. Handle both.
+    let thrown: unknown;
+    try {
+      const result$ = interceptor.intercept(ctx, handler);
+      await firstValueFrom(result$);
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('skips withTenantContext for @Public() routes', async () => {
+    (mockReflector.get as jest.Mock).mockReturnValue(true);
+    const ctx = buildContext(undefined);
+    const handler = buildHandler();
+
+    const result$ = interceptor.intercept(ctx, handler);
+    await firstValueFrom(result$);
+
+    expect(mockWithTenantContext).not.toHaveBeenCalled();
+  });
+
+  it('propagates userId and role through requestContext', async () => {
+    const ctx = buildContext({ organizationId: 'org-1', sub: 'user-123', role: 'admin' });
+    let capturedUserId: string | undefined;
+    let capturedRole: string | undefined;
+
+    const handler: CallHandler = {
+      handle: () => {
+        capturedUserId = requestContext.getStore()?.userId;
+        capturedRole = requestContext.getStore()?.role;
+        return of('done');
+      },
+    };
+
+    const result$ = interceptor.intercept(ctx, handler);
+    await firstValueFrom(result$);
+
+    expect(capturedUserId).toBe('user-123');
+    expect(capturedRole).toBe('admin');
   });
 });

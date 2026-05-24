@@ -7,6 +7,7 @@ import {
   Body,
   Param,
   UseGuards,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ProvidersService } from './providers.service';
 import { JwtAuthGuard, CurrentUser } from '@evalops/shared-auth';
@@ -32,11 +33,12 @@ export class ProvidersController {
   @Post()
   async createProvider(
     @Body() body: InsertAiProvider,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     @CurrentUser() user: any,
   ) {
     // Check if user is admin (basic check - can be enhanced with proper permission system)
     if (user.role !== 'admin') {
-      throw new Error('Only admins can create providers');
+      throw new ForbiddenException('Only admins can create providers');
     }
     return this.providersService.createProvider(body);
   }
@@ -46,21 +48,23 @@ export class ProvidersController {
   async updateProvider(
     @Param('id') id: string,
     @Body() body: Partial<InsertAiProvider>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     @CurrentUser() user: any,
   ) {
     // Check if user is admin
     if (user.role !== 'admin') {
-      throw new Error('Only admins can update providers');
+      throw new ForbiddenException('Only admins can update providers');
     }
     return this.providersService.updateProvider(id, body);
   }
 
   @UseGuards(JwtAuthGuard)
   @Delete(':id')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async deleteProvider(@Param('id') id: string, @CurrentUser() user: any) {
     // Check if user is admin
     if (user.role !== 'admin') {
-      throw new Error('Only admins can delete providers');
+      throw new ForbiddenException('Only admins can delete providers');
     }
     return this.providersService.deleteProvider(id);
   }
