@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { EvaluatorsService } from './evaluators.service';
+import { EvaluatorsDeterministicService } from './evaluators-deterministic.service';
+import { EvaluatorsLLMService } from './evaluators-llm.service';
 import { AIProviderModule } from '../../ai-provider/ai-provider.module';
 
 @Module({
   imports: [AIProviderModule],
-  providers: [EvaluatorsService],
+  providers: [EvaluatorsService, EvaluatorsDeterministicService, EvaluatorsLLMService],
   exports: [EvaluatorsService],
 })
 export class EvaluatorsModule {}
-

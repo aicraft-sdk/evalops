@@ -94,3 +94,8 @@ export const runRelations = relations(runs, ({ one, many }) => ({
   runAnnotations: many(runAnnotations),
   reviewQueueItems: many(reviewQueueItems),
 }));
+
+// Cross-module extension: evalSpecRelations with baselines (defined here to avoid circular import)
+export const evalSpecCrossRelations = relations(evalSpecs, ({ many }) => ({
+  baselines: many(baselines),
+}));
