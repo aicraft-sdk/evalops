@@ -1,7 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TraceMigrationService } from './trace-migration.service';
 import { TraceEventAdapterService } from '../ingestion/trace-event-adapter.service';
-import { DatabaseStorageService } from '../storage/database-storage.service';
 import { db } from '@evalops/shared-db';
 import { runs, traceSpans } from '@evalops/shared-db';
 import { eq, isNotNull, and, sql } from 'drizzle-orm';
@@ -24,7 +23,6 @@ jest.mock('@evalops/shared-db', () => ({
 describe('TraceMigrationService', () => {
   let service: TraceMigrationService;
   let traceEventAdapter: jest.Mocked<TraceEventAdapterService>;
-  let storageService: jest.Mocked<DatabaseStorageService>;
   let mockDb: jest.Mocked<typeof db>;
 
   const createMockRun = (overrides: Partial<Run> = {}): Run => ({
@@ -58,10 +56,6 @@ describe('TraceMigrationService', () => {
       convertAndStore: jest.fn(),
     };
 
-    const mockStorageService = {
-      getRun: jest.fn(),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TraceMigrationService,
@@ -69,16 +63,11 @@ describe('TraceMigrationService', () => {
           provide: TraceEventAdapterService,
           useValue: mockTraceEventAdapter,
         },
-        {
-          provide: DatabaseStorageService,
-          useValue: mockStorageService,
-        },
       ],
     }).compile();
 
     service = module.get<TraceMigrationService>(TraceMigrationService);
     traceEventAdapter = module.get(TraceEventAdapterService);
-    storageService = module.get(DatabaseStorageService);
     mockDb = db as jest.Mocked<typeof db>;
   });
 

@@ -9,7 +9,7 @@ import { HealthController } from './health/health.controller';
 import { RunsModule } from './runs/runs.module';
 import { EvaluationModule } from './evaluation/evaluation.module';
 import { PoliciesModule } from './policies/policies.module';
-import { StorageModule } from './storage/storage.module';
+import { SharedDbModule } from '@evalops/shared-db';
 import { IngestionModule } from './ingestion/ingestion.module';
 import { SimulationsModule } from './simulations/simulations.module';
 import { ReviewsModule } from './reviews/reviews.module';
@@ -40,7 +40,7 @@ import { JwtStrategy } from './auth/jwt.strategy';
       },
       inject: [ConfigService],
     }),
-    StorageModule,
+    SharedDbModule,
     RunsModule,
     EvaluationModule,
     PoliciesModule,

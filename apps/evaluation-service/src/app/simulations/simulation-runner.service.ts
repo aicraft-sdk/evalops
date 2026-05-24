@@ -4,7 +4,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { RunsRepository } from '@evalops/shared-db';
 import { SimulationsService } from './simulations.service';
 import { TraceWriterService } from './trace-writer.service';
 import { CoreClientService } from '../core-client/core-client.service';
@@ -51,7 +51,7 @@ export class SimulationRunnerService {
   private readonly agentParser = new AgentMDParser();
 
   constructor(
-    private storageService: DatabaseStorageService,
+    private runsRepository: RunsRepository,
     private simulationsService: SimulationsService,
     private traceWriterService: TraceWriterService,
     private coreClient: CoreClientService,
@@ -114,7 +114,7 @@ export class SimulationRunnerService {
       commitSha: commitSha || getGitCommitShaSync() || undefined, // Allow null/undefined if unable to determine
     };
 
-    const createdRun = await this.storageService.createRun(run);
+    const createdRun = await this.runsRepository.create(run);
 
     // 4. Create simulation run linking record
     await this.simulationsService.createSimulationRun(
@@ -180,7 +180,7 @@ export class SimulationRunnerService {
 
       // 8. Update run with metrics
       const duration = Math.floor((Date.now() - startTime) / 1000);
-      await this.storageService.updateRun(createdRun.id, {
+      await this.runsRepository.update(createdRun.id, {
         status: 'completed',
         completedAt: new Date(),
         metrics: {
@@ -199,7 +199,7 @@ export class SimulationRunnerService {
       });
 
       // 9. Evaluate policies
-      const updatedRun = await this.storageService.getRun(createdRun.id);
+      const updatedRun = await this.runsRepository.findById(createdRun.id);
       if (updatedRun) {
         await this.policiesService.evaluateRun(updatedRun.id);
       }
@@ -218,7 +218,7 @@ export class SimulationRunnerService {
       });
 
       // Update run status
-      await this.storageService.updateRun(createdRun.id, {
+      await this.runsRepository.update(createdRun.id, {
         status: 'failed',
         completedAt: new Date(),
         errorMessage: error.message,

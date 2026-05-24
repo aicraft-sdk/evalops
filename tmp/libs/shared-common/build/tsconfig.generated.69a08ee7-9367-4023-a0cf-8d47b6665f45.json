@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "paths": {
+      "@evalops/shared-db": [
+        "dist/libs/shared-db/src/index"
+      ],
+      "@evalops/shared-auth": [
+        "dist/libs/shared-auth"
+      ],
+      "shared-db": [
+        "dist/libs/shared-db"
+      ]
+    }
+  },
+  "extends": "../../../../libs/shared-common/tsconfig.lib.json"
+}

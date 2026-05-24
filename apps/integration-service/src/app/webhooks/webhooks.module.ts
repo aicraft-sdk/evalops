@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { WebhooksController } from './webhooks.controller';
 import { WebhooksService } from './webhooks.service';
 import { WebhookProcessor } from './webhook.processor';
-import { StorageModule } from '../storage/storage.module';
 import { HttpModule } from '@nestjs/axios';
 import { BullModule } from '@nestjs/bull';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -10,7 +9,6 @@ import { EvaluationClientModule } from '../evaluation-client/evaluation-client.m
 
 @Module({
   imports: [
-    StorageModule,
     HttpModule,
     ConfigModule,
     EvaluationClientModule,

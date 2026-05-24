@@ -1,13 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { PromptsRepository } from '@evalops/shared-db';
 import { TemplateEngine } from '../templates/template-engine.service';
-import { Prompt, InsertPrompt } from '@evalops/shared-db';
-import crypto from 'crypto';
+import { InsertPrompt } from '@evalops/shared-db';
+import * as crypto from 'crypto';
 
 export interface PromptUpload {
   name: string;
   content: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface PromptValidationResult {
@@ -19,7 +19,7 @@ export interface PromptValidationResult {
 @Injectable()
 export class PromptsService {
   constructor(
-    private storageService: DatabaseStorageService,
+    private promptsRepository: PromptsRepository,
     private templateEngine: TemplateEngine,
   ) {}
 
@@ -37,7 +37,7 @@ export class PromptsService {
 
     const contentHash = this.generateContentHash(upload.content);
     const existingPrompt =
-      await this.storageService.findPromptByContentHash(contentHash);
+      await this.promptsRepository.findByContentHash(contentHash);
     if (existingPrompt) {
       return existingPrompt.id;
     }
@@ -52,7 +52,7 @@ export class PromptsService {
       createdBy: userId,
     };
 
-    const prompt = await this.storageService.createPrompt(promptData);
+    const prompt = await this.promptsRepository.create(promptData);
     return prompt.id;
   }
 
@@ -86,8 +86,8 @@ export class PromptsService {
     };
   }
 
-  async testPrompt(promptId: string, testInput: Record<string, any>): Promise<any> {
-    const prompt = await this.storageService.getPrompt(promptId);
+  async testPrompt(promptId: string, testInput: Record<string, unknown>): Promise<unknown> {
+    const prompt = await this.promptsRepository.findById(promptId);
     if (!prompt) {
       throw new NotFoundException(`Prompt ${promptId} not found`);
     }
@@ -131,4 +131,3 @@ export class PromptsService {
     return crypto.createHash('sha256').update(content).digest('hex');
   }
 }
-

@@ -1,21 +1,25 @@
 import { Injectable } from '@nestjs/common';
-import { DatabaseStorageService } from '../storage/database-storage.service';
-import { Flow, InsertFlow } from '@evalops/shared-db';
+import { FlowsRepository } from '@evalops/shared-db';
+import { flows } from '@evalops/shared-db';
 
 @Injectable()
 export class FlowsService {
-  constructor(private storageService: DatabaseStorageService) {}
+  constructor(private flowsRepository: FlowsRepository) {}
 
-  async createFlow(flow: InsertFlow): Promise<Flow> {
-    return this.storageService.createFlow(flow);
+  async createFlow(
+    data: typeof flows.$inferInsert,
+  ): Promise<typeof flows.$inferSelect> {
+    return this.flowsRepository.create(data);
   }
 
-  async updateFlow(id: string, flow: Partial<InsertFlow>): Promise<Flow> {
-    return this.storageService.updateFlow(id, flow);
+  async updateFlow(
+    id: string,
+    data: Partial<typeof flows.$inferInsert>,
+  ): Promise<typeof flows.$inferSelect> {
+    return this.flowsRepository.update(id, data);
   }
 
   async deleteFlow(id: string): Promise<void> {
-    return this.storageService.deleteFlow(id);
+    return this.flowsRepository.delete(id);
   }
 }
-

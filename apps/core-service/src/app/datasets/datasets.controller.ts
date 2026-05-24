@@ -10,25 +10,25 @@ import {
 } from '@nestjs/common';
 import { DatasetsService, DatasetUpload } from './datasets.service';
 import { JwtAuthGuard, CurrentUser } from '@evalops/shared-auth';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { DatasetsRepository } from '@evalops/shared-db';
 
 @Controller('datasets')
 export class DatasetsController {
   constructor(
     private datasetsService: DatasetsService,
-    private storageService: DatabaseStorageService,
+    private datasetsRepository: DatasetsRepository,
   ) {}
 
   @UseGuards(JwtAuthGuard)
   @Get()
-  async getDatasets(@CurrentUser() user: any) {
-    return this.storageService.getDatasets(user.organizationId);
+  async getDatasets(@CurrentUser() user: { organizationId: string }) {
+    return this.datasetsRepository.findAllByOrg(user.organizationId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get(':id')
   async getDataset(@Param('id') id: string) {
-    return this.storageService.getDataset(id);
+    return this.datasetsRepository.findById(id);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -41,14 +41,14 @@ export class DatasetsController {
   @Post()
   async createDataset(
     @Body() body: DatasetUpload,
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; organizationId: string },
   ) {
     const datasetId = await this.datasetsService.uploadDataset(
       body,
       user.id,
       user.organizationId,
     );
-    return this.storageService.getDataset(datasetId);
+    return this.datasetsRepository.findById(datasetId);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -57,17 +57,15 @@ export class DatasetsController {
     @Param('id') id: string,
     @Body() body: Partial<DatasetUpload>,
   ) {
-    return this.storageService.updateDataset(id, {
+    return this.datasetsRepository.update(id, {
       ...body,
-      updatedAt: new Date(),
     });
   }
 
   @UseGuards(JwtAuthGuard)
   @Delete(':id')
   async deleteDataset(@Param('id') id: string) {
-    await this.storageService.deleteDataset(id);
+    await this.datasetsRepository.delete(id);
     return { message: 'Dataset deleted successfully' };
   }
 }
-

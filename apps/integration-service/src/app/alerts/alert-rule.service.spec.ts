@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AlertRuleService } from './alert-rule.service';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { CicdRepository, AlertsRepository } from '@evalops/shared-db';
 import { type Run } from '@evalops/shared-db';
 
 /** Minimal Run stub sufficient for alert-rule tests */
@@ -14,12 +14,15 @@ const mockRun: Run = {
   completedAt: new Date().toISOString(),
 } as unknown as Run;
 
-const mockStorageService = {
-  getRun: jest.fn(),
-  getPolicyViolationsByRun: jest.fn(),
-  getAlertConfigs: jest.fn(),
-  getRunsByEvalSpec: jest.fn(),
-  getRuns: jest.fn(),
+const mockCicdRepository = {
+  findEvalRunById: jest.fn(),
+  findPolicyViolationsByRun: jest.fn(),
+  findEvalRunsByEvalSpec: jest.fn(),
+  findEvalRunsByOrg: jest.fn(),
+};
+
+const mockAlertsRepository = {
+  findConfigsByOrg: jest.fn(),
 };
 
 describe('AlertRuleService.checkRunAlerts', () => {
@@ -30,7 +33,8 @@ describe('AlertRuleService.checkRunAlerts', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AlertRuleService,
-        { provide: DatabaseStorageService, useValue: mockStorageService },
+        { provide: CicdRepository, useValue: mockCicdRepository },
+        { provide: AlertsRepository, useValue: mockAlertsRepository },
       ],
     }).compile();
     service = module.get<AlertRuleService>(AlertRuleService);
@@ -41,11 +45,11 @@ describe('AlertRuleService.checkRunAlerts', () => {
     // checkPerformanceAlerts and checkCostAlerts both call getAlertConfigs.
     // checkCostAlerts: run.cost=0.5, config.maxCostPerRun=0.1 → alert fires.
     // checkPerformanceAlerts: run.duration=120, return no performance configs → no alert.
-    mockStorageService.getRun.mockResolvedValue(mockRun);
-    mockStorageService.getPolicyViolationsByRun.mockRejectedValue(
+    mockCicdRepository.findEvalRunById.mockResolvedValue(mockRun);
+    mockCicdRepository.findPolicyViolationsByRun.mockRejectedValue(
       new Error('DB failure in policy check'),
     );
-    mockStorageService.getAlertConfigs.mockImplementation((_orgId: string) => {
+    mockAlertsRepository.findConfigsByOrg.mockImplementation((_orgId: string) => {
       // Both checkPerformanceAlerts and checkCostAlerts call this.
       // Return a cost-type config and a performance config that won't fire.
       return Promise.resolve([
@@ -75,10 +79,10 @@ describe('AlertRuleService.checkRunAlerts', () => {
   });
 
   it('returns empty array when all three sub-checks reject', async () => {
-    mockStorageService.getRun.mockResolvedValue(mockRun);
+    mockCicdRepository.findEvalRunById.mockResolvedValue(mockRun);
     // All three checks will throw
-    mockStorageService.getPolicyViolationsByRun.mockRejectedValue(new Error('DB error'));
-    mockStorageService.getAlertConfigs.mockRejectedValue(new Error('DB error'));
+    mockCicdRepository.findPolicyViolationsByRun.mockRejectedValue(new Error('DB error'));
+    mockAlertsRepository.findConfigsByOrg.mockRejectedValue(new Error('DB error'));
 
     const alerts = await service.checkRunAlerts('run-1');
 

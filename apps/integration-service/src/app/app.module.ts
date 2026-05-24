@@ -9,10 +9,10 @@ import { HealthController } from './health/health.controller';
 import { AzureModule } from './azure/azure.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { AlertsModule } from './alerts/alerts.module';
-import { StorageModule } from './storage/storage.module';
 import { ArtifactsModule } from './artifacts/artifacts.module';
 import { SandboxModule } from './sandbox/sandbox.module';
 import { JwtAuthGuard } from '@evalops/shared-auth';
+import { SharedDbModule } from '@evalops/shared-db';
 import {
   LoggingInterceptor,
   OrgContextInterceptor,
@@ -34,7 +34,7 @@ import {
       },
       inject: [ConfigService],
     }),
-    StorageModule,
+    SharedDbModule,
     AzureModule,
     WebhooksModule,
     AlertsModule,

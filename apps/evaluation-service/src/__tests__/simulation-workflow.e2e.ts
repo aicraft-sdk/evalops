@@ -14,17 +14,17 @@ import { SimulationsController } from '../app/simulations/simulations.controller
 import { SimulationsService } from '../app/simulations/simulations.service';
 import { SimulationRunnerService } from '../app/simulations/simulation-runner.service';
 import { TraceWriterService } from '../app/simulations/trace-writer.service';
-import { DatabaseStorageService } from '../app/storage/database-storage.service';
+import { RunsRepository } from '@evalops/shared-db';
 import { CoreClientService } from '../app/core-client/core-client.service';
 import { AIProviderService } from '../app/ai-provider/ai-provider.service';
 import { EvaluatorsService } from '../app/evaluation/evaluators/evaluators.service';
 import { PoliciesService } from '../app/policies/policies.service';
 import { JwtAuthGuard } from '@evalops/shared-auth';
 
-const mockStorageService = {
-  createRun: jest.fn(),
-  updateRun: jest.fn(),
-  getRun: jest.fn(),
+const mockRunsRepository = {
+  create: jest.fn(),
+  update: jest.fn(),
+  findById: jest.fn(),
 };
 
 const mockSimulationsService = {
@@ -75,7 +75,7 @@ describe('Simulation Workflow (integration)', () => {
         SimulationsService,
         SimulationRunnerService,
         TraceWriterService,
-        { provide: DatabaseStorageService, useValue: mockStorageService },
+        { provide: RunsRepository, useValue: mockRunsRepository },
         { provide: CoreClientService, useValue: mockCoreClient },
         { provide: AIProviderService, useValue: mockAIProvider },
         { provide: EvaluatorsService, useValue: mockEvaluatorsService },
@@ -221,7 +221,7 @@ describe('Simulation Workflow (integration)', () => {
 
       mockSimulationsService.getScenario.mockResolvedValue(scenario);
       mockSimulationsService.getSuite.mockResolvedValue(suite);
-      mockStorageService.createRun.mockResolvedValue({
+      mockRunsRepository.create.mockResolvedValue({
         ...createdRun,
         status: 'running',
       });
@@ -266,7 +266,7 @@ describe('Simulation Workflow (integration)', () => {
         violations: [],
       });
 
-      mockStorageService.updateRun.mockResolvedValue(createdRun);
+      mockRunsRepository.update.mockResolvedValue(createdRun);
 
       const res = await request(app.getHttpServer())
         .post('/api/evaluation/simulations/scenarios/scenario-123/run')
@@ -278,12 +278,12 @@ describe('Simulation Workflow (integration)', () => {
         decision: 'pass',
       });
 
-      expect(mockStorageService.createRun).toHaveBeenCalled();
+      expect(mockRunsRepository.create).toHaveBeenCalled();
       expect(mockSimulationsService.createSimulationRun).toHaveBeenCalled();
       expect(mockTraceWriterService.createRootSpan).toHaveBeenCalled();
       expect(mockAIProvider.generateResponse).toHaveBeenCalled();
       expect(mockPoliciesService.evaluatePolicies).toHaveBeenCalled();
-      expect(mockStorageService.updateRun).toHaveBeenCalledWith(
+      expect(mockRunsRepository.update).toHaveBeenCalledWith(
         'run-123',
         expect.objectContaining({
           status: 'completed',
@@ -395,7 +395,7 @@ describe('Simulation Workflow (integration)', () => {
         decision: 'pass',
       };
 
-      mockStorageService.createRun
+      mockRunsRepository.create
         .mockResolvedValueOnce({ ...run1, status: 'running' })
         .mockResolvedValueOnce({ ...run2, status: 'running' });
 
@@ -430,7 +430,7 @@ describe('Simulation Workflow (integration)', () => {
         violations: [],
       });
 
-      mockStorageService.updateRun
+      mockRunsRepository.update
         .mockResolvedValueOnce(run1)
         .mockResolvedValueOnce(run2);
 

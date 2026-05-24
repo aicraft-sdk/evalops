@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { MetricsRepository } from '@evalops/shared-db';
 
 export interface TrendData {
   date: string;
@@ -55,14 +55,14 @@ export interface PerformanceComparison {
 export class AnalyticsService {
   private readonly logger = new Logger(AnalyticsService.name);
 
-  constructor(private storageService: DatabaseStorageService) {}
+  constructor(private metricsRepository: MetricsRepository) {}
 
   async getTrends(
     organizationId: string,
     days = 30,
   ): Promise<TrendData[]> {
     // Use the existing getTrends method from storage service
-    const trends = await this.storageService.getTrends(organizationId, days);
+    const trends = await this.metricsRepository.getTrends(organizationId, days);
     
     // Transform to match TrendData interface
     return trends.map((trend) => ({
@@ -84,7 +84,7 @@ export class AnalyticsService {
     startDate.setDate(startDate.getDate() - days);
 
     // Use existing storage method
-    const breakdown = await this.storageService.getCostBreakdown(
+    const breakdown = await this.metricsRepository.getCostBreakdown(
       organizationId,
       days,
     );
@@ -98,7 +98,7 @@ export class AnalyticsService {
     }));
 
     // Get model breakdown
-    const modelBreakdown = await this.storageService.getModelUsageBreakdown(
+    const modelBreakdown = await this.metricsRepository.getModelUsageBreakdown(
       organizationId,
       days,
     );
@@ -136,14 +136,14 @@ export class AnalyticsService {
     startDate.setDate(startDate.getDate() - days * 2);
 
     // Get current period runs
-    const currentRuns = await this.storageService.getRunsByDateRange(
+    const currentRuns = await this.metricsRepository.getRunsByDateRange(
       organizationId,
       midDate,
       endDate,
     );
 
     // Get previous period runs
-    const previousRuns = await this.storageService.getRunsByDateRange(
+    const previousRuns = await this.metricsRepository.getRunsByDateRange(
       organizationId,
       startDate,
       midDate,

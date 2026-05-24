@@ -1,41 +1,48 @@
 import { Injectable } from '@nestjs/common';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import {
+  UsersRepository,
+  OrganizationsRepository,
+  UpsertUserInput,
+  organizations,
+} from '@evalops/shared-db';
 import { UpsertUser, InsertOrganization } from '@evalops/shared-db';
 
 @Injectable()
 export class AdminService {
-  constructor(private storageService: DatabaseStorageService) {}
+  constructor(
+    private usersRepository: UsersRepository,
+    private organizationsRepository: OrganizationsRepository,
+  ) {}
 
   async getAllUsers() {
-    return this.storageService.getAllUsers();
+    return this.usersRepository.findAll();
   }
 
   async getAllOrganizations() {
-    return this.storageService.getAllOrganizations();
+    return this.organizationsRepository.findAll();
   }
 
   async updateUserRole(userId: string, role: string) {
-    const user = await this.storageService.getUser(userId);
+    const user = await this.usersRepository.findById(userId);
     if (!user) {
       throw new Error(`User ${userId} not found`);
     }
 
-    return this.storageService.upsertUser({
+    return this.usersRepository.upsert({
       ...user,
       role,
-    } as UpsertUser);
+    } as UpsertUserInput);
   }
 
   async updateOrganization(
     organizationId: string,
     organizationData: Partial<InsertOrganization>,
   ) {
-    return this.storageService.updateOrganization(
+    return this.organizationsRepository.update(
       organizationId,
-      organizationData,
+      organizationData as Partial<typeof organizations.$inferInsert>,
     );
   }
-
 }
 
 

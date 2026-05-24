@@ -12,7 +12,7 @@ import { DatasetsModule } from './datasets/datasets.module';
 import { EvalSpecsModule } from './eval-specs/eval-specs.module';
 import { ProvidersModule } from './providers/providers.module';
 import { ModelsModule } from './models/models.module';
-import { StorageModule } from './storage/storage.module';
+import { SharedDbModule } from '@evalops/shared-db';
 import { AgentsModule } from './agents/agents.module';
 import { JwtAuthGuard } from '@evalops/shared-auth';
 import { JwtStrategy } from './jwt.strategy';
@@ -37,7 +37,7 @@ import {
       },
       inject: [ConfigService],
     }),
-    StorageModule,
+    SharedDbModule,
     PromptsModule,
     FlowsModule,
     DatasetsModule,

@@ -12,7 +12,7 @@ import {
 import { WebhooksService } from './webhooks.service';
 import { Public } from '@evalops/shared-auth';
 import { CurrentUser } from '@evalops/shared-auth';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { CicdRepository } from '@evalops/shared-db';
 
 @Controller('webhooks')
 export class WebhooksController {
@@ -20,7 +20,7 @@ export class WebhooksController {
 
   constructor(
     private webhooksService: WebhooksService,
-    private storageService: DatabaseStorageService,
+    private cicdRepository: CicdRepository,
   ) {}
 
   @Public()
@@ -38,7 +38,7 @@ export class WebhooksController {
     }
 
     // Fetch integration from database to get secret and organization
-    const integration = await this.storageService.getCicdIntegrationById(
+    const integration = await this.cicdRepository.findIntegrationById(
       integrationId,
     );
     if (!integration) {

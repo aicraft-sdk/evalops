@@ -5,10 +5,9 @@ import { AzureDiscoveryService } from './azure-discovery.service';
 import { AzureMLService } from './azure-ml.service';
 import { AzureOpenAIService } from './azure-openai.service';
 import { HttpModule } from '@nestjs/axios';
-import { StorageModule } from '../storage/storage.module';
 
 @Module({
-  imports: [HttpModule, ConfigModule, StorageModule],
+  imports: [HttpModule, ConfigModule],
   controllers: [AzureController],
   providers: [AzureDiscoveryService, AzureMLService, AzureOpenAIService],
   exports: [AzureDiscoveryService, AzureMLService, AzureOpenAIService],

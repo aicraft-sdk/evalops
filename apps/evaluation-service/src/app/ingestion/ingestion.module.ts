@@ -5,7 +5,6 @@ import { IngestionController } from './ingestion.controller';
 import { IngestionService } from './ingestion.service';
 import { IdempotencyService } from './idempotency.service';
 import { TraceEventAdapterService } from './trace-event-adapter.service';
-import { StorageModule } from '../storage/storage.module';
 import { RedisModule } from '@evalops/shared-common';
 import { RateLimitGuard } from '@evalops/shared-auth';
 
@@ -17,7 +16,6 @@ import { RateLimitGuard } from '@evalops/shared-auth';
  */
 @Module({
   imports: [
-    StorageModule,
     ConfigModule,
     RedisModule,
     HttpModule.register({ timeout: 10000 }),

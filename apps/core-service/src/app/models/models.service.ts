@@ -1,17 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { ModelsRepository } from '@evalops/shared-db';
 import { InsertModel } from '@evalops/shared-db';
 
 @Injectable()
 export class ModelsService {
-  constructor(private storageService: DatabaseStorageService) {}
+  constructor(private modelsRepository: ModelsRepository) {}
 
   async getAllModels(providerId?: string) {
-    return this.storageService.getModels(providerId);
+    return this.modelsRepository.findAll(providerId);
   }
 
   async getModel(id: string) {
-    const model = await this.storageService.getModel(id);
+    const model = await this.modelsRepository.findById(id);
     if (!model) {
       throw new Error(`Model ${id} not found`);
     }
@@ -19,19 +19,15 @@ export class ModelsService {
   }
 
   async createModel(modelData: InsertModel) {
-    return this.storageService.createModel(modelData);
+    return this.modelsRepository.create(modelData);
   }
 
   async updateModel(id: string, modelData: Partial<InsertModel>) {
-    return this.storageService.updateModel(id, modelData);
+    return this.modelsRepository.update(id, modelData);
   }
 
   async deleteModel(id: string) {
-    await this.storageService.deleteModel(id);
+    await this.modelsRepository.delete(id);
     return { message: 'Model deleted successfully' };
   }
 }
-
-
-
-

@@ -1,19 +1,21 @@
 import { Injectable } from '@nestjs/common';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { OrganizationsRepository, organizations } from '@evalops/shared-db';
 import { Organization, InsertOrganization } from '@evalops/shared-db';
 
 @Injectable()
 export class OrganizationsService {
-  constructor(private storageService: DatabaseStorageService) {}
+  constructor(private organizationsRepository: OrganizationsRepository) {}
 
   async getOrganization(id: string): Promise<Organization | undefined> {
-    return this.storageService.getOrganization(id);
+    return this.organizationsRepository.findById(id) as Promise<Organization | undefined>;
   }
 
   async createOrganization(
     organization: InsertOrganization,
   ): Promise<Organization> {
-    return this.storageService.createOrganization(organization);
+    return this.organizationsRepository.create(
+      organization as typeof organizations.$inferInsert,
+    ) as Promise<Organization>;
   }
 }
 

@@ -4,7 +4,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { RunsRepository, SampleResultsRepository, ReviewQueueRepository } from '@evalops/shared-db';
 import { CoreClientService } from '../core-client/core-client.service';
 import {
   RunAnnotation,
@@ -28,7 +28,9 @@ export class ReviewsService {
   private readonly logger = new Logger(ReviewsService.name);
 
   constructor(
-    private storageService: DatabaseStorageService,
+    private runsRepository: RunsRepository,
+    private sampleResultsRepository: SampleResultsRepository,
+    private reviewQueueRepository: ReviewQueueRepository,
     private coreClient: CoreClientService
   ) {}
 
@@ -40,7 +42,7 @@ export class ReviewsService {
     authorId: string
   ): Promise<RunAnnotation> {
     // Verify run exists
-    const run = await this.storageService.getRun(data.runId);
+    const run = await this.runsRepository.findById(data.runId);
     if (!run) {
       throw new NotFoundException(`Run ${data.runId} not found`);
     }
@@ -75,7 +77,7 @@ export class ReviewsService {
       linkTargets: data.linkTargets || [],
     };
 
-    const created = await this.storageService.createAnnotation(annotation);
+    const created = await this.sampleResultsRepository.createAnnotation(annotation);
 
     // Optionally create a review queue item if this is a failure annotation
     if (
@@ -98,7 +100,7 @@ export class ReviewsService {
     id: string,
     organizationId: string
   ): Promise<RunAnnotation> {
-    const annotation = await this.storageService.getAnnotation(id);
+    const annotation = await this.sampleResultsRepository.findAnnotationById(id);
     if (!annotation || annotation.organizationId !== organizationId) {
       throw new NotFoundException(`Annotation ${id} not found`);
     }
@@ -111,12 +113,12 @@ export class ReviewsService {
     spanId?: string
   ): Promise<RunAnnotation[]> {
     // Verify run exists and belongs to organization
-    const run = await this.storageService.getRun(runId);
+    const run = await this.runsRepository.findById(runId);
     if (!run || run.organizationId !== organizationId) {
       throw new NotFoundException(`Run ${runId} not found`);
     }
 
-    return await this.storageService.getAnnotationsForRun(runId, spanId);
+    return await this.sampleResultsRepository.findAnnotationsForRun(runId, spanId);
   }
 
   async updateAnnotation(
@@ -125,12 +127,12 @@ export class ReviewsService {
     organizationId: string
   ): Promise<RunAnnotation> {
     const annotation = await this.getAnnotation(id, organizationId);
-    return await this.storageService.updateAnnotation(id, data);
+    return await this.sampleResultsRepository.updateAnnotation(id, data);
   }
 
   async deleteAnnotation(id: string, organizationId: string): Promise<void> {
     await this.getAnnotation(id, organizationId); // Verify exists and belongs to org
-    await this.storageService.deleteAnnotation(id);
+    await this.sampleResultsRepository.deleteAnnotation(id);
   }
 
   // ========== Review Queue Operations ==========
@@ -141,14 +143,14 @@ export class ReviewsService {
     createdBy: string
   ): Promise<ReviewQueueItem> {
     // Verify run exists
-    const run = await this.storageService.getRun(data.runId);
+    const run = await this.runsRepository.findById(data.runId);
     if (!run || run.organizationId !== organizationId) {
       throw new NotFoundException(`Run ${data.runId} not found`);
     }
 
     // Verify annotation exists if provided
     if (data.annotationId) {
-      const annotation = await this.storageService.getAnnotation(
+      const annotation = await this.sampleResultsRepository.findAnnotationById(
         data.annotationId
       );
       if (!annotation || annotation.organizationId !== organizationId) {
@@ -165,7 +167,7 @@ export class ReviewsService {
       tags: data.tags || [],
     };
 
-    return await this.storageService.createReviewQueueItem(item);
+    return await this.reviewQueueRepository.create(item);
   }
 
   async createQueueItemFromAnnotation(
@@ -222,7 +224,7 @@ export class ReviewsService {
     }
 
     // Check if run has commitSha (indicating CI run) and add ci_gate tag
-    const run = await this.storageService.getRun(runId);
+    const run = await this.runsRepository.findById(runId);
     const tags: string[] = [];
     if (run?.commitSha) {
       tags.push('ci_gate');
@@ -245,7 +247,7 @@ export class ReviewsService {
     id: string,
     organizationId: string
   ): Promise<ReviewQueueItem> {
-    const item = await this.storageService.getReviewQueueItem(id);
+    const item = await this.reviewQueueRepository.findById(id);
     if (!item || item.organizationId !== organizationId) {
       throw new NotFoundException(`Review queue item ${id} not found`);
     }
@@ -263,7 +265,7 @@ export class ReviewsService {
     },
     limit?: number
   ): Promise<ReviewQueueItem[]> {
-    return await this.storageService.getReviewQueueItems(
+    return await this.reviewQueueRepository.findByOrg(
       organizationId,
       filters,
       limit
@@ -276,7 +278,7 @@ export class ReviewsService {
     organizationId: string
   ): Promise<ReviewQueueItem> {
     await this.getQueueItem(id, organizationId); // Verify exists and belongs to org
-    return await this.storageService.updateReviewQueueItem(id, data);
+    return await this.reviewQueueRepository.update(id, data);
   }
 
   // ========== Promote Operations ==========
@@ -289,7 +291,7 @@ export class ReviewsService {
     authToken?: string
   ): Promise<{ datasetId: string; sampleIndex: number }> {
     const queueItem = await this.getQueueItem(queueItemId, organizationId);
-    const run = await this.storageService.getRun(queueItem.runId);
+    const run = await this.runsRepository.findById(queueItem.runId);
     if (!run) {
       throw new NotFoundException(`Run ${queueItem.runId} not found`);
     }
@@ -300,7 +302,7 @@ export class ReviewsService {
 
     if (queueItem.annotationId) {
       // If there's an annotation with a spanId, extract from that span
-      const annotation = await this.storageService.getAnnotation(
+      const annotation = await this.sampleResultsRepository.findAnnotationById(
         queueItem.annotationId
       );
       if (annotation?.spanId) {
@@ -324,7 +326,7 @@ export class ReviewsService {
 
     // Fallback: extract from sampleResults
     if (!input) {
-      const samples = await this.storageService.getSampleResults(run.id);
+      const samples = await this.sampleResultsRepository.findByRun(run.id);
       if (samples.length > 0) {
         const sample = samples[0]; // Use first sample
         input = sample.input;
@@ -371,7 +373,7 @@ export class ReviewsService {
     // Add sample to dataset via core-service
     // Note: This would require adding an addSample method to CoreClientService
     // For now, we'll update the queue item to track the promotion
-    await this.storageService.updateReviewQueueItem(queueItemId, {
+    await this.reviewQueueRepository.update(queueItemId, {
       status: 'promoted',
       promotedToDatasetId: targetDatasetId,
     });
@@ -392,7 +394,7 @@ export class ReviewsService {
     authToken?: string
   ): Promise<{ scenarioId: string }> {
     const queueItem = await this.getQueueItem(queueItemId, organizationId);
-    const run = await this.storageService.getRun(queueItem.runId);
+    const run = await this.runsRepository.findById(queueItem.runId);
     if (!run) {
       throw new NotFoundException(`Run ${queueItem.runId} not found`);
     }
@@ -432,7 +434,7 @@ export class ReviewsService {
     // For now, we'll update the queue item to track the promotion
     const targetScenarioId = scenarioId || 'new-scenario-id'; // Placeholder
 
-    await this.storageService.updateReviewQueueItem(queueItemId, {
+    await this.reviewQueueRepository.update(queueItemId, {
       status: 'promoted',
       promotedToScenarioId: targetScenarioId,
     });

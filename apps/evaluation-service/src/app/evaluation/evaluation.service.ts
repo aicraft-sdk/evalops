@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { RunsRepository, SampleResultsRepository } from '@evalops/shared-db';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
@@ -46,7 +46,8 @@ export class EvaluationService {
   private readonly integrationServiceUrl: string;
 
   constructor(
-    private storageService: DatabaseStorageService,
+    private runsRepository: RunsRepository,
+    private sampleResultsRepository: SampleResultsRepository,
     private httpService: HttpService,
     private configService: ConfigService,
     private coreClient: CoreClientService,
@@ -63,9 +64,9 @@ export class EvaluationService {
     const startTime = Date.now();
 
     try {
-      await this.storageService.updateRun(runId, { status: 'running' });
+      await this.runsRepository.update(runId, { status: 'running' });
 
-      const run = await this.storageService.getRun(runId);
+      const run = await this.runsRepository.findById(runId);
       if (!run) {
         throw new Error(`Run ${runId} not found`);
       }
@@ -119,7 +120,7 @@ export class EvaluationService {
               authToken,
             );
 
-            await this.storageService.createSampleResult({
+            await this.sampleResultsRepository.create({
               runId,
               sampleIndex,
               repetition: rep,
@@ -169,7 +170,7 @@ export class EvaluationService {
             completedSamples++;
 
             if (completedSamples % 10 === 0) {
-              await this.storageService.updateRun(runId, {
+              await this.runsRepository.update(runId, {
                 description: `Progress: ${completedSamples}/${totalSamples} samples (${Math.round(
                   (completedSamples / totalSamples) * 100
                 )}%)`,
@@ -197,7 +198,7 @@ export class EvaluationService {
       }
 
       const duration = Date.now() - startTime;
-      await this.storageService.updateRun(runId, {
+      await this.runsRepository.update(runId, {
         status: 'completed',
         completedAt: new Date(),
         metrics: aggregateMetrics,
@@ -207,7 +208,7 @@ export class EvaluationService {
 
       try {
         const policyResult = await this.policiesService.evaluateRun(runId);
-        await this.storageService.updateRun(runId, {
+        await this.runsRepository.update(runId, {
           decision: policyResult.decision,
           policyScore: policyResult.score,
         });
@@ -249,7 +250,7 @@ export class EvaluationService {
     } catch (error: unknown) {
       this.logger.error(`Error executing run ${runId}:`, error);
       const errMsg = error instanceof Error ? error.message : String(error);
-      await this.storageService.updateRun(runId, {
+      await this.runsRepository.update(runId, {
         status: 'failed',
         errorMessage: errMsg,
       });

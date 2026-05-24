@@ -1,17 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { ProvidersRepository } from '@evalops/shared-db';
 import { InsertAiProvider } from '@evalops/shared-db';
 
 @Injectable()
 export class ProvidersService {
-  constructor(private storageService: DatabaseStorageService) {}
+  constructor(private providersRepository: ProvidersRepository) {}
 
   async getAllProviders() {
-    return this.storageService.getProviders();
+    return this.providersRepository.findAll();
   }
 
   async getProvider(id: string) {
-    const provider = await this.storageService.getProvider(id);
+    const provider = await this.providersRepository.findById(id);
     if (!provider) {
       throw new Error(`Provider ${id} not found`);
     }
@@ -19,19 +19,15 @@ export class ProvidersService {
   }
 
   async createProvider(providerData: InsertAiProvider) {
-    return this.storageService.createProvider(providerData);
+    return this.providersRepository.create(providerData);
   }
 
   async updateProvider(id: string, providerData: Partial<InsertAiProvider>) {
-    return this.storageService.updateProvider(id, providerData);
+    return this.providersRepository.update(id, providerData);
   }
 
   async deleteProvider(id: string) {
-    await this.storageService.deleteProvider(id);
+    await this.providersRepository.delete(id);
     return { message: 'Provider deleted successfully' };
   }
 }
-
-
-
-

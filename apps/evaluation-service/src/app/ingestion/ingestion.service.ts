@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { TraceEvent } from '@evalops/sdk';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { RunsRepository } from '@evalops/shared-db';
 import { IdempotencyService } from './idempotency.service';
 import { TraceEventAdapterService } from './trace-event-adapter.service';
 
@@ -19,7 +19,7 @@ export class IngestionService {
 
   constructor(
     private readonly idempotency: IdempotencyService,
-    private readonly storageService: DatabaseStorageService,
+    private readonly runsRepository: RunsRepository,
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
     private readonly traceEventAdapter: TraceEventAdapterService
@@ -56,7 +56,7 @@ export class IngestionService {
     // Process each run's events
     for (const [runId, runEvents] of byRun.entries()) {
       // Get organizationId from run
-      const run = await this.storageService.getRun(runId);
+      const run = await this.runsRepository.findById(runId);
       if (!run) {
         this.logger.warn(`Run ${runId} not found, skipping trace ingestion`);
         continue;
@@ -83,7 +83,7 @@ export class IngestionService {
       // Optionally write to legacy JSONB (feature flag)
       if (this.useLegacyJsonb) {
         try {
-          await this.storageService.appendTraceEvents(runId, runEvents);
+          await this.runsRepository.appendTraceEvents(runId, runEvents);
         } catch (error) {
           this.logger.error(
             `Failed to append trace events to JSONB for run ${runId}: ${error?.message}`
@@ -111,8 +111,7 @@ export class IngestionService {
       `Completing run ${runId}, artifacts=${Object.keys(artifactHashes).length}`
     );
 
-    await this.storageService.updateRunStatus(runId, 'completed');
-    await this.storageService.updateRunArtifacts(runId, artifactHashes);
+    await this.runsRepository.completeRun(runId, artifactHashes);
 
     // Fire-and-forget: notify integration-service to process artifact metadata
     this.notifyIntegrationService(runId, artifactHashes).catch((err) => {

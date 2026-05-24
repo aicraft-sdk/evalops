@@ -15,7 +15,7 @@ import { INestApplication, HttpStatus } from '@nestjs/common';
 import request from 'supertest';
 import nock from 'nock';
 import { SandboxExecutionService } from '../app/sandbox-execution/sandbox-execution.service';
-import { DatabaseStorageService } from '../app/storage/database-storage.service';
+import { CustomEvaluatorsRepository } from '@evalops/shared-db';
 import { CoreClientService } from '../app/core-client/core-client.service';
 import { HttpClientService } from '@evalops/shared-common';
 import { ConfigService } from '@nestjs/config';
@@ -56,9 +56,9 @@ const mockEvaluator = {
   executionTimeout: 300,
 };
 
-const mockStorageService = {
-  getCustomEvaluator: jest.fn().mockResolvedValue(mockEvaluator),
-  createEvaluatorUsage: jest.fn().mockResolvedValue({}),
+const mockCustomEvaluatorsRepository = {
+  findById: jest.fn().mockResolvedValue(mockEvaluator),
+  createUsage: jest.fn().mockResolvedValue({}),
 };
 
 const mockCoreClient = {};
@@ -86,7 +86,7 @@ describe('Sandbox Execution Integration', () => {
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
         SandboxExecutionService,
-        { provide: DatabaseStorageService, useValue: mockStorageService },
+        { provide: CustomEvaluatorsRepository, useValue: mockCustomEvaluatorsRepository },
         { provide: CoreClientService, useValue: mockCoreClient },
         { provide: HttpClientService, useValue: mockHttpClient },
         { provide: ConfigService, useValue: mockConfigService },
@@ -107,7 +107,7 @@ describe('Sandbox Execution Integration', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     nock.cleanAll();
-    mockStorageService.getCustomEvaluator.mockResolvedValue(mockEvaluator);
+    mockCustomEvaluatorsRepository.findById.mockResolvedValue(mockEvaluator);
   });
 
   describe('Custom Evaluator Workflow', () => {
@@ -144,7 +144,7 @@ describe('Sandbox Execution Integration', () => {
       });
       expect(mockHttpClient.post).toHaveBeenCalledTimes(2);
       expect(mockHttpClient.delete).toHaveBeenCalled();
-      expect(mockStorageService.createEvaluatorUsage).toHaveBeenCalled();
+      expect(mockCustomEvaluatorsRepository.createUsage).toHaveBeenCalled();
     });
 
     it('should handle evaluator with input schema', async () => {
@@ -195,7 +195,7 @@ describe('Sandbox Execution Integration', () => {
 
       await service.executeCustomEvaluator(TEST_EVALUATOR_ID, TEST_INPUT);
 
-      expect(mockStorageService.createEvaluatorUsage).toHaveBeenCalledWith(
+      expect(mockCustomEvaluatorsRepository.createUsage).toHaveBeenCalledWith(
         expect.objectContaining({
           evaluatorId: TEST_EVALUATOR_ID,
           success: true,

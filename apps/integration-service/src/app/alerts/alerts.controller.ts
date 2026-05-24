@@ -9,26 +9,26 @@ import {
 } from '@nestjs/common';
 import { AlertsService } from './alerts.service';
 import { JwtAuthGuard, CurrentUser } from '@evalops/shared-auth';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { AlertsRepository } from '@evalops/shared-db';
 import { InsertAlertConfig } from '@evalops/shared-db';
 
 @Controller('alerts')
 export class AlertsController {
   constructor(
     private alertsService: AlertsService,
-    private storageService: DatabaseStorageService,
+    private alertsRepository: AlertsRepository,
   ) {}
 
   @UseGuards(JwtAuthGuard)
   @Get()
   async getAlerts(@CurrentUser() user: any) {
-    return this.storageService.getAlertEvents(user.organizationId);
+    return this.alertsRepository.findEventsByOrg(user.organizationId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('configs')
   async getAlertConfigs(@CurrentUser() user: any) {
-    return this.storageService.getAlertConfigs(user.organizationId);
+    return this.alertsRepository.findConfigsByOrg(user.organizationId);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -37,7 +37,7 @@ export class AlertsController {
     @Body() body: InsertAlertConfig,
     @CurrentUser() user: any,
   ) {
-    return this.storageService.createAlertConfig({
+    return this.alertsRepository.createConfig({
       ...body,
       organizationId: user.organizationId,
       createdBy: user.id,

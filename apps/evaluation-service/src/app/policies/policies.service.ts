@@ -5,7 +5,7 @@ import {
   forwardRef,
   Optional,
 } from '@nestjs/common';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { RunsRepository } from '@evalops/shared-db';
 import {
   Policy,
   Run,
@@ -62,24 +62,24 @@ export class PoliciesService {
   private readonly logger = new Logger(PoliciesService.name);
 
   constructor(
-    private storageService: DatabaseStorageService,
+    private runsRepository: RunsRepository,
     @Optional()
     @Inject(forwardRef(() => ReviewsService))
     private reviewsService?: ReviewsService
   ) {}
 
   async evaluateRun(runId: string): Promise<PolicyResult> {
-    const run = await this.storageService.getRun(runId);
+    const run = await this.runsRepository.findById(runId);
     if (!run) {
       throw new Error(`Run ${runId} not found`);
     }
 
-    const activePolicies = await this.storageService.getActivePolicies(
+    const activePolicies = await this.runsRepository.findActivePolicies(
       run.organizationId
     );
 
     // Get baseline for comparison
-    const baseline = await this.storageService.getActiveBaseline(
+    const baseline = await this.runsRepository.findActiveBaseline(
       run.evalSpecId
     );
 
@@ -141,7 +141,7 @@ export class PoliciesService {
 
           if (run) {
             const createdViolation =
-              await this.storageService.createPolicyViolation({
+              await this.runsRepository.createPolicyViolation({
                 runId: run.id,
                 policyId: policy.id,
                 ruleIndex,
@@ -387,6 +387,6 @@ export class PoliciesService {
   }
 
   async getActivePolicies(organizationId: string): Promise<Policy[]> {
-    return this.storageService.getActivePolicies(organizationId);
+    return this.runsRepository.findActivePolicies(organizationId);
   }
 }

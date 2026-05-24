@@ -8,8 +8,8 @@ import { AppService } from './app.service';
 import { HealthController } from './health/health.controller';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AuditModule } from './audit/audit.module';
-import { StorageModule } from './storage/storage.module';
 import { JwtAuthGuard } from '@evalops/shared-auth';
+import { SharedDbModule } from '@evalops/shared-db';
 import {
   LoggingInterceptor,
   OrgContextInterceptor,
@@ -31,7 +31,7 @@ import {
       },
       inject: [ConfigService],
     }),
-    StorageModule,
+    SharedDbModule,
     AnalyticsModule,
     AuditModule,
   ],

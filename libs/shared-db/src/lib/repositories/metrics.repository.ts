@@ -1,119 +1,43 @@
 import { Injectable } from '@nestjs/common';
-import { db } from '@evalops/shared-db';
-import {
-  auditTrail,
-  runs,
-  evalSpecs,
-  users,
-  modelUsage,
-  models,
-  type AuditTrail,
-  type EnhancedAuditEntry,
-} from '@evalops/shared-db';
-import { datasets, prompts } from '@evalops/shared-db';
-import { eq, desc, and, sql, count, gte, lte, avg, sum } from 'drizzle-orm';
+import { db } from '../db';
+import { runs, evalSpecs, modelUsage, models } from '../schema';
+import { eq, and, gte, lte, desc, sql, count, avg, sum } from 'drizzle-orm';
+
+export interface TrendMetric {
+  date: string;
+  totalRuns: number;
+  successRate: number;
+  passRate: number;
+  totalCost: number;
+  avgDuration: number;
+}
+
+export interface CostBreakdown {
+  byEvalSpec: {
+    id: string;
+    name: string;
+    totalCost: number;
+    avgCost: number;
+    runCount: number;
+  }[];
+}
+
+export interface ModelUsageMetric {
+  modelId: string;
+  modelName: string;
+  cost: number;
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+  avgLatency: number;
+}
 
 @Injectable()
-export class DatabaseStorageService {
-  async getAuditTrail(
+export class MetricsRepository {
+  async getTrends(
     organizationId: string,
-    limit = 100,
-  ): Promise<AuditTrail[]> {
-    return await db
-      .select()
-      .from(auditTrail)
-      .where(eq(auditTrail.organizationId, organizationId))
-      .orderBy(desc(auditTrail.createdAt))
-      .limit(limit);
-  }
-
-  async getAuditTrailEnhanced(
-    organizationId: string,
-    limit = 100,
-  ): Promise<EnhancedAuditEntry[]> {
-    const entries = await db
-      .select({
-        id: auditTrail.id,
-        action: auditTrail.action,
-        entityType: auditTrail.entityType,
-        entityId: auditTrail.entityId,
-        changes: auditTrail.changes,
-        organizationId: auditTrail.organizationId,
-        userId: auditTrail.userId,
-        createdAt: auditTrail.createdAt,
-        userName: users.email,
-        userFirstName: users.firstName,
-        userLastName: users.lastName,
-      })
-      .from(auditTrail)
-      .leftJoin(users, eq(auditTrail.userId, users.id))
-      .where(eq(auditTrail.organizationId, organizationId))
-      .orderBy(desc(auditTrail.createdAt))
-      .limit(limit);
-
-    // Enhance with entity names
-    const enhancedEntries = await Promise.all(
-      entries.map(async (entry) => {
-        let entityName = 'Unknown';
-
-        try {
-          switch (entry.entityType) {
-            case 'dataset':
-              if (entry.entityId) {
-                const [dataset] = await db
-                  .select({ name: datasets.name })
-                  .from(datasets)
-                  .where(eq(datasets.id, entry.entityId))
-                  .limit(1);
-                entityName = dataset?.name || 'Unknown';
-              }
-              break;
-            case 'prompt':
-              if (entry.entityId) {
-                const [prompt] = await db
-                  .select({ name: prompts.name })
-                  .from(prompts)
-                  .where(eq(prompts.id, entry.entityId))
-                  .limit(1);
-                entityName = prompt?.name || 'Unknown';
-              }
-              break;
-            case 'eval_spec':
-              if (entry.entityId) {
-                const spec = await this.getEvalSpec(entry.entityId);
-                entityName = spec?.name || 'Unknown';
-              }
-              break;
-            case 'run':
-              if (entry.entityId) {
-                const [run] = await db
-                  .select({ name: runs.name })
-                  .from(runs)
-                  .where(eq(runs.id, entry.entityId))
-                  .limit(1);
-                entityName = run?.name || 'Unknown';
-              }
-              break;
-            default:
-              entityName = entry.entityId || 'Unknown';
-          }
-        } catch (error) {
-          // If entity lookup fails, keep 'Unknown'
-          entityName = 'Unknown';
-        }
-
-        return {
-          ...entry,
-          entityName,
-          description: `${entry.action} ${entry.entityType}${entityName !== 'Unknown' ? `: ${entityName}` : ''}`,
-        } as EnhancedAuditEntry;
-      }),
-    );
-
-    return enhancedEntries;
-  }
-
-  async getTrends(organizationId: string, days: number): Promise<any[]> {
+    days: number,
+  ): Promise<TrendMetric[]> {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
@@ -133,11 +57,21 @@ export class DatabaseStorageService {
         ),
       );
 
-    // Group by date and calculate metrics
-    const dailyMetrics = new Map<string, any>();
+    const dailyMetrics = new Map<
+      string,
+      {
+        date: string;
+        totalRuns: number;
+        completedRuns: number;
+        passedRuns: number;
+        failedRuns: number;
+        totalCost: number;
+        durations: number[];
+      }
+    >();
 
     for (const run of runsData) {
-      const date = run.date as string;
+      const date = run.date;
       if (!dailyMetrics.has(date)) {
         dailyMetrics.set(date, {
           date,
@@ -150,7 +84,7 @@ export class DatabaseStorageService {
         });
       }
 
-      const dayData = dailyMetrics.get(date);
+      const dayData = dailyMetrics.get(date)!;
       dayData.totalRuns++;
 
       if (run.status === 'completed') {
@@ -178,14 +112,16 @@ export class DatabaseStorageService {
       avgDuration:
         day.durations.length > 0
           ? Math.round(
-              day.durations.reduce((a: number, b: number) => a + b, 0) /
-                day.durations.length,
+              day.durations.reduce((a, b) => a + b, 0) / day.durations.length,
             )
           : 0,
     }));
   }
 
-  async getCostBreakdown(organizationId: string, days: number): Promise<any> {
+  async getCostBreakdown(
+    organizationId: string,
+    days: number,
+  ): Promise<CostBreakdown> {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
@@ -224,8 +160,8 @@ export class DatabaseStorageService {
     organizationId: string,
     startDate: Date,
     endDate: Date,
-  ): Promise<any[]> {
-    return await db
+  ): Promise<(typeof runs.$inferSelect)[]> {
+    return db
       .select()
       .from(runs)
       .where(
@@ -238,7 +174,7 @@ export class DatabaseStorageService {
       .orderBy(desc(runs.createdAt));
   }
 
-  async getEvalSpec(id: string): Promise<any> {
+  async findEvalSpec(id: string): Promise<typeof evalSpecs.$inferSelect | undefined> {
     const [spec] = await db
       .select()
       .from(evalSpecs)
@@ -249,7 +185,7 @@ export class DatabaseStorageService {
   async getModelUsageBreakdown(
     organizationId: string,
     days: number,
-  ): Promise<any[]> {
+  ): Promise<ModelUsageMetric[]> {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
@@ -285,4 +221,3 @@ export class DatabaseStorageService {
     }));
   }
 }
-

@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AzureMLService, AzureCredentials } from './azure-ml.service';
-import { DatabaseStorageService } from '../storage/database-storage.service';
 
 export interface DiscoveryResult {
   subscriptions: number;
@@ -24,10 +23,7 @@ export interface DiscoveryOptions {
 export class AzureDiscoveryService {
   private readonly logger = new Logger(AzureDiscoveryService.name);
 
-  constructor(
-    private azureMLService: AzureMLService,
-    private storageService: DatabaseStorageService,
-  ) {}
+  constructor(private azureMLService: AzureMLService) {}
 
   async validateCredentials(credentials: AzureCredentials): Promise<boolean> {
     try {

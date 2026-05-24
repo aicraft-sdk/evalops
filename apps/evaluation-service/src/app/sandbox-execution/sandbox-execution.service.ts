@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpClientService, getErrorMessage } from '@evalops/shared-common';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { CustomEvaluatorsRepository } from '@evalops/shared-db';
 import { CoreClientService } from '../core-client/core-client.service';
 import {
   CustomEvaluatorExecutionRequest,
@@ -26,7 +26,7 @@ export class SandboxExecutionService {
   constructor(
     private httpClient: HttpClientService,
     private configService: ConfigService,
-    private storageService: DatabaseStorageService,
+    private customEvaluatorsRepository: CustomEvaluatorsRepository,
     private coreClient: CoreClientService,
   ) {
     this.integrationServiceUrl =
@@ -43,7 +43,7 @@ export class SandboxExecutionService {
     this.logger.debug('Executing custom evaluator', { evaluatorId, runId });
 
     // Get evaluator metadata from database
-    const evaluator = await this.storageService.getCustomEvaluator(evaluatorId);
+    const evaluator = await this.customEvaluatorsRepository.findById(evaluatorId);
     if (!evaluator) {
       throw new NotFoundException(`Evaluator not found: ${evaluatorId}`);
     }
@@ -491,7 +491,7 @@ export class SandboxExecutionService {
     },
   ): Promise<void> {
     try {
-      await this.storageService.createEvaluatorUsage({
+      await this.customEvaluatorsRepository.createUsage({
         evaluatorId,
         runId: runId || null,
         organizationId,

@@ -8,13 +8,11 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 import { MicrosoftAuthService } from './microsoft/microsoft-auth.service';
 import { MicrosoftAuthController } from './microsoft/microsoft-auth.controller';
-import { StorageModule } from '../storage/storage.module';
 import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
     PassportModule,
-    StorageModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

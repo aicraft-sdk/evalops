@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EvaluationService } from './evaluation.service';
 import { EvaluationRunnerService } from './evaluation-runner.service';
-import { StorageModule } from '../storage/storage.module';
 import { HttpModule } from '@nestjs/axios';
 import { PythonWorkerModule } from '../python-worker/python-worker.module';
 import { CoreClientModule } from '../core-client/core-client.module';
@@ -15,7 +14,6 @@ import { SandboxExecutionModule } from '../sandbox-execution/sandbox-execution.m
 
 @Module({
   imports: [
-    StorageModule,
     HttpModule,
     ConfigModule,
     PythonWorkerModule,

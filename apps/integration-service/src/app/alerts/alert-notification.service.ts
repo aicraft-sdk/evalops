@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { AlertsRepository } from '@evalops/shared-db';
 import {
   type AlertConfig,
   type AlertEvent,
@@ -17,7 +17,7 @@ export class AlertNotificationService {
   private readonly logger = new Logger(AlertNotificationService.name);
 
   constructor(
-    private storageService: DatabaseStorageService,
+    private alertsRepository: AlertsRepository,
     private httpService: HttpService,
   ) {}
 
@@ -34,7 +34,7 @@ export class AlertNotificationService {
     entityId: string;
     metadata?: Record<string, unknown>;
   }): Promise<AlertEvent> {
-    const alertEvent = await this.storageService.createAlertEvent({
+    const alertEvent = await this.alertsRepository.createEvent({
       configId: alertData.configId,
       organizationId: alertData.organizationId,
       severity: alertData.severity,
@@ -49,7 +49,7 @@ export class AlertNotificationService {
       resolved: false,
     } as InsertAlertEvent);
 
-    const alertConfigs = await this.storageService.getAlertConfigs(
+    const alertConfigs = await this.alertsRepository.findConfigsByOrg(
       alertData.organizationId,
     );
     const alertConfig = alertConfigs.find((c) => c.id === alertData.configId);

@@ -1,24 +1,24 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { DatabaseStorageService } from '../storage/database-storage.service';
-import { Dataset, InsertDataset, InsertDatasetSample } from '@evalops/shared-db';
-import crypto from 'crypto';
+import { DatasetsRepository } from '@evalops/shared-db';
+import { InsertDataset, InsertDatasetSample } from '@evalops/shared-db';
+import * as crypto from 'crypto';
 
 export interface DatasetSample {
-  input: any;
-  expected?: any;
-  metadata?: Record<string, any>;
+  input: unknown;
+  expected?: unknown;
+  metadata?: Record<string, unknown>;
 }
 
 export interface DatasetUpload {
   name: string;
   description?: string;
   samples: DatasetSample[];
-  schema?: any;
+  schema?: unknown;
 }
 
 @Injectable()
 export class DatasetsService {
-  constructor(private storageService: DatabaseStorageService) {}
+  constructor(private datasetsRepository: DatasetsRepository) {}
 
   async uploadDataset(
     upload: DatasetUpload,
@@ -27,7 +27,7 @@ export class DatasetsService {
   ): Promise<string> {
     const contentHash = this.generateContentHash(upload.samples);
     const existingDataset =
-      await this.storageService.findDatasetByContentHash(contentHash);
+      await this.datasetsRepository.findByContentHash(contentHash);
     if (existingDataset) {
       return existingDataset.id;
     }
@@ -44,7 +44,7 @@ export class DatasetsService {
       createdBy: userId,
     };
 
-    const dataset = await this.storageService.createDataset(datasetData);
+    const dataset = await this.datasetsRepository.create(datasetData);
 
     const datasetSamples: InsertDatasetSample[] = upload.samples.map(
       (sample, index) => ({
@@ -57,23 +57,23 @@ export class DatasetsService {
       }),
     );
 
-    await this.storageService.createDatasetSamples(datasetSamples);
+    await this.datasetsRepository.createSamples(datasetSamples);
 
     return dataset.id;
   }
 
   async getDatasetSamples(datasetId: string): Promise<DatasetSample[]> {
-    const dataset = await this.storageService.getDataset(datasetId);
+    const dataset = await this.datasetsRepository.findById(datasetId);
     if (!dataset) {
       throw new NotFoundException(`Dataset ${datasetId} not found`);
     }
 
-    const dbSamples = await this.storageService.getDatasetSamples(datasetId);
+    const dbSamples = await this.datasetsRepository.findSamplesByDataset(datasetId);
 
     return dbSamples.map((sample) => ({
       input: sample.input,
       expected: sample.expected || undefined,
-      metadata: sample.metadata || {},
+      metadata: (sample.metadata as Record<string, unknown>) || {},
     }));
   }
 
@@ -84,7 +84,7 @@ export class DatasetsService {
       .digest('hex');
   }
 
-  private inferSchema(samples: DatasetSample[]): any {
+  private inferSchema(samples: DatasetSample[]): unknown {
     if (samples.length === 0) return {};
 
     const firstSample = samples[0];
@@ -96,7 +96,7 @@ export class DatasetsService {
     };
   }
 
-  private inferType(value: any): string {
+  private inferType(value: unknown): string {
     if (typeof value === 'string') return 'string';
     if (typeof value === 'number') return 'number';
     if (typeof value === 'boolean') return 'boolean';
@@ -105,4 +105,3 @@ export class DatasetsService {
     return 'unknown';
   }
 }
-

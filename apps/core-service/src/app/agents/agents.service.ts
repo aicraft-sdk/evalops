@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
-import { Agent } from '@evalops/shared-db';
+import { AgentsRepository } from '@evalops/shared-db';
+import { agents } from '@evalops/shared-db';
 import { hashContent } from '@evalops/sdk';
 import { AgentMDParser } from '@evalops/agent-md';
-import { DatabaseStorageService } from '../storage/database-storage.service';
 import { CreateAgentDto, UpdateAgentDto } from './agents.dto';
 
 /**
@@ -16,13 +16,13 @@ export class AgentsService {
   private readonly logger = new Logger(AgentsService.name);
   private readonly parser = new AgentMDParser();
 
-  constructor(private readonly storage: DatabaseStorageService) {}
+  constructor(private readonly agentsRepository: AgentsRepository) {}
 
   async create(
     dto: CreateAgentDto,
     userId: string,
     organizationId: string,
-  ): Promise<Agent> {
+  ): Promise<typeof agents.$inferSelect> {
     const versionHash = hashContent(dto.content);
     const parseResult = this.parser.parse(dto.content);
 
@@ -32,7 +32,7 @@ export class AgentsService {
       );
     }
 
-    const agent = await this.storage.createAgent({
+    const agent = await this.agentsRepository.create({
       organizationId,
       name: dto.name,
       description: dto.description,
@@ -48,7 +48,7 @@ export class AgentsService {
     });
 
     // Record initial version snapshot
-    await this.storage.createAgentVersion({
+    await this.agentsRepository.createVersion({
       agentId: agent.id,
       organizationId,
       version: dto.version,
@@ -62,15 +62,12 @@ export class AgentsService {
     return agent;
   }
 
-  async findAll(
-    organizationId: string,
-    activeOnly = true,
-  ) {
-    return this.storage.findAgents(organizationId, activeOnly);
+  async findAll(organizationId: string, activeOnly = true) {
+    return this.agentsRepository.findAllByOrg(organizationId, activeOnly);
   }
 
   async findOne(id: string, organizationId: string) {
-    const agent = await this.storage.findAgentById(id, organizationId);
+    const agent = await this.agentsRepository.findById(id, organizationId);
     if (!agent) {
       throw new NotFoundException(`Agent ${id} not found`);
     }
@@ -106,7 +103,7 @@ export class AgentsService {
         updates['modelName'] = parsed.agentMD.model?.model;
 
         // Record new version snapshot
-        await this.storage.createAgentVersion({
+        await this.agentsRepository.createVersion({
           agentId: id,
           organizationId,
           version: newVersion,
@@ -119,16 +116,16 @@ export class AgentsService {
       }
     }
 
-    await this.storage.updateAgent(id, organizationId, updates);
+    await this.agentsRepository.update(id, organizationId, updates);
   }
 
   async deactivate(id: string, organizationId: string): Promise<void> {
     await this.findOne(id, organizationId); // 404 if not found
-    await this.storage.updateAgent(id, organizationId, { active: false });
+    await this.agentsRepository.update(id, organizationId, { active: false });
   }
 
   async getVersionHistory(id: string, organizationId: string) {
     await this.findOne(id, organizationId);
-    return this.storage.findAgentVersions(id, organizationId);
+    return this.agentsRepository.findVersions(id, organizationId);
   }
 }

@@ -10,33 +10,33 @@ import {
 } from '@nestjs/common';
 import { EvalSpecsService } from './eval-specs.service';
 import { JwtAuthGuard, CurrentUser } from '@evalops/shared-auth';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { EvalSpecsRepository } from '@evalops/shared-db';
 import { InsertEvalSpec } from '@evalops/shared-db';
 
 @Controller('eval-specs')
 export class EvalSpecsController {
   constructor(
     private evalSpecsService: EvalSpecsService,
-    private storageService: DatabaseStorageService,
+    private evalSpecsRepository: EvalSpecsRepository,
   ) {}
 
   @UseGuards(JwtAuthGuard)
   @Get()
-  async getEvalSpecs(@CurrentUser() user: any) {
-    return this.storageService.getEvalSpecs(user.organizationId);
+  async getEvalSpecs(@CurrentUser() user: { organizationId: string }) {
+    return this.evalSpecsRepository.findAllByOrg(user.organizationId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get(':id')
   async getEvalSpec(@Param('id') id: string) {
-    return this.storageService.getEvalSpec(id);
+    return this.evalSpecsRepository.findById(id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post()
   async createEvalSpec(
     @Body() body: InsertEvalSpec,
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; organizationId: string },
   ) {
     return this.evalSpecsService.createEvalSpec({
       ...body,
@@ -61,4 +61,3 @@ export class EvalSpecsController {
     return { message: 'Eval spec deleted successfully' };
   }
 }
-

@@ -7,50 +7,49 @@ import {
   Body,
   Param,
   UseGuards,
-  Request,
 } from '@nestjs/common';
 import { PromptsService, PromptUpload } from './prompts.service';
 import { JwtAuthGuard, CurrentUser } from '@evalops/shared-auth';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { PromptsRepository } from '@evalops/shared-db';
 
 @Controller('prompts')
 export class PromptsController {
   constructor(
     private promptsService: PromptsService,
-    private storageService: DatabaseStorageService,
+    private promptsRepository: PromptsRepository,
   ) {}
 
   @UseGuards(JwtAuthGuard)
   @Get()
-  async getPrompts(@CurrentUser() user: any) {
-    return this.storageService.getPrompts(user.organizationId);
+  async getPrompts(@CurrentUser() user: { organizationId: string }) {
+    return this.promptsRepository.findAllByOrg(user.organizationId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get(':id')
   async getPrompt(@Param('id') id: string) {
-    return this.storageService.getPrompt(id);
+    return this.promptsRepository.findById(id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post()
   async createPrompt(
     @Body() body: PromptUpload,
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; organizationId: string },
   ) {
     const promptId = await this.promptsService.uploadPrompt(
       body,
       user.id,
       user.organizationId,
     );
-    return this.storageService.getPrompt(promptId);
+    return this.promptsRepository.findById(promptId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post(':id/test')
   async testPrompt(
     @Param('id') id: string,
-    @Body() testInput: Record<string, any>,
+    @Body() testInput: Record<string, unknown>,
   ) {
     return this.promptsService.testPrompt(id, testInput);
   }
@@ -60,19 +59,16 @@ export class PromptsController {
   async updatePrompt(
     @Param('id') id: string,
     @Body() body: Partial<PromptUpload>,
-    @CurrentUser() user: any,
   ) {
-    return this.storageService.updatePrompt(id, {
+    return this.promptsRepository.update(id, {
       ...body,
-      updatedAt: new Date(),
     });
   }
 
   @UseGuards(JwtAuthGuard)
   @Delete(':id')
   async deletePrompt(@Param('id') id: string) {
-    await this.storageService.deletePrompt(id);
+    await this.promptsRepository.delete(id);
     return { message: 'Prompt deleted successfully' };
   }
 }
-

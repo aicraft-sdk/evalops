@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { CicdRepository, AlertsRepository } from '@evalops/shared-db';
 import { type Run } from '@evalops/shared-db';
 
 /** Shape of alert data passed back to the facade for notification dispatch. */
@@ -24,7 +24,10 @@ export class AlertRuleService {
   private activeAlerts = new Map<string, Date>(); // Track cooldown periods
   private readonly ALERT_COOLDOWN_MINUTES = 15;
 
-  constructor(private storageService: DatabaseStorageService) {}
+  constructor(
+    private cicdRepository: CicdRepository,
+    private alertsRepository: AlertsRepository,
+  ) {}
 
   /**
    * Check for alert conditions after a run completes.
@@ -32,7 +35,7 @@ export class AlertRuleService {
    */
   async checkRunAlerts(runId: string): Promise<AlertData[]> {
     try {
-      const run = await this.storageService.getRun(runId);
+      const run = await this.cicdRepository.findEvalRunById(runId);
       if (!run) {
         this.logger.error(`Run ${runId} not found for alert checking`);
         return [];
@@ -57,14 +60,14 @@ export class AlertRuleService {
   }
 
   private async checkPolicyViolationAlerts(run: Run): Promise<AlertData[]> {
-    const violations = await this.storageService.getPolicyViolationsByRun(
+    const violations = await this.cicdRepository.findPolicyViolationsByRun(
       run.id,
     );
 
     const alerts: AlertData[] = [];
 
     if (violations.length > 0) {
-      const alertConfigs = await this.storageService.getAlertConfigs(
+      const alertConfigs = await this.alertsRepository.findConfigsByOrg(
         run.organizationId,
       );
       const policyAlertConfigs = alertConfigs.filter(
@@ -140,7 +143,7 @@ export class AlertRuleService {
   private async checkPerformanceAlerts(run: Run): Promise<AlertData[]> {
     if (!run.duration) return [];
 
-    const alertConfigs = await this.storageService.getAlertConfigs(
+    const alertConfigs = await this.alertsRepository.findConfigsByOrg(
       run.organizationId,
     );
     const performanceConfigs = alertConfigs.filter(
@@ -166,7 +169,7 @@ export class AlertRuleService {
       }
 
       if (p95LatencyThreshold !== undefined) {
-        const recentRuns = await this.storageService.getRunsByEvalSpec(
+        const recentRuns = await this.cicdRepository.findEvalRunsByEvalSpec(
           run.evalSpecId,
         );
         const completedRuns = recentRuns
@@ -213,7 +216,7 @@ export class AlertRuleService {
   private async checkCostAlerts(run: Run): Promise<AlertData[]> {
     if (!run.cost) return [];
 
-    const alertConfigs = await this.storageService.getAlertConfigs(
+    const alertConfigs = await this.alertsRepository.findConfigsByOrg(
       run.organizationId,
     );
     const costConfigs = alertConfigs.filter(
@@ -239,7 +242,7 @@ export class AlertRuleService {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const todayRuns = await this.storageService.getRuns(
+        const todayRuns = await this.cicdRepository.findEvalRunsByOrg(
           run.organizationId,
           1000,
         );

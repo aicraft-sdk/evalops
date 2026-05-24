@@ -1,14 +1,20 @@
 import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import {
+  UsersRepository,
+  OrganizationsRepository,
+  UpsertUserInput,
+  organizations,
+} from '@evalops/shared-db';
 import { JwtPayload } from '@evalops/shared-auth';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
   constructor(
-    private storageService: DatabaseStorageService,
+    private usersRepository: UsersRepository,
+    private organizationsRepository: OrganizationsRepository,
     private jwtService: JwtService,
     private configService: ConfigService,
   ) {}
@@ -18,11 +24,11 @@ export class AuthService {
     // Development mode: allow demo login (fallback for testing)
     if (process.env.NODE_ENV === 'development') {
       if (email === 'dev@example.com' && password === 'dev') {
-        let user = await this.storageService.getUser('dev-user-123');
+        let user = await this.usersRepository.findById('dev-user-123');
         if (!user) {
           // Create demo user with hashed password
           const passwordHash = await bcrypt.hash('dev', 10);
-          user = await this.storageService.upsertUser({
+          user = await this.usersRepository.upsert({
             id: 'dev-user-123',
             email: 'dev@example.com',
             passwordHash,
@@ -31,15 +37,14 @@ export class AuthService {
             organizationId: 'default-org',
             role: 'admin',
             profileImageUrl: null,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any);
+          } as UpsertUserInput);
         }
         return user;
       }
     }
 
     // Look up user by email
-    const user = await this.storageService.getUserByEmail(email);
+    const user = await this.usersRepository.findByEmail(email);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -56,11 +61,10 @@ export class AuthService {
     }
 
     // Update last login time
-    await this.storageService.upsertUser({
+    await this.usersRepository.upsert({
       ...user,
       lastLoginAt: new Date(),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    } as UpsertUserInput);
 
     return user;
   }
@@ -93,7 +97,7 @@ export class AuthService {
     lastName?: string,
   ) {
     // Check if user already exists
-    const existingUser = await this.storageService.getUserByEmail(email);
+    const existingUser = await this.usersRepository.findByEmail(email);
     if (existingUser) {
       throw new BadRequestException('User with this email already exists');
     }
@@ -102,17 +106,17 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(password, 10);
 
     // Create or get default organization
-    let organization = await this.storageService.getOrganization('default-org');
+    let organization = await this.organizationsRepository.findById('default-org');
     if (!organization) {
-      organization = await this.storageService.createOrganization({
+      organization = await this.organizationsRepository.create({
         id: 'default-org',
         name: 'Default Organization',
         createdAt: new Date(),
-      });
+      } as typeof organizations.$inferInsert);
     }
 
     // Create user with hashed password
-    const user = await this.storageService.upsertUser({
+    const user = await this.usersRepository.upsert({
       email,
       passwordHash,
       firstName: firstName || '',
@@ -121,8 +125,7 @@ export class AuthService {
       role: 'viewer', // Default role
       profileImageUrl: null,
       isActive: true,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    } as UpsertUserInput);
 
     // Generate JWT token for immediate login
     const payload: JwtPayload = {
@@ -146,7 +149,7 @@ export class AuthService {
   }
 
   async validateJwtPayload(payload: JwtPayload) {
-    const user = await this.storageService.getUser(payload.sub);
+    const user = await this.usersRepository.findById(payload.sub);
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
@@ -155,7 +158,7 @@ export class AuthService {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async findUserByEmail(email: string): Promise<any> {
-    return await this.storageService.getUserByEmail(email);
+    return this.usersRepository.findByEmail(email);
   }
 
   async createUserFromMicrosoft(entraUser: {
@@ -171,17 +174,17 @@ export class AuthService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }): Promise<any> {
     // Create or get default organization
-    let organization = await this.storageService.getOrganization('default-org');
+    let organization = await this.organizationsRepository.findById('default-org');
     if (!organization) {
-      organization = await this.storageService.createOrganization({
+      organization = await this.organizationsRepository.create({
         id: 'default-org',
         name: 'Default Organization',
         createdAt: new Date(),
-      });
+      } as typeof organizations.$inferInsert);
     }
 
     // Create user from Microsoft account
-    const user = await this.storageService.upsertUser({
+    const user = await this.usersRepository.upsert({
       id: `ms-${entraUser.oid}`,
       email: entraUser.email || entraUser.upn,
       firstName: entraUser.given_name || entraUser.name.split(' ')[0] || '',
@@ -189,8 +192,7 @@ export class AuthService {
       organizationId: organization.id,
       role: entraUser.roles?.includes('admin') ? 'admin' : 'viewer',
       profileImageUrl: null,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    } as UpsertUserInput);
 
     return user;
   }
@@ -211,10 +213,10 @@ export class AuthService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any> {
     // Get existing user first
-    const existingUser = await this.storageService.getUser(userId);
+    const existingUser = await this.usersRepository.findById(userId);
 
     // Update existing user with Microsoft account info
-    const user = await this.storageService.upsertUser({
+    const user = await this.usersRepository.upsert({
       id: userId,
       email: entraUser.email || entraUser.upn,
       firstName: entraUser.given_name || existingUser?.firstName || '',
@@ -222,10 +224,8 @@ export class AuthService {
       organizationId: existingUser?.organizationId || 'default-org',
       role: entraUser.roles?.includes('admin') ? 'admin' : existingUser?.role || 'viewer',
       profileImageUrl: null,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    } as UpsertUserInput);
 
     return user;
   }
 }
-

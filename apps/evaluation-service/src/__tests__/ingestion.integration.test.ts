@@ -13,18 +13,19 @@ import { INestApplication, HttpStatus } from '@nestjs/common';
 import request from 'supertest';
 import { IngestionController } from '../app/ingestion/ingestion.controller';
 import { IngestionService } from '../app/ingestion/ingestion.service';
-import { DatabaseStorageService } from '../app/storage/database-storage.service';
+import { RunsRepository } from '@evalops/shared-db';
 import { IdempotencyService } from '../app/ingestion/idempotency.service';
 import { TraceEventAdapterService } from '../app/ingestion/trace-event-adapter.service';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { of, throwError } from 'rxjs';
 
-const mockStorageService = {
+const mockRunsRepository = {
   appendTraceEvents: jest.fn().mockResolvedValue(undefined),
-  updateRunStatus: jest.fn().mockResolvedValue(undefined),
-  updateRunArtifacts: jest.fn().mockResolvedValue(undefined),
-  getRun: jest.fn().mockResolvedValue({
+  updateStatus: jest.fn().mockResolvedValue(undefined),
+  updateArtifacts: jest.fn().mockResolvedValue(undefined),
+  completeRun: jest.fn().mockResolvedValue(undefined),
+  findById: jest.fn().mockResolvedValue({
     id: 'run-123',
     organizationId: 'org-123',
   }),
@@ -66,7 +67,7 @@ describe('Ingestion Pipeline (integration)', () => {
       controllers: [IngestionController],
       providers: [
         IngestionService,
-        { provide: DatabaseStorageService, useValue: mockStorageService },
+        { provide: RunsRepository, useValue: mockRunsRepository },
         { provide: IdempotencyService, useValue: mockIdempotencyService },
         {
           provide: TraceEventAdapterService,
@@ -115,7 +116,7 @@ describe('Ingestion Pipeline (integration)', () => {
 
       expect(res.body.success).toBe(true);
       expect(res.body.skipped).toBeUndefined();
-      expect(mockStorageService.appendTraceEvents).toHaveBeenCalledWith(
+      expect(mockRunsRepository.appendTraceEvents).toHaveBeenCalledWith(
         'run-123',
         validEvents
       );
@@ -132,7 +133,7 @@ describe('Ingestion Pipeline (integration)', () => {
 
       expect(res.body.success).toBe(true);
       expect(res.body.skipped).toBe(true);
-      expect(mockStorageService.appendTraceEvents).not.toHaveBeenCalled();
+      expect(mockRunsRepository.appendTraceEvents).not.toHaveBeenCalled();
     });
 
     it('marks idempotency key as seen after processing', async () => {
@@ -172,8 +173,8 @@ describe('Ingestion Pipeline (integration)', () => {
         .send({ events: multiRunEvents })
         .expect(HttpStatus.ACCEPTED);
 
-      expect(mockStorageService.appendTraceEvents).toHaveBeenCalledTimes(2);
-      const calls = mockStorageService.appendTraceEvents.mock.calls;
+      expect(mockRunsRepository.appendTraceEvents).toHaveBeenCalledTimes(2);
+      const calls = mockRunsRepository.appendTraceEvents.mock.calls;
       const runIds = calls.map((c: any[]) => c[0]);
       expect(runIds).toContain('run-A');
       expect(runIds).toContain('run-B');
@@ -194,11 +195,7 @@ describe('Ingestion Pipeline (integration)', () => {
         .expect(HttpStatus.OK);
 
       expect(res.body.success).toBe(true);
-      expect(mockStorageService.updateRunStatus).toHaveBeenCalledWith(
-        runId,
-        'completed'
-      );
-      expect(mockStorageService.updateRunArtifacts).toHaveBeenCalledWith(
+      expect(mockRunsRepository.completeRun).toHaveBeenCalledWith(
         runId,
         artifactHashes
       );
@@ -244,10 +241,7 @@ describe('Ingestion Pipeline (integration)', () => {
         .expect(HttpStatus.OK);
 
       expect(res.body.success).toBe(true);
-      expect(mockStorageService.updateRunArtifacts).toHaveBeenCalledWith(
-        runId,
-        {}
-      );
+      expect(mockRunsRepository.completeRun).toHaveBeenCalledWith(runId, {});
     });
   });
 });

@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { SimulationRunnerService } from './simulation-runner.service';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { RunsRepository } from '@evalops/shared-db';
 import { SimulationsService } from './simulations.service';
 import { TraceWriterService } from './trace-writer.service';
 import { CoreClientService } from '../core-client/core-client.service';
@@ -17,7 +17,7 @@ import type {
 
 describe('SimulationRunnerService', () => {
   let service: SimulationRunnerService;
-  let storageService: jest.Mocked<DatabaseStorageService>;
+  let runsRepository: jest.Mocked<RunsRepository>;
   let simulationsService: jest.Mocked<SimulationsService>;
   let traceWriterService: jest.Mocked<TraceWriterService>;
   let coreClient: jest.Mocked<CoreClientService>;
@@ -97,10 +97,10 @@ describe('SimulationRunnerService', () => {
   };
 
   beforeEach(async () => {
-    const mockStorageService = {
-      createRun: jest.fn(),
-      updateRun: jest.fn(),
-      getRun: jest.fn(),
+    const mockRunsRepository = {
+      create: jest.fn(),
+      update: jest.fn(),
+      findById: jest.fn(),
     };
 
     const mockSimulationsService = {
@@ -144,8 +144,8 @@ describe('SimulationRunnerService', () => {
       providers: [
         SimulationRunnerService,
         {
-          provide: DatabaseStorageService,
-          useValue: mockStorageService,
+          provide: RunsRepository,
+          useValue: mockRunsRepository,
         },
         {
           provide: SimulationsService,
@@ -175,7 +175,7 @@ describe('SimulationRunnerService', () => {
     }).compile();
 
     service = module.get<SimulationRunnerService>(SimulationRunnerService);
-    storageService = module.get(DatabaseStorageService);
+    runsRepository = module.get(RunsRepository);
     simulationsService = module.get(SimulationsService);
     traceWriterService = module.get(TraceWriterService);
     coreClient = module.get(CoreClientService);
@@ -192,7 +192,7 @@ describe('SimulationRunnerService', () => {
     it('should execute a scenario successfully', async () => {
       simulationsService.getScenario.mockResolvedValue(mockScenario);
       simulationsService.getSuite.mockResolvedValue(mockSuite);
-      storageService.createRun.mockResolvedValue(mockRun);
+      runsRepository.create.mockResolvedValue(mockRun);
       simulationsService.createSimulationRun.mockResolvedValue(undefined);
       traceWriterService.createRootSpan.mockResolvedValue(mockRootSpan);
 
@@ -244,7 +244,7 @@ describe('SimulationRunnerService', () => {
         totalRules: 1,
       });
 
-      storageService.getRun.mockResolvedValue({
+      runsRepository.findById.mockResolvedValue({
         ...mockRun,
         status: 'completed',
       });
@@ -257,7 +257,7 @@ describe('SimulationRunnerService', () => {
 
       expect(result).toBeDefined();
       expect(result.status).toBe('completed');
-      expect(storageService.createRun).toHaveBeenCalled();
+      expect(runsRepository.create).toHaveBeenCalled();
       expect(simulationsService.createSimulationRun).toHaveBeenCalled();
       expect(traceWriterService.createRootSpan).toHaveBeenCalled();
       expect(aiProvider.generateResponse).toHaveBeenCalled();
@@ -313,7 +313,7 @@ describe('SimulationRunnerService', () => {
 
       simulationsService.getScenario.mockResolvedValue(scenarioWithTermination);
       simulationsService.getSuite.mockResolvedValue(mockSuite);
-      storageService.createRun.mockResolvedValue(mockRun);
+      runsRepository.create.mockResolvedValue(mockRun);
       simulationsService.createSimulationRun.mockResolvedValue(undefined);
       traceWriterService.createRootSpan.mockResolvedValue(mockRootSpan);
 
@@ -360,7 +360,7 @@ describe('SimulationRunnerService', () => {
         totalRules: 1,
       });
 
-      storageService.getRun.mockResolvedValue({
+      runsRepository.findById.mockResolvedValue({
         ...mockRun,
         status: 'completed',
       });
@@ -393,7 +393,7 @@ describe('SimulationRunnerService', () => {
 
       simulationsService.getScenario.mockResolvedValue(scenarioWithStopTokens);
       simulationsService.getSuite.mockResolvedValue(mockSuite);
-      storageService.createRun.mockResolvedValue(mockRun);
+      runsRepository.create.mockResolvedValue(mockRun);
       simulationsService.createSimulationRun.mockResolvedValue(undefined);
       traceWriterService.createRootSpan.mockResolvedValue(mockRootSpan);
 
@@ -440,7 +440,7 @@ describe('SimulationRunnerService', () => {
         totalRules: 1,
       });
 
-      storageService.getRun.mockResolvedValue({
+      runsRepository.findById.mockResolvedValue({
         ...mockRun,
         status: 'completed',
       });
@@ -457,7 +457,7 @@ describe('SimulationRunnerService', () => {
     it('should handle errors during execution', async () => {
       simulationsService.getScenario.mockResolvedValue(mockScenario);
       simulationsService.getSuite.mockResolvedValue(mockSuite);
-      storageService.createRun.mockResolvedValue(mockRun);
+      runsRepository.create.mockResolvedValue(mockRun);
       simulationsService.createSimulationRun.mockResolvedValue(undefined);
       traceWriterService.createRootSpan.mockResolvedValue(mockRootSpan);
 
@@ -483,7 +483,7 @@ describe('SimulationRunnerService', () => {
         service.executeScenario('scenario-123', 'org-123', 'user-123')
       ).rejects.toThrow('LLM API error');
 
-      expect(storageService.updateRun).toHaveBeenCalledWith(
+      expect(runsRepository.update).toHaveBeenCalledWith(
         'run-123',
         expect.objectContaining({
           status: 'failed',
@@ -494,7 +494,7 @@ describe('SimulationRunnerService', () => {
     it('should validate response with regex assertion', async () => {
       simulationsService.getScenario.mockResolvedValue(mockScenario);
       simulationsService.getSuite.mockResolvedValue(mockSuite);
-      storageService.createRun.mockResolvedValue(mockRun);
+      runsRepository.create.mockResolvedValue(mockRun);
       simulationsService.createSimulationRun.mockResolvedValue(undefined);
       traceWriterService.createRootSpan.mockResolvedValue(mockRootSpan);
 
@@ -571,7 +571,7 @@ describe('SimulationRunnerService', () => {
 
       simulationsService.getScenario.mockResolvedValue(scenarioWithJudge);
       simulationsService.getSuite.mockResolvedValue(mockSuite);
-      storageService.createRun.mockResolvedValue(mockRun);
+      runsRepository.create.mockResolvedValue(mockRun);
       simulationsService.createSimulationRun.mockResolvedValue(undefined);
       traceWriterService.createRootSpan.mockResolvedValue(mockRootSpan);
 
@@ -657,7 +657,7 @@ describe('SimulationRunnerService', () => {
 
       simulationsService.getScenario.mockResolvedValue(scenarioWithTemplate);
       simulationsService.getSuite.mockResolvedValue(mockSuite);
-      storageService.createRun.mockResolvedValue(mockRun);
+      runsRepository.create.mockResolvedValue(mockRun);
       simulationsService.createSimulationRun.mockResolvedValue(undefined);
       traceWriterService.createRootSpan.mockResolvedValue(mockRootSpan);
 

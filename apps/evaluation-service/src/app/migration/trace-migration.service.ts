@@ -4,7 +4,6 @@ import { runs, traceSpans, type Run } from '@evalops/shared-db';
 import type { TraceEvent } from '@evalops/sdk';
 import { eq, isNotNull, and, sql } from 'drizzle-orm';
 import { TraceEventAdapterService } from '../ingestion/trace-event-adapter.service';
-import { DatabaseStorageService } from '../storage/database-storage.service';
 
 export interface MigrationProgress {
   totalRuns: number;
@@ -23,7 +22,6 @@ export class TraceMigrationService {
 
   constructor(
     private readonly traceEventAdapter: TraceEventAdapterService,
-    private readonly storageService: DatabaseStorageService,
   ) {}
 
   /**

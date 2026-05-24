@@ -4,7 +4,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { RunsRepository } from '@evalops/shared-db';
 import { EvaluationService } from '../evaluation/evaluation.service';
 import { Run, InsertRun } from '@evalops/shared-db';
 import { CoreClientService } from '../core-client/core-client.service';
@@ -16,7 +16,7 @@ export class RunsService {
   private readonly logger = new Logger(RunsService.name);
 
   constructor(
-    private storageService: DatabaseStorageService,
+    private runsRepository: RunsRepository,
     private evaluationService: EvaluationService,
     private coreClient: CoreClientService,
     private traceCompatibility: TraceCompatibilityService,
@@ -52,7 +52,7 @@ export class RunsService {
     }
 
     // Create run with default values
-    const run = await this.storageService.createRun({
+    const run = await this.runsRepository.create({
       ...runData,
       status: runData.status || 'pending',
       commitSha: runData.commitSha || `manual-${Date.now()}`,
@@ -62,8 +62,8 @@ export class RunsService {
     this.evaluationService.executeRun(run.id, authToken).catch((error) => {
       this.logger.error(`Failed to execute run ${run.id}:`, error);
       // Update run status to failed
-      this.storageService
-        .updateRun(run.id, {
+      this.runsRepository
+        .update(run.id, {
           status: 'failed',
           errorMessage: error.message,
         })
@@ -79,7 +79,7 @@ export class RunsService {
   }
 
   async getRun(id: string): Promise<Run> {
-    const run = await this.storageService.getRun(id);
+    const run = await this.runsRepository.findById(id);
     if (!run) {
       throw new NotFoundException(`Run ${id} not found`);
     }
@@ -87,7 +87,7 @@ export class RunsService {
   }
 
   async getRuns(organizationId: string, limit = 50): Promise<Run[]> {
-    return this.storageService.getRuns(organizationId, limit);
+    return this.runsRepository.findAllByOrg(organizationId, limit);
   }
 
   async cancelRun(id: string): Promise<Run> {
@@ -97,7 +97,7 @@ export class RunsService {
         `Cannot cancel run in ${run.status} status`,
       );
     }
-    return this.storageService.updateRun(id, {
+    return this.runsRepository.update(id, {
       status: 'cancelled',
       completedAt: new Date(),
     });

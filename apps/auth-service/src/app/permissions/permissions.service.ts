@@ -1,5 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import {
+  PermissionsRepository,
+  UsersRepository,
+  permissions,
+  roles,
+  userRoles,
+  rolePermissions,
+  resourcePermissions,
+  permissionAuditLog,
+} from '@evalops/shared-db';
 import {
   type Role,
   type Permission,
@@ -51,7 +60,10 @@ export class PermissionsService {
   private permissionCache = new Map<string, UserPermissions>();
   private cacheTimeout = 5 * 60 * 1000; // 5 minutes
 
-  constructor(private storageService: DatabaseStorageService) {}
+  constructor(
+    private permissionsRepository: PermissionsRepository,
+    private usersRepository: UsersRepository,
+  ) {}
 
   /**
    * Check if user has permission to perform action on resource
@@ -84,8 +96,8 @@ export class PermissionsService {
         check.resourceType,
         check.action,
       );
-    } catch (error: any) {
-      this.logger.error('Permission check error:', error);
+    } catch (error: unknown) {
+      this.logger.error('Permission check error:', error instanceof Error ? error.message : String(error));
       return false;
     }
   }
@@ -102,19 +114,19 @@ export class PermissionsService {
     }
 
     // Fetch fresh permissions from database
-    const roles = await this.storageService.getUserRoles(userId);
-    const permissions = await this.storageService.getUserPermissions(userId);
-    const resourcePermissions =
-      await this.storageService.getUserResourcePermissions(userId);
+    const userRolesList = await this.permissionsRepository.getUserRoles(userId);
+    const userPerms = await this.permissionsRepository.getUserPermissions(userId);
+    const userResourcePerms =
+      await this.permissionsRepository.getUserResourcePermissions(userId);
 
     const userPermissions: UserPermissions = {
-      roles,
-      permissions,
-      resourcePermissions,
+      roles: userRolesList as Role[],
+      permissions: userPerms as Permission[],
+      resourcePermissions: userResourcePerms as ResourcePermission[],
     };
 
     // Cache with timestamp
-    (userPermissions as any)._cached = Date.now();
+    (userPermissions as unknown as Record<string, unknown>)['_cached'] = Date.now();
     this.permissionCache.set(cacheKey, userPermissions);
 
     return userPermissions;
@@ -123,8 +135,8 @@ export class PermissionsService {
   /**
    * Check if user has system admin role
    */
-  private isSystemAdmin(roles: Role[]): boolean {
-    return roles.some(
+  private isSystemAdmin(userRolesList: Role[]): boolean {
+    return userRolesList.some(
       (role) =>
         role.name.toLowerCase().includes('admin') ||
         role.name.toLowerCase().includes('superuser'),
@@ -140,10 +152,10 @@ export class PermissionsService {
     resourceId: string,
     action: PermissionAction,
   ): Promise<boolean | null> {
-    const resourcePerms = await this.storageService.getResourcePermissions(
+    const resourcePerms = await this.permissionsRepository.getResourcePermissions(
       resourceType,
       resourceId,
-    );
+    ) as ResourcePermission[];
 
     // Look for explicit user permission
     const userPerm = resourcePerms.find(
@@ -157,11 +169,11 @@ export class PermissionsService {
     }
 
     // Look for role-based resource permission
-    const userRoles = await this.storageService.getUserRoles(userId);
+    const userRolesList = await this.permissionsRepository.getUserRoles(userId) as Role[];
     const rolePerm = resourcePerms.find(
       (p) =>
         p.roleId &&
-        userRoles.some((r) => r.id === p.roleId) &&
+        userRolesList.some((r) => r.id === p.roleId) &&
         (p.action === action || p.action === 'admin'),
     );
 
@@ -176,14 +188,14 @@ export class PermissionsService {
    * Check role-based permissions
    */
   private async checkRolePermissions(
-    roles: Role[],
+    userRolesList: Role[],
     resourceType: ResourceType,
     action: PermissionAction,
   ): Promise<boolean> {
-    for (const role of roles) {
-      const rolePermissions = await this.storageService.getRolePermissions(
+    for (const role of userRolesList) {
+      const rolePermissions = await this.permissionsRepository.getRolePermissions(
         role.id,
-      );
+      ) as Permission[];
 
       const hasPermission = rolePermissions.some(
         (perm) =>
@@ -210,7 +222,7 @@ export class PermissionsService {
     grantedBy: string,
     expiresAt?: Date,
   ): Promise<void> {
-    await this.storageService.createResourcePermission({
+    await this.permissionsRepository.createResourcePermission({
       userId,
       resourceType,
       resourceId,
@@ -218,7 +230,7 @@ export class PermissionsService {
       granted: true,
       grantedBy,
       expiresAt: expiresAt || undefined,
-    } as InsertResourcePermission);
+    } as typeof resourcePermissions.$inferInsert);
 
     // Clear cache
     this.clearUserCache(userId);
@@ -244,14 +256,14 @@ export class PermissionsService {
     action: PermissionAction,
     revokedBy: string,
   ): Promise<void> {
-    await this.storageService.createResourcePermission({
+    await this.permissionsRepository.createResourcePermission({
       userId,
       resourceType,
       resourceId,
       action,
       granted: false,
       grantedBy: revokedBy,
-    } as InsertResourcePermission);
+    } as typeof resourcePermissions.$inferInsert);
 
     // Clear cache
     this.clearUserCache(userId);
@@ -275,11 +287,11 @@ export class PermissionsService {
     roleId: string,
     assignedBy: string,
   ): Promise<void> {
-    await this.storageService.createUserRole({
+    await this.permissionsRepository.createUserRole({
       userId,
       roleId,
       assignedBy,
-    } as InsertUserRole);
+    } as typeof userRoles.$inferInsert);
 
     // Clear cache
     this.clearUserCache(userId);
@@ -297,7 +309,7 @@ export class PermissionsService {
    * Remove role from user
    */
   async removeRole(userId: string, roleId: string, removedBy: string): Promise<void> {
-    await this.storageService.removeUserRole(userId, roleId);
+    await this.permissionsRepository.removeUserRole(userId, roleId);
 
     // Clear cache
     this.clearUserCache(userId);
@@ -314,21 +326,23 @@ export class PermissionsService {
   /**
    * Get all users with access to a specific resource
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getResourceAccessList(
     resourceType: ResourceType,
     resourceId: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any[]> {
-    const resourcePerms = await this.storageService.getResourcePermissions(
+    const resourcePerms = await this.permissionsRepository.getResourcePermissions(
       resourceType,
       resourceId,
-    );
-    const users = [];
+    ) as ResourcePermission[];
+    const result = [];
 
     for (const perm of resourcePerms) {
       if (perm.userId) {
-        const user = await this.storageService.getUser(perm.userId);
+        const user = await this.usersRepository.findById(perm.userId);
         if (user) {
-          users.push({
+          result.push({
             user,
             permission: perm.action,
             granted: perm.granted,
@@ -338,9 +352,9 @@ export class PermissionsService {
       }
 
       if (perm.roleId) {
-        const roleUsers = await this.storageService.getUsersByRole(perm.roleId);
+        const roleUsers = await this.usersRepository.findByRole(perm.roleId);
         for (const user of roleUsers) {
-          users.push({
+          result.push({
             user,
             permission: perm.action,
             granted: perm.granted,
@@ -350,7 +364,7 @@ export class PermissionsService {
       }
     }
 
-    return users;
+    return result;
   }
 
   /**
@@ -390,13 +404,13 @@ export class PermissionsService {
 
     for (const roleData of defaultRoles) {
       // Create role
-      const role = await this.storageService.createRole({
+      const role = await this.permissionsRepository.createRole({
         name: roleData.name,
         description: roleData.description,
         organizationId,
         isSystemRole: roleData.isSystemRole,
         priority: roleData.priority,
-      } as InsertRole);
+      } as typeof roles.$inferInsert) as Role;
 
       // Create permissions for each resource type
       const resourceTypes: ResourceType[] = [
@@ -417,10 +431,10 @@ export class PermissionsService {
             resourceType,
             action as PermissionAction,
           );
-          await this.storageService.createRolePermission({
+          await this.permissionsRepository.createRolePermission({
             roleId: role.id,
             permissionId: permission.id,
-          } as InsertRolePermission);
+          } as typeof rolePermissions.$inferInsert);
         }
       }
     }
@@ -433,19 +447,19 @@ export class PermissionsService {
     resourceType: ResourceType,
     action: PermissionAction,
   ): Promise<Permission> {
-    let permission = await this.storageService.getPermissionByTypeAndAction(
+    let permission = await this.permissionsRepository.findPermissionByTypeAndAction(
       resourceType,
       action,
-    );
+    ) as Permission | undefined;
 
     if (!permission) {
-      permission = await this.storageService.createPermission({
+      permission = await this.permissionsRepository.createPermission({
         name: `${resourceType}.${action}`,
         resourceType,
         action,
         description: `${action} access to ${resourceType} resources`,
         isSystemPermission: true,
-      } as InsertPermission);
+      } as typeof permissions.$inferInsert) as Permission;
     }
 
     return permission;
@@ -454,18 +468,18 @@ export class PermissionsService {
   /**
    * Log permission changes for audit trail
    */
-  private async logPermissionChange(logData: any): Promise<void> {
-    await this.storageService.createPermissionAuditLog({
-      action: logData.action,
-      userId: logData.userId,
-      targetUserId: logData.targetUserId,
-      resourceType: logData.resourceType,
-      resourceId: logData.resourceId,
-      permission: logData.permission,
-      roleId: logData.roleId,
-      details: logData.details || {},
-      performedBy: logData.performedBy,
-    } as InsertPermissionAuditLog);
+  private async logPermissionChange(logData: Record<string, unknown>): Promise<void> {
+    await this.permissionsRepository.createPermissionAuditLog({
+      action: logData['action'],
+      userId: logData['userId'],
+      targetUserId: logData['targetUserId'],
+      resourceType: logData['resourceType'],
+      resourceId: logData['resourceId'],
+      permission: logData['permission'],
+      roleId: logData['roleId'],
+      details: logData['details'] || {},
+      performedBy: logData['performedBy'],
+    } as typeof permissionAuditLog.$inferInsert);
   }
 
   /**
@@ -479,8 +493,8 @@ export class PermissionsService {
    * Check if cached permissions are still valid
    */
   private isCacheValid(cached: UserPermissions): boolean {
-    const cacheTime = (cached as any)._cached;
-    return cacheTime && Date.now() - cacheTime < this.cacheTimeout;
+    const cacheTime = (cached as unknown as Record<string, unknown>)['_cached'];
+    return Boolean(cacheTime) && Date.now() - (cacheTime as number) < this.cacheTimeout;
   }
 
   /**

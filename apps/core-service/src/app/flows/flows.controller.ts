@@ -10,31 +10,34 @@ import {
 } from '@nestjs/common';
 import { FlowsService } from './flows.service';
 import { JwtAuthGuard, CurrentUser } from '@evalops/shared-auth';
-import { DatabaseStorageService } from '../storage/database-storage.service';
-import { InsertFlow } from '@evalops/shared-db';
+import { FlowsRepository } from '@evalops/shared-db';
+import { flows } from '@evalops/shared-db';
 
 @Controller('flows')
 export class FlowsController {
   constructor(
     private flowsService: FlowsService,
-    private storageService: DatabaseStorageService,
+    private flowsRepository: FlowsRepository,
   ) {}
 
   @UseGuards(JwtAuthGuard)
   @Get()
-  async getFlows(@CurrentUser() user: any) {
-    return this.storageService.getFlows(user.organizationId);
+  async getFlows(@CurrentUser() user: { organizationId: string }) {
+    return this.flowsRepository.findAllByOrg(user.organizationId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get(':id')
   async getFlow(@Param('id') id: string) {
-    return this.storageService.getFlow(id);
+    return this.flowsRepository.findById(id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post()
-  async createFlow(@Body() body: InsertFlow, @CurrentUser() user: any) {
+  async createFlow(
+    @Body() body: typeof flows.$inferInsert,
+    @CurrentUser() user: { id: string; organizationId: string },
+  ) {
     return this.flowsService.createFlow({
       ...body,
       organizationId: user.organizationId,
@@ -44,7 +47,10 @@ export class FlowsController {
 
   @UseGuards(JwtAuthGuard)
   @Put(':id')
-  async updateFlow(@Param('id') id: string, @Body() body: Partial<InsertFlow>) {
+  async updateFlow(
+    @Param('id') id: string,
+    @Body() body: Partial<typeof flows.$inferInsert>,
+  ) {
     return this.flowsService.updateFlow(id, body);
   }
 
@@ -55,4 +61,3 @@ export class FlowsController {
     return { message: 'Flow deleted successfully' };
   }
 }
-

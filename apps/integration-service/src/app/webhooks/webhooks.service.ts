@@ -4,7 +4,7 @@ import { Queue } from 'bull';
 import * as crypto from 'crypto';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { CicdRepository } from '@evalops/shared-db';
 import { InsertWebhookEvent, InsertCicdRun } from '@evalops/shared-db';
 import { EvaluationClientService } from '../evaluation-client/evaluation-client.service';
 
@@ -55,10 +55,10 @@ export class WebhooksService {
   private readonly logger = new Logger(WebhooksService.name);
 
   constructor(
-    private storageService: DatabaseStorageService,
+    private cicdRepository: CicdRepository,
     private httpService: HttpService,
     private evaluationClient: EvaluationClientService,
-    @InjectQueue('webhook-delivery') private webhookQueue: Queue
+    @InjectQueue('webhook-delivery') private webhookQueue: Queue,
   ) {}
 
   verifyGitHubSignature(
@@ -91,23 +91,14 @@ export class WebhooksService {
     payload: GitHubPushPayload,
     organizationId: string
   ): Promise<void> {
-    // Create webhook event record
-    const webhookEvent: InsertWebhookEvent = {
-      integrationId,
-      eventType: 'push',
-      payload: payload as any,
-      organizationId,
-    };
-
-    await this.storageService.createWebhookEvent(webhookEvent);
-
     // Check if this is a push to main/master branch
     const isMainBranch =
       payload.ref === 'refs/heads/main' || payload.ref === 'refs/heads/master';
 
     if (isMainBranch) {
-      // Create CI/CD run for main branch pushes
-      const cicdRun: InsertCicdRun = {
+      // Atomically create the webhook event and its CI/CD run so neither
+      // record is left orphaned if the second write fails.
+      const cicdRunData: InsertCicdRun = {
         integrationId,
         externalRunId: `push-${payload.head_commit.id}`,
         branch: payload.ref.replace('refs/heads/', ''),
@@ -122,10 +113,28 @@ export class WebhooksService {
         organizationId,
       };
 
-      await this.storageService.createCicdRun(cicdRun);
+      const { run: cicdRun } =
+        await this.cicdRepository.createRunWithWebhookEvent(
+          {
+            integrationId,
+            eventType: 'push',
+            payload: payload as any,
+            organizationId,
+          },
+          cicdRunData,
+        );
 
       // Trigger evaluation run based on integration configuration
       await this.triggerEvaluationRun(integrationId, cicdRun, organizationId);
+    } else {
+      // Non-main-branch push: record the event only (no CI/CD run needed)
+      const webhookEvent: InsertWebhookEvent = {
+        integrationId,
+        eventType: 'push',
+        payload: payload as any,
+        organizationId,
+      };
+      await this.cicdRepository.createWebhookEvent(webhookEvent);
     }
   }
 
@@ -134,20 +143,11 @@ export class WebhooksService {
     payload: GitHubPullRequestPayload,
     organizationId: string
   ): Promise<void> {
-    // Create webhook event record
-    const webhookEvent: InsertWebhookEvent = {
-      integrationId,
-      eventType: 'pull_request',
-      payload: payload as any,
-      organizationId,
-    };
-
-    await this.storageService.createWebhookEvent(webhookEvent);
-
-    // Only process opened and synchronize actions
+    // Only process opened and synchronize actions (these create CI/CD runs)
     if (['opened', 'synchronize'].includes(payload.action)) {
-      // Create CI/CD run for PR
-      const cicdRun: InsertCicdRun = {
+      // Atomically create the webhook event and its CI/CD run so neither
+      // record is left orphaned if the second write fails.
+      const cicdRunData: InsertCicdRun = {
         integrationId,
         externalRunId: `pr-${payload.pull_request.number}-${payload.pull_request.head.sha}`,
         branch: payload.pull_request.head.ref,
@@ -163,10 +163,28 @@ export class WebhooksService {
         organizationId,
       };
 
-      await this.storageService.createCicdRun(cicdRun);
+      const { run: cicdRun } =
+        await this.cicdRepository.createRunWithWebhookEvent(
+          {
+            integrationId,
+            eventType: 'pull_request',
+            payload: payload as any,
+            organizationId,
+          },
+          cicdRunData,
+        );
 
       // Trigger evaluation run for PR
       await this.triggerEvaluationRun(integrationId, cicdRun, organizationId);
+    } else {
+      // Other PR actions (closed, labeled, etc.): record event only
+      const webhookEvent: InsertWebhookEvent = {
+        integrationId,
+        eventType: 'pull_request',
+        payload: payload as any,
+        organizationId,
+      };
+      await this.cicdRepository.createWebhookEvent(webhookEvent);
     }
   }
 
@@ -177,8 +195,8 @@ export class WebhooksService {
   ): Promise<void> {
     try {
       // Get integration configuration
-      const integration = await this.storageService.getCicdIntegrationById(
-        integrationId
+      const integration = await this.cicdRepository.findIntegrationById(
+        integrationId,
       );
       if (!integration || !integration.config) {
         throw new Error('Integration configuration not found');
@@ -227,7 +245,7 @@ export class WebhooksService {
       });
 
       // Update CI/CD run status and link to evaluation run
-      await this.storageService.updateCicdRun(cicdRun.id, {
+      await this.cicdRepository.updateRun(cicdRun.id, {
         status: 'running',
         runId: evaluationRun.id,
         metadata: {
@@ -239,7 +257,7 @@ export class WebhooksService {
       this.logger.error('Failed to trigger evaluation run:', error);
 
       // Update CI/CD run with failure
-      await this.storageService.updateCicdRun(cicdRun.id, {
+      await this.cicdRepository.updateRun(cicdRun.id, {
         status: 'failure',
         completedAt: new Date(),
         metadata: {
@@ -304,19 +322,19 @@ export class WebhooksService {
   ): Promise<void> {
     try {
       // Get CI/CD run to find integration and commit info
-      const cicdRun = await this.storageService.getCicdRunById(cicdRunId);
+      const cicdRun = await this.cicdRepository.findRunById(cicdRunId);
       if (!cicdRun) {
         this.logger.warn(`CI/CD run ${cicdRunId} not found`);
         return;
       }
 
       // Get the integration to find repository info
-      const integration = await this.storageService.getCicdIntegrationById(
-        cicdRun.integrationId
+      const integration = await this.cicdRepository.findIntegrationById(
+        cicdRun.integrationId,
       );
       if (!integration || !integration.config) {
         this.logger.warn(`Integration not found for CI/CD run ${cicdRunId}`);
-        await this.storageService.updateCicdRun(cicdRunId, {
+        await this.cicdRepository.updateRun(cicdRunId, {
           status: status === 'success' ? 'success' : 'failure',
           qualityGateResult,
           runId,
@@ -329,7 +347,7 @@ export class WebhooksService {
       const repository = config.repository; // e.g., "owner/repo"
 
       // Update CI/CD run status
-      await this.storageService.updateCicdRun(cicdRunId, {
+      await this.cicdRepository.updateRun(cicdRunId, {
         status: status === 'success' ? 'success' : 'failure',
         qualityGateResult,
         runId,

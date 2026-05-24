@@ -3,7 +3,6 @@ import { SimulationsController } from './simulations.controller';
 import { SimulationsService } from './simulations.service';
 import { TraceWriterService } from './trace-writer.service';
 import { SimulationRunnerService } from './simulation-runner.service';
-import { StorageModule } from '../storage/storage.module';
 import { CoreClientModule } from '../core-client/core-client.module';
 import { EvaluationModule } from '../evaluation/evaluation.module';
 import { PoliciesModule } from '../policies/policies.module';
@@ -24,7 +23,6 @@ import { AIProviderModule } from '../ai-provider/ai-provider.module';
  */
 @Module({
   imports: [
-    StorageModule,
     CoreClientModule,
     EvaluationModule,
     PoliciesModule,

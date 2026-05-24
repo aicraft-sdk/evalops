@@ -1,16 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import { DatabaseStorageService } from '../storage/database-storage.service';
+import { AuditRepository } from '@evalops/shared-db';
 import { EnhancedAuditEntry } from '@evalops/shared-db';
 
 @Injectable()
 export class AuditService {
-  constructor(private storageService: DatabaseStorageService) {}
+  constructor(private auditRepository: AuditRepository) {}
 
   async getAuditTrail(
     organizationId: string,
     limit = 100,
   ): Promise<EnhancedAuditEntry[]> {
-    return this.storageService.getAuditTrailEnhanced(organizationId, limit);
+    return this.auditRepository.findEnhancedByOrg(organizationId, limit);
   }
 }
 
