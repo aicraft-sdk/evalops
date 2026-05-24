@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
+import { getErrorMessage } from '@evalops/shared-common';
 
 export interface PythonEvaluationRequest {
   evalSpecId: string;
@@ -109,8 +110,9 @@ export class PythonWorkerService {
         ),
       );
       return response.data;
-    } catch (error: any) {
-      this.logger.error('Failed to submit evaluation to Python worker:', error);
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      this.logger.error(`Failed to submit evaluation to Python worker: ${message}`, error instanceof Error ? error.stack : undefined);
       throw error;
     }
   }
@@ -123,11 +125,12 @@ export class PythonWorkerService {
         }),
       );
       return response.data;
-    } catch (error: any) {
-      if (error.response?.status === 404) {
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      if (error instanceof Error && (error as Error & { response?: { status?: number } }).response?.status === 404) {
         throw new Error('Task not found');
       }
-      this.logger.error('Failed to get task status:', error);
+      this.logger.error(`Failed to get task status: ${message}`, error instanceof Error ? error.stack : undefined);
       throw error;
     }
   }
@@ -137,7 +140,7 @@ export class PythonWorkerService {
     limit = 50,
   ): Promise<PythonTaskStatus[]> {
     try {
-      const params: any = { limit };
+      const params: Record<string, unknown> = { limit };
       if (status) params.status = status;
 
       const response = await firstValueFrom(
@@ -147,8 +150,9 @@ export class PythonWorkerService {
         }),
       );
       return response.data;
-    } catch (error: any) {
-      this.logger.error('Failed to list tasks:', error);
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      this.logger.error(`Failed to list tasks: ${message}`, error instanceof Error ? error.stack : undefined);
       throw error;
     }
   }
@@ -182,16 +186,19 @@ export class PythonWorkerService {
       );
 
       return response.data;
-    } catch (error: any) {
-      this.logger.error('Failed to execute code:', error);
-      if (error.response?.status === 408) {
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      this.logger.error(`Failed to execute code: ${message}`, error instanceof Error ? error.stack : undefined);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const httpError = error as any;
+      if (httpError?.response?.status === 408) {
         throw new Error(
-          `Code execution timed out: ${error.response?.data?.detail || error.message}`,
+          `Code execution timed out: ${httpError.response?.data?.detail || message}`,
         );
       }
-      if (error.response?.status === 400) {
+      if (httpError?.response?.status === 400) {
         throw new Error(
-          `Invalid code execution request: ${error.response?.data?.detail || error.message}`,
+          `Invalid code execution request: ${httpError.response?.data?.detail || message}`,
         );
       }
       throw error;

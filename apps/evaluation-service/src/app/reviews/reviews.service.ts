@@ -295,8 +295,8 @@ export class ReviewsService {
     }
 
     // Extract sample data from run
-    let input: any;
-    let expectedOutput: any;
+    let input: unknown;
+    let expectedOutput: unknown;
 
     if (queueItem.annotationId) {
       // If there's an annotation with a spanId, extract from that span
@@ -315,9 +315,9 @@ export class ReviewsService {
           );
         if (span) {
           // Extract from span attributes
-          const attrs = span.attributes as any;
-          input = attrs?.input || attrs?.user_message || attrs?.message;
-          expectedOutput = attrs?.expected_output || attrs?.expected;
+          const attrs = span.attributes as Record<string, unknown>;
+          input = attrs?.['input'] || attrs?.['user_message'] || attrs?.['message'];
+          expectedOutput = attrs?.['expected_output'] || attrs?.['expected'];
         }
       }
     }
@@ -406,7 +406,9 @@ export class ReviewsService {
 
     // Filter for simulation.turn spans
     const turnSpans = spans.filter(
-      (span) => (span.attributes as any)?.simulation?.turn !== undefined
+      (span) => (span.attributes as Record<string, unknown>)?.['simulation'] !== undefined &&
+        typeof (span.attributes as Record<string, unknown>)?.['simulation'] === 'object' &&
+        (span.attributes as Record<string, Record<string, unknown>>)?.['simulation']?.['turn'] !== undefined
     );
 
     if (turnSpans.length === 0) {
@@ -417,11 +419,11 @@ export class ReviewsService {
 
     // Build turn definitions from spans
     const turns = turnSpans.map((span) => {
-      const attrs = span.attributes as any;
+      const attrs = span.attributes as Record<string, unknown>;
       return {
-        role: attrs?.role || 'user',
-        content: attrs?.content || attrs?.message || attrs?.user_message,
-        metadata: attrs?.metadata || {},
+        role: (attrs?.['role'] as string) || 'user',
+        content: attrs?.['content'] || attrs?.['message'] || attrs?.['user_message'],
+        metadata: (attrs?.['metadata'] as Record<string, unknown>) || {},
       };
     });
 

@@ -1,5 +1,7 @@
 import baseConfig from '../../eslint.config.mjs';
-
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+const __dirname = dirname(fileURLToPath(import.meta.url));
 export default [
   ...baseConfig,
   {
@@ -14,6 +16,16 @@ export default [
     },
     languageOptions: {
       parser: await import('jsonc-eslint-parser'),
+    },
+  },
+  {
+    files: ['src/**/*.ts'],
+    ignores: ['**/*.spec.ts', '**/*.test.ts'],
+    languageOptions: {
+      parserOptions: {
+        project: resolve(__dirname, 'tsconfig.lib.json'),
+        tsconfigRootDir: __dirname,
+      },
     },
   },
 ];

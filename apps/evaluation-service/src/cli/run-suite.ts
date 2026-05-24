@@ -302,5 +302,6 @@ async function main() {
 
 // Run if executed directly
 if (require.main === module) {
+  // eslint-disable-next-line @typescript-eslint/no-floating-promises -- CLI entry point; process exits on uncaught rejection
   main();
 }

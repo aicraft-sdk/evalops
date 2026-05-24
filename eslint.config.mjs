@@ -48,6 +48,16 @@ export default [
           'ts-expect-error': 'allow-with-description',
         },
       ],
+    },
+  },
+  {
+    // no-floating-promises requires type information — apply only to TypeScript
+    // production source files under src/ (not spec/test/e2e files).
+    // Each project ESLint config wires parserOptions.project for
+    // tsconfig.app.json / tsconfig.lib.json which cover the same file set.
+    files: ['**/src/**/*.ts', '**/src/**/*.tsx'],
+    ignores: ['**/*.spec.ts', '**/*.test.ts', '**/*.e2e.ts', '**/*.spec.tsx'],
+    rules: {
       '@typescript-eslint/no-floating-promises': 'error',
     },
   },

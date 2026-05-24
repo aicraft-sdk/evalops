@@ -149,7 +149,8 @@ export class TraceMigrationService {
       // Mark as migrated even though we didn't create the spans
       await db
         .update(runs)
-        .set({ traceMigratedAt: new Date() } as any)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .set({ traceMigratedAt: new Date() } as any) // Drizzle Exactly<> type limitation
         .where(eq(runs.id, run.id));
       return 0;
     }
@@ -177,7 +178,8 @@ export class TraceMigrationService {
       // Mark run as migrated
       await db
         .update(runs)
-        .set({ traceMigratedAt: new Date() } as any)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .set({ traceMigratedAt: new Date() } as any) // Drizzle Exactly<> type limitation
         .where(eq(runs.id, run.id));
 
       this.logger.log(

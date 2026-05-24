@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { getErrorMessage } from '@evalops/shared-common';
 
 export interface FlowExecutionResponse {
   response: any;
@@ -69,10 +70,11 @@ export class PromptFlowService {
         duration,
         outputs,
       };
-    } catch (error: any) {
-      this.logger.error('Error executing Prompt Flow:', error);
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      this.logger.error(`Error executing Prompt Flow: ${message}`, error instanceof Error ? error.stack : undefined);
       throw new Error(
-        `Prompt Flow execution failed: ${error.message || 'Unknown error'}`,
+        `Prompt Flow execution failed: ${message}`,
       );
     }
   }
@@ -90,10 +92,11 @@ export class PromptFlowService {
       );
 
       return response.data.value || response.data.flows || [];
-    } catch (error: any) {
-      this.logger.error('Error listing Prompt Flows:', error);
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      this.logger.error(`Error listing Prompt Flows: ${message}`, error instanceof Error ? error.stack : undefined);
       throw new Error(
-        `Failed to list flows: ${error.message || 'Unknown error'}`,
+        `Failed to list flows: ${message}`,
       );
     }
   }
@@ -111,10 +114,11 @@ export class PromptFlowService {
       );
 
       return response.data;
-    } catch (error: any) {
-      this.logger.error('Error getting flow details:', error);
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      this.logger.error(`Error getting flow details: ${message}`, error instanceof Error ? error.stack : undefined);
       throw new Error(
-        `Failed to get flow details: ${error.message || 'Unknown error'}`,
+        `Failed to get flow details: ${message}`,
       );
     }
   }
@@ -123,8 +127,9 @@ export class PromptFlowService {
     try {
       await this.listFlows(workspaceId);
       return true;
-    } catch (error: any) {
-      this.logger.error('Prompt Flow connection test failed:', error);
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      this.logger.error(`Prompt Flow connection test failed: ${message}`, error instanceof Error ? error.stack : undefined);
       return false;
     }
   }

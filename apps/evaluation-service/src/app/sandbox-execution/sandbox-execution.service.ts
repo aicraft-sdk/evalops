@@ -6,7 +6,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { HttpClientService } from '@evalops/shared-common';
+import { HttpClientService, getErrorMessage } from '@evalops/shared-common';
 import { DatabaseStorageService } from '../storage/database-storage.service';
 import { CoreClientService } from '../core-client/core-client.service';
 import {
@@ -36,7 +36,7 @@ export class SandboxExecutionService {
 
   async executeCustomEvaluator(
     evaluatorId: string,
-    input: any,
+    input: unknown,
     runId?: string,
   ): Promise<EvaluationResult> {
     const startTime = Date.now();
@@ -70,7 +70,7 @@ export class SandboxExecutionService {
     if (evaluator.inputSchema) {
       const inputValidation = this.validateAgainstSchema(
         input,
-        evaluator.inputSchema as any,
+        evaluator.inputSchema as Record<string, unknown>,
       );
       if (!inputValidation.valid) {
         throw new BadRequestException(
@@ -109,7 +109,7 @@ export class SandboxExecutionService {
       if (evaluator.outputSchema) {
         const outputValidation = this.validateAgainstSchema(
           executionResult.output,
-          evaluator.outputSchema as any,
+          evaluator.outputSchema as Record<string, unknown>,
         );
         if (!outputValidation.valid) {
           this.logger.warn(
@@ -159,12 +159,13 @@ export class SandboxExecutionService {
       });
 
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       const totalExecutionTime = Date.now() - startTime;
+      const message = getErrorMessage(error);
       this.logger.error(`Custom evaluator execution failed`, {
         evaluatorId,
         runId,
-        error: error.message,
+        error: message,
         totalExecutionTime,
       });
 
@@ -176,7 +177,7 @@ export class SandboxExecutionService {
         {
           success: false,
           executionTime: totalExecutionTime,
-          errorMessage: error.message,
+          errorMessage: message,
         },
       ).catch((trackError) => {
         this.logger.warn(
@@ -197,7 +198,7 @@ export class SandboxExecutionService {
   async executeCode(
     code: string,
     language: 'python' | 'javascript',
-    input?: any,
+    input?: unknown,
     config?: SandboxConfig,
   ): Promise<ExecutionResult> {
     this.logger.debug('Executing code in sandbox', {
@@ -272,11 +273,12 @@ export class SandboxExecutionService {
   }
 
   private validateAgainstSchema(
-    value: any,
+    value: unknown,
     schema: {
       type?: string;
       required?: string[];
       properties?: Record<string, { type?: string }>;
+      [key: string]: unknown;
     },
   ): ValidationResult {
     const errors: string[] = [];
@@ -362,7 +364,7 @@ export class SandboxExecutionService {
     sandboxId: string,
     code: string,
     language: 'python' | 'javascript',
-    input?: any,
+    input?: unknown,
   ): Promise<ExecutionResult> {
     this.logger.debug('Executing code in sandbox', {
       sandboxId,
@@ -423,18 +425,20 @@ export class SandboxExecutionService {
         `Successfully retrieved evaluator code (${response.content.length} bytes)`,
       );
       return response.content;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
       this.logger.error(
-        `Failed to retrieve evaluator code from ${filePath}:`,
-        error,
+        `Failed to retrieve evaluator code from ${filePath}: ${message}`,
+        error instanceof Error ? error.stack : undefined,
       );
-      if (error.response?.status === 404) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((error as any)?.response?.status === 404) {
         throw new NotFoundException(
           `Evaluator file not found: ${filePath}`,
         );
       }
       throw new InternalServerErrorException(
-        `Failed to retrieve evaluator code: ${error.message}`,
+        `Failed to retrieve evaluator code: ${message}`,
       );
     }
   }
@@ -455,7 +459,7 @@ export class SandboxExecutionService {
     return 'python';
   }
 
-  private extractScore(output: any): number | undefined {
+  private extractScore(output: unknown): number | undefined {
     if (typeof output === 'number') {
       return output;
     }
@@ -496,9 +500,11 @@ export class SandboxExecutionService {
         executionTime: metrics.executionTime,
         errorMessage: metrics.errorMessage || null,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
       this.logger.error(
-        `Failed to create evaluator usage record: ${error.message}`,
+        `Failed to create evaluator usage record: ${message}`,
+        error instanceof Error ? error.stack : undefined,
       );
       throw error;
     }

@@ -30,4 +30,5 @@ async function bootstrap() {
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-floating-promises -- top-level bootstrap call; process exits on uncaught rejection
 bootstrap();

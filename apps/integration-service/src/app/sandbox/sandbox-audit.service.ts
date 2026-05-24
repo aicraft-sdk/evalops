@@ -3,6 +3,7 @@ import { db } from '@evalops/shared-db';
 import { sandboxAuditLog } from '@evalops/shared-db';
 import { eq, desc } from 'drizzle-orm';
 import { createHash } from 'crypto';
+import { getErrorMessage } from '@evalops/shared-common';
 
 export type SandboxOperation =
   | 'create'
@@ -83,10 +84,11 @@ export class SandboxAuditService {
       });
 
       return logId || '';
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
       this.logger.error(
-        `Failed to create audit log: ${error.message}`,
-        error.stack,
+        `Failed to create audit log: ${message}`,
+        error instanceof Error ? error.stack : undefined,
       );
       // Don't throw - audit logging failures shouldn't break operations
       return '';
@@ -191,10 +193,11 @@ export class SandboxAuditService {
         .limit(limit);
 
       return logs;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
       this.logger.error(
-        `Failed to retrieve audit logs: ${error.message}`,
-        error.stack,
+        `Failed to retrieve audit logs: ${message}`,
+        error instanceof Error ? error.stack : undefined,
       );
       return [];
     }
@@ -216,10 +219,11 @@ export class SandboxAuditService {
         .limit(limit);
 
       return logs;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
       this.logger.error(
-        `Failed to retrieve organization audit logs: ${error.message}`,
-        error.stack,
+        `Failed to retrieve organization audit logs: ${message}`,
+        error instanceof Error ? error.stack : undefined,
       );
       return [];
     }
@@ -241,10 +245,11 @@ export class SandboxAuditService {
         .limit(limit);
 
       return logs;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
       this.logger.error(
-        `Failed to retrieve audit logs by code hash: ${error.message}`,
-        error.stack,
+        `Failed to retrieve audit logs by code hash: ${message}`,
+        error instanceof Error ? error.stack : undefined,
       );
       return [];
     }

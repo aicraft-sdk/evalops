@@ -511,25 +511,32 @@ export const reviewQueueItemRelations = relations(
   })
 );
 
-// Insert schemas - using type assertion to fix type errors
+// Insert schemas - drizzle-zod createInsertSchema() returns a type that requires `as any`
+// to call .omit() because drizzle-zod's internal ZodObject generic does not expose .omit()
+// in all TypeScript configurations. Each cast is intentional — not a logic error.
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const insertPromptSchema = (createInsertSchema(prompts) as any).omit({
   id: true,
   contentHash: true,
   createdAt: true,
 });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const insertFlowSchema = (createInsertSchema(flows) as any).omit({
   id: true,
   contentHash: true,
   createdAt: true,
 });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const insertDatasetSchema = (createInsertSchema(datasets) as any).omit({
   id: true,
   contentHash: true,
   createdAt: true,
 });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const insertDatasetSampleSchema = (
   createInsertSchema(datasetSamples) as any
 ).omit({
@@ -537,6 +544,7 @@ export const insertDatasetSampleSchema = (
   createdAt: true,
 });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const insertEvalSpecSchema = (createInsertSchema(evalSpecs) as any).omit(
   {
     id: true,
@@ -544,12 +552,14 @@ export const insertEvalSpecSchema = (createInsertSchema(evalSpecs) as any).omit(
   }
 );
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const insertRunSchema = (createInsertSchema(runs) as any).omit({
   id: true,
   createdAt: true,
   startedAt: true,
 });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const insertBaselineSchema = (createInsertSchema(baselines) as any).omit(
   {
     id: true,
@@ -557,6 +567,7 @@ export const insertBaselineSchema = (createInsertSchema(baselines) as any).omit(
   }
 );
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const insertSampleResultSchema = (
   createInsertSchema(sampleResults) as any
 ).omit({
@@ -564,6 +575,7 @@ export const insertSampleResultSchema = (
   createdAt: true,
 });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const insertSimulationSuiteSchema = (
   createInsertSchema(simulationSuites) as any
 ).omit({
@@ -571,6 +583,7 @@ export const insertSimulationSuiteSchema = (
   createdAt: true,
 });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const insertSimulationScenarioSchema = (
   createInsertSchema(simulationScenarios) as any
 ).omit({
@@ -578,6 +591,7 @@ export const insertSimulationScenarioSchema = (
   createdAt: true,
 });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const insertSimulationRunSchema = (
   createInsertSchema(simulationRuns) as any
 ).omit({
@@ -585,6 +599,7 @@ export const insertSimulationRunSchema = (
   createdAt: true,
 });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const insertTraceSpanSchema = (
   createInsertSchema(traceSpans) as any
 ).omit({
@@ -592,6 +607,7 @@ export const insertTraceSpanSchema = (
   createdAt: true,
 });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const insertRunAnnotationSchema = (
   createInsertSchema(runAnnotations) as any
 ).omit({
@@ -600,6 +616,7 @@ export const insertRunAnnotationSchema = (
   updatedAt: true,
 });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const insertReviewQueueItemSchema = (
   createInsertSchema(reviewQueueItems) as any
 ).omit({

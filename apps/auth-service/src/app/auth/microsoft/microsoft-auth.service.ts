@@ -1,6 +1,7 @@
 import {
   Injectable,
   InternalServerErrorException,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import * as msal from '@azure/msal-node';
@@ -8,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class MicrosoftAuthService {
+  private readonly logger = new Logger(MicrosoftAuthService.name);
   private msalInstance: msal.ConfidentialClientApplication | null = null;
   private config: {
     clientId: string;
@@ -30,8 +32,7 @@ export class MicrosoftAuthService {
       'http://localhost:3000/api/auth/microsoft/callback';
 
     if (!clientId || !clientSecret || !tenantId) {
-      // eslint-disable-next-line no-console
-      console.warn(
+      this.logger.warn(
         'Microsoft Entra ID configuration incomplete. SSO will not be available.',
       );
       return;
@@ -55,8 +56,7 @@ export class MicrosoftAuthService {
         loggerOptions: {
           loggerCallback: (level: msal.LogLevel, message: string) => {
             if (level <= msal.LogLevel.Error) {
-              // eslint-disable-next-line no-console
-              console.error('MSAL Error:', message);
+              this.logger.error(`MSAL Error: ${message}`);
             }
           },
           piiLoggingEnabled: false,
@@ -161,11 +161,10 @@ export class MicrosoftAuthService {
 
       return await response.json();
     } catch (error: unknown) {
-      // eslint-disable-next-line no-console
-      console.error('Error fetching user profile from Graph API:', error);
-      // TODO: Phase 3 — throw ServiceUnavailableException instead of returning null
-      // (getUserProfile currently has zero callers; changing to throw would be safe
-      // but is deferred to the Phase 3 Logger migration sweep)
+      this.logger.error(
+        'Error fetching user profile from Graph API',
+        error instanceof Error ? error.stack : String(error),
+      );
       return null;
     }
   }
