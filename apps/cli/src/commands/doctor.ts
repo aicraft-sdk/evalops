@@ -1,11 +1,10 @@
 import * as cp from 'child_process';
-import axios from 'axios';
 import { loadConfig } from '../lib/config';
 import { loadCredentials } from '../lib/credentials';
 
-const OK = '✅';
-const WARN = '⚠️ ';
-const FAIL = '❌';
+const OK = '[OK]';
+const WARN = '[WARN]';
+const FAIL = '[FAIL]';
 
 function check(label: string, status: 'ok' | 'warn' | 'fail', detail?: string): void {
   const icon = status === 'ok' ? OK : status === 'warn' ? WARN : FAIL;
@@ -23,8 +22,11 @@ function execSync(cmd: string): string | null {
 
 async function checkUrl(url: string): Promise<boolean> {
   try {
-    await axios.get(url, { timeout: 4000 });
-    return true;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    const resp = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    return resp.ok || resp.status < 500;
   } catch {
     return false;
   }
@@ -56,9 +58,9 @@ export async function runDoctor(_args: string[]): Promise<void> {
   // Auth
   const config = loadConfig();
   const creds = loadCredentials();
-  if (process.env.EVALOPS_API_KEY) {
-    check('Auth', 'ok', 'EVALOPS_API_KEY set via env');
-  } else if (creds?.apiKey) {
+  if (process.env['EVALOPS_TOKEN'] || process.env['EVALOPS_API_KEY']) {
+    check('Auth', 'ok', 'EVALOPS_TOKEN set via env');
+  } else if (creds?.token) {
     check('Auth', 'ok', '~/.evalops/credentials.json found');
   } else {
     check('Auth', 'fail', 'no credentials — run `evalops login`');
@@ -75,11 +77,11 @@ export async function runDoctor(_args: string[]): Promise<void> {
 
   if (gatewayOk) {
     const services = [
-      { name: 'auth-service',       port: 3001 },
-      { name: 'core-service',       port: 3002 },
-      { name: 'evaluation-service', port: 3003 },
-      { name: 'integration-service',port: 3004 },
-      { name: 'analytics-service',  port: 3005 },
+      { name: 'auth-service',        port: 3001 },
+      { name: 'core-service',        port: 3002 },
+      { name: 'evaluation-service',  port: 3003 },
+      { name: 'integration-service', port: 3004 },
+      { name: 'analytics-service',   port: 3005 },
     ];
     const localBase = apiUrl.replace(':3000', '');
     for (const svc of services) {

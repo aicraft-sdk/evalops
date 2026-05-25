@@ -12,6 +12,10 @@ export * from './lib/decorators/rate-limit.decorator';
 
 // Guards
 export * from './lib/guards/jwt-auth.guard';
+export * from './lib/guards/api-auth.guard';
 export * from './lib/guards/rbac.guard';
 export * from './lib/guards/rate-limit.guard';
 export * from './lib/guards/service-auth.guard';
+
+// Scopes decorator
+export * from './lib/decorators/require-scopes.decorator';

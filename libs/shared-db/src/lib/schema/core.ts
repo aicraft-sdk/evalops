@@ -86,6 +86,24 @@ export const auditTrail = pgTable('audit_trail', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// Personal access tokens for CLI and API key auth
+export const personalAccessTokens = pgTable('personal_access_tokens', {
+  id: varchar('id')
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  organizationId: varchar('organization_id').notNull(),
+  userId: varchar('user_id').notNull(),
+  name: varchar('name').notNull(),
+  tokenHash: varchar('token_hash').notNull().unique(),
+  scopes: text('scopes').array().notNull().default(sql`ARRAY[]::text[]`),
+  expiresAt: timestamp('expires_at'),
+  lastUsedAt: timestamp('last_used_at'),
+  revokedAt: timestamp('revoked_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export type PersonalAccessToken = typeof personalAccessTokens.$inferSelect;
+
 // Relations - these will be properly set up in index.ts after all modules are imported
 
 export const auditTrailRelations = relations(auditTrail, ({ one }) => ({

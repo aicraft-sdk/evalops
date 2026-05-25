@@ -1,0 +1,27 @@
+{
+  "name": "sdk-formatters",
+  "projectType": "library",
+  "sourceRoot": "libs/sdk-formatters/src",
+  "prefix": "evalops",
+  "tags": ["scope:shared", "type:lib", "domain:sdk"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/sdk-formatters",
+        "main": "libs/sdk-formatters/src/index.ts",
+        "tsConfig": "libs/sdk-formatters/tsconfig.lib.json"
+      }
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "options": {
+        "jestConfig": "libs/sdk-formatters/jest.config.cts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

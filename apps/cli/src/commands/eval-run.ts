@@ -1,26 +1,5 @@
-import { ApiClient } from '../lib/api-client';
+import { EvalOpsClient } from '@evalops/sdk';
 import { loadConfig, requireAuth } from '../lib/config';
-
-interface RunResult {
-  id: string;
-  status: string;
-  decision?: string;
-  name?: string;
-  duration?: number;
-  results?: { passRate?: number };
-  costUsd?: number;
-}
-
-async function pollRun(api: ApiClient, runId: string, timeoutMs = 600_000): Promise<RunResult> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const run = await api.get<RunResult>(`/api/evaluation/runs/${runId}`);
-    if (run.status === 'completed' || run.status === 'failed') return run;
-    process.stdout.write('.');
-    await new Promise(r => setTimeout(r, 2000));
-  }
-  throw new Error(`Run ${runId} timed out after ${timeoutMs / 1000}s`);
-}
 
 export async function runEvalRun(args: string[]): Promise<void> {
   let specName = '';
@@ -46,10 +25,10 @@ export async function runEvalRun(args: string[]): Promise<void> {
 
   const config = loadConfig();
   requireAuth(config);
-  const api = new ApiClient(config);
+  const client = new EvalOpsClient({ baseUrl: config.apiUrl, token: config.token });
 
   if (!specId) {
-    const specs = await api.get<{ id: string; name: string }[]>('/api/core/eval-specs');
+    const specs = await client.specs.list();
     const found = specs.find(s => s.name === specName);
     if (!found) {
       console.error(`Eval spec "${specName}" not found. Available:\n${specs.map(s => `  ${s.name}`).join('\n')}`);
@@ -60,26 +39,21 @@ export async function runEvalRun(args: string[]): Promise<void> {
 
   console.log(`Starting eval run for spec: ${specName || specId}`);
   const runName = `${specName || 'run'} — ${new Date().toISOString()}`;
-  const run = await api.post<RunResult>('/api/evaluation/runs', { evalSpecId: specId, name: runName });
+  const run = await client.runs.create({ evalSpecId: specId, name: runName });
   console.log(`Run created: ${run.id}`);
 
   if (!watch) {
-    console.log(`Run triggered. Check status: evalops eval run --spec-id=${specId}`);
-    console.log(`Or view in the UI: ${config.apiUrl.replace(':3000', ':4200')}/runs/${run.id}`);
+    console.log(`Run triggered. Check status: evalops run get ${run.id}`);
     return;
   }
 
   process.stdout.write('Waiting for completion');
-  const completed = await pollRun(api, run.id);
+  const completed = await client.runs.waitFor(run.id, { timeoutMs: 600_000 });
   console.log('');
 
-  const icon = completed.decision === 'fail' ? '❌' : completed.decision === 'warn' ? '⚠️' : '✅';
-  const passRate = completed.results?.passRate != null
-    ? ` — pass rate: ${(completed.results.passRate * 100).toFixed(1)}%`
-    : '';
-  const cost = completed.costUsd != null ? ` — cost: $${completed.costUsd.toFixed(4)}` : '';
-
-  console.log(`${icon} ${completed.decision?.toUpperCase() ?? 'COMPLETED'}${passRate}${cost}`);
+  const decision = completed.decision ?? 'completed';
+  const icon = decision === 'fail' ? 'FAIL' : decision === 'warn' ? 'WARN' : 'PASS';
+  console.log(`[${icon}] ${decision.toUpperCase()}`);
 
   if (completed.decision === 'fail') process.exit(1);
 }

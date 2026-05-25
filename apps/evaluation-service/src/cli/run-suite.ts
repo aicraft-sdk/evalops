@@ -10,8 +10,12 @@
 
 import axios from 'axios';
 import { getAuthHeaders, getAuthConfig, validateAuth } from './auth';
-import { formatJUnitXML, type SuiteRunResult, type ScenarioRun } from './junit-formatter';
-import { formatJsonSummary } from './json-formatter';
+import {
+  formatJUnitXML,
+  formatJsonSummary,
+  type SuiteRunResult,
+  type ScenarioRun,
+} from '@evalops/sdk-formatters';
 import { getGitCommitShaSync } from '../app/simulations/git-utils';
 import * as fs from 'fs';
 import * as path from 'path';

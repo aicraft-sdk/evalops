@@ -1,0 +1,8 @@
+{
+  "name": "@evalops/cli",
+  "version": "0.2.0",
+  "description": "EvalOps CLI — evaluate LLM pipelines from the terminal",
+  "bin": { "evalops": "dist/main.js" },
+  "files": ["dist"],
+  "publishConfig": { "access": "public" }
+}

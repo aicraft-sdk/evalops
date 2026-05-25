@@ -11,6 +11,7 @@ import { UsersModule } from './users/users.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { PermissionsModule } from './permissions/permissions.module';
 import { AdminModule } from './admin/admin.module';
+import { TokensModule } from './tokens/tokens.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AdminModule } from './admin/admin.module';
     OrganizationsModule,
     PermissionsModule,
     AdminModule,
+    TokensModule,
   ],
   controllers: [AppController, HealthController],
   providers: [

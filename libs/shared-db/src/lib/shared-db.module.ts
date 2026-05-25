@@ -17,6 +17,7 @@ import { CicdRepository } from './repositories/cicd.repository';
 import { AlertsRepository } from './repositories/alerts.repository';
 import { AuditRepository } from './repositories/audit.repository';
 import { MetricsRepository } from './repositories/metrics.repository';
+import { PersonalAccessTokensRepository } from './repositories/personal-access-tokens.repository';
 
 const REPOSITORIES = [
   UsersRepository,
@@ -37,6 +38,7 @@ const REPOSITORIES = [
   AlertsRepository,
   AuditRepository,
   MetricsRepository,
+  PersonalAccessTokensRepository,
 ];
 
 @Global()

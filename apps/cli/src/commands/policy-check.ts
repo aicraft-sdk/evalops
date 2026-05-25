@@ -1,22 +1,5 @@
-import { ApiClient } from '../lib/api-client';
+import { EvalOpsClient } from '@evalops/sdk';
 import { loadConfig, requireAuth } from '../lib/config';
-
-interface PolicyViolation {
-  policyId?: string;
-  policyName?: string;
-  severity: 'fail' | 'warn';
-  message: string;
-}
-
-interface RunDetail {
-  id: string;
-  status: string;
-  decision?: string;
-  name?: string;
-  results?: { passRate?: number };
-  costUsd?: number;
-  policyViolations?: PolicyViolation[];
-}
 
 export async function runPolicyCheck(args: string[]): Promise<void> {
   let runId = '';
@@ -37,30 +20,26 @@ export async function runPolicyCheck(args: string[]): Promise<void> {
 
   const config = loadConfig();
   requireAuth(config);
-  const api = new ApiClient(config);
+  const client = new EvalOpsClient({ baseUrl: config.apiUrl, token: config.token });
 
-  const run = await api.get<RunDetail>(`/api/evaluation/runs/${runId}`);
+  const run = await client.runs.get(runId);
+  const policyResult = await client.runs.policy(runId);
 
-  const decision = run.decision ?? (run.status === 'failed' ? 'fail' : 'pending');
-  const icon = decision === 'pass' ? '✅' : decision === 'warn' ? '⚠️' : decision === 'fail' ? '❌' : '⏳';
-  const passRate = run.results?.passRate != null
-    ? ` (pass rate: ${(run.results.passRate * 100).toFixed(1)}%)`
-    : '';
-  const cost = run.costUsd != null ? ` — cost: $${run.costUsd.toFixed(4)}` : '';
+  const decision = policyResult.decision ?? run.decision ?? 'pending';
+  const icon = decision === 'pass' ? '[PASS]' : decision === 'warn' ? '[WARN]' : decision === 'fail' ? '[FAIL]' : '[...]';
 
-  console.log(`${icon} Run: ${run.name || run.id}`);
-  console.log(`   Decision: ${decision.toUpperCase()}${passRate}${cost}`);
+  console.log(`${icon} Run: ${(run['name'] as string | undefined) || run.id}`);
+  console.log(`   Decision: ${decision.toUpperCase()}`);
   console.log(`   Status:   ${run.status}`);
 
-  const violations = run.policyViolations ?? [];
+  const violations = policyResult.violations ?? [];
   if (violations.length > 0) {
     console.log('\n   Policy violations:');
     for (const v of violations) {
-      const vIcon = v.severity === 'fail' ? '  ❌' : '  ⚠️';
-      console.log(`${vIcon} [${v.severity.toUpperCase()}] ${v.policyName ?? v.policyId ?? 'Policy'}: ${v.message}`);
+      const vIcon = v.severity === 'fail' ? '  [FAIL]' : '  [WARN]';
+      console.log(`${vIcon} [${v.severity.toUpperCase()}] ${v.policyName}: ${v.message}`);
     }
   }
 
   if (decision === 'fail') process.exit(1);
-  if (decision === 'warn') process.exit(0);
 }
