@@ -1,0 +1,96 @@
+name: 'EvalOps Eval'
+description: 'Run an EvalOps evaluation spec and gate on the policy verdict'
+author: 'EvalOps'
+
+inputs:
+  spec:
+    description: 'Path to the eval spec YAML file (glob supported)'
+    required: true
+  evalops-url:
+    description: 'EvalOps API base URL'
+    required: true
+  evalops-token:
+    description: 'EvalOps API token (PAT or JWT)'
+    required: true
+  fail-on-warn:
+    description: 'Exit 1 when policy verdict is warn (default: false)'
+    required: false
+    default: 'false'
+  comment-on-pr:
+    description: 'Post a summary comment on the PR (default: false)'
+    required: false
+    default: 'false'
+
+outputs:
+  decision:
+    description: 'Policy verdict: pass, warn, or fail'
+    value: ${{ steps.eval.outputs.decision }}
+  run-id:
+    description: 'EvalOps run ID'
+    value: ${{ steps.eval.outputs.run-id }}
+  junit-path:
+    description: 'Path to the generated JUnit XML file'
+    value: ${{ steps.eval.outputs.junit-path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run eval
+      id: eval
+      shell: bash
+      env:
+        EVALOPS_URL: ${{ inputs.evalops-url }}
+        EVALOPS_TOKEN: ${{ inputs.evalops-token }}
+      run: |
+        JUNIT_PATH="./test-results/evalops-junit.xml"
+        OUTPUT_FILE=$(mktemp)
+        npx --yes @evalops/cli@latest eval "${{ inputs.spec }}" \
+          --watch \
+          --out junit \
+          --out-dir ./test-results \
+          ${{ inputs.fail-on-warn == 'true' && '--fail-on-warn' || '' }} | tee "$OUTPUT_FILE"
+        EXIT_CODE=${PIPESTATUS[0]}
+        RUN_ID=$(grep -oP '(?<=Run ID: )\S+' "$OUTPUT_FILE" 2>/dev/null || echo '')
+        echo "run-id=$RUN_ID" >> $GITHUB_OUTPUT
+        rm -f "$OUTPUT_FILE"
+        echo "junit-path=$JUNIT_PATH" >> $GITHUB_OUTPUT
+        # Write default decision; overwritten below if JUnit file exists
+        echo "decision=unknown" >> $GITHUB_OUTPUT
+        # Extract decision from JUnit file if present
+        if [ -f "$JUNIT_PATH" ]; then
+          DECISION=$(grep -o 'decision="[^"]*"' "$JUNIT_PATH" | head -1 | cut -d'"' -f2 || echo "unknown")
+          echo "decision=$DECISION" >> $GITHUB_OUTPUT
+        fi
+        exit $EXIT_CODE
+
+    - name: Upload JUnit results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: evalops-junit
+        path: ./test-results/evalops-junit.xml
+        if-no-files-found: ignore
+
+    - name: Comment on PR
+      if: ${{ inputs.comment-on-pr == 'true' && github.event_name == 'pull_request' }}
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const junitPath = '${{ steps.eval.outputs.junit-path }}';
+          const decision = '${{ steps.eval.outputs.decision }}';
+          const runId = '${{ steps.eval.outputs.run-id }}';
+          const icon = decision === 'pass' ? '✅' : decision === 'warn' ? '⚠️' : '❌';
+          const body = [
+            `## ${icon} EvalOps Evaluation`,
+            `**Decision:** ${decision}`,
+            runId ? `**Run ID:** \`${runId}\`` : '',
+            '',
+            '_Powered by [EvalOps](https://github.com/your-org/evalops)_'
+          ].filter(Boolean).join('\n');
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body
+          });

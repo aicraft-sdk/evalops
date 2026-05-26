@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "evalops-sdk"
+version = "0.1.0"
+description = "EvalOps Python SDK — evaluate LLM pipelines from Python"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "httpx>=0.27",
+  "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+pytest-evalops = [
+  "pytest>=7.0",
+]
+
+[project.entry-points."pytest11"]
+evalops = "evalops.pytest_plugin"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/evalops"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
