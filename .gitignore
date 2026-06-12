@@ -50,3 +50,8 @@ docs/learnings/personal/
 dist/
 *.backup
 .env.*.backup
+
+# cc10x transient workflow state
+.claude/cc10x/
+.cc10x/v10/workflows/
+.cc10x/v10/cc10x-hook-events.log
