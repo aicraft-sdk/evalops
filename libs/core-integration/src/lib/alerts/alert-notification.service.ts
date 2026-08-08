@@ -175,19 +175,19 @@ export class AlertNotificationService {
     email: string,
   ): Promise<void> {
     try {
-      const emailServiceUrl = process.env.EMAIL_SERVICE_URL;
-      const emailApiKey = process.env.EMAIL_API_KEY;
+      const emailServiceUrl = process.env['EMAIL_SERVICE_URL'];
+      const emailApiKey = process.env['EMAIL_API_KEY'];
 
       if (!emailServiceUrl && !emailApiKey) {
-        const sendGridApiKey = process.env.SENDGRID_API_KEY;
+        const sendGridApiKey = process.env['SENDGRID_API_KEY'];
         if (sendGridApiKey) {
           await this.sendEmailViaSendGrid(sendGridApiKey, email, alertEvent);
           return;
         }
 
-        const awsSesRegion = process.env.AWS_SES_REGION;
-        const awsAccessKeyId = process.env.AWS_ACCESS_KEY_ID;
-        const awsSecretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+        const awsSesRegion = process.env['AWS_SES_REGION'];
+        const awsAccessKeyId = process.env['AWS_ACCESS_KEY_ID'];
+        const awsSecretAccessKey = process.env['AWS_SECRET_ACCESS_KEY'];
         if (awsSesRegion && awsAccessKeyId && awsSecretAccessKey) {
           await this.sendEmailViaSES(
             awsSesRegion,
@@ -236,7 +236,7 @@ export class AlertNotificationService {
     email: string,
     alertEvent: AlertEvent,
   ): Promise<void> {
-    const fromEmail = process.env.EMAIL_FROM || 'alerts@evalops.com';
+    const fromEmail = process.env['EMAIL_FROM'] || 'alerts@evalops.com';
     const payload = {
       personalizations: [
         {
