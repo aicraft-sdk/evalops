@@ -20,6 +20,8 @@ import {
   LoggingInterceptor,
   OrgContextInterceptor,
 } from '@evalops/shared-common';
+import { CoreIntegrationModule } from '@evalops/core-integration';
+import { CoreAnalyticsModule } from '@evalops/core-analytics';
 
 @Module({
   imports: [
@@ -45,6 +47,8 @@ import {
     ProvidersModule,
     ModelsModule,
     AgentsModule,
+    CoreIntegrationModule,
+    CoreAnalyticsModule,
   ],
   controllers: [AppController, HealthController],
   providers: [
