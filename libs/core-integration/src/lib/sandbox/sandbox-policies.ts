@@ -1,3 +1,4 @@
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 /**
@@ -36,6 +37,7 @@ export interface CodeValidationPolicy {
  * Provides network policy, resource policy, and code validation policy configuration.
  * Policies are loaded from environment variables and can be validated.
  */
+@Injectable()
 export class SandboxPolicies {
   private readonly networkPolicy: NetworkPolicy;
   private readonly resourcePolicy: ResourcePolicy;

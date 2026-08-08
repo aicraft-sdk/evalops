@@ -6,11 +6,6 @@ import { JwtModule } from '@nestjs/jwt';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { HealthController } from './health/health.controller';
-import { AzureModule } from './azure/azure.module';
-import { WebhooksModule } from './webhooks/webhooks.module';
-import { AlertsModule } from './alerts/alerts.module';
-import { ArtifactsModule } from './artifacts/artifacts.module';
-import { SandboxModule } from './sandbox/sandbox.module';
 import { JwtAuthGuard } from '@evalops/shared-auth';
 import { SharedDbModule } from '@evalops/shared-db';
 import {
@@ -35,11 +30,6 @@ import {
       inject: [ConfigService],
     }),
     SharedDbModule,
-    AzureModule,
-    WebhooksModule,
-    AlertsModule,
-    ArtifactsModule,
-    SandboxModule,
   ],
   controllers: [AppController, HealthController],
   providers: [

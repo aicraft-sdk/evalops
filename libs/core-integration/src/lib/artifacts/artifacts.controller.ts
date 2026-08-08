@@ -12,6 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Response } from 'express';
+import { ApiExcludeEndpoint } from '@nestjs/swagger';
 import { AzureBlobService } from '../storage/azure-blob.service';
 import { ServiceAuthGuard } from '@evalops/shared-auth';
 
@@ -75,13 +76,17 @@ export class ArtifactsController {
    * Protected by ServiceAuthGuard (requires X-Service-Token header).
    * Used by evaluation-service to retrieve evaluator code.
    */
-  @Get('blob/:blobPath(*)')
+  @Get('blob/*blobPath')
   @UseGuards(ServiceAuthGuard)
+  @ApiExcludeEndpoint() // cf:shortcut: named-wildcard route isn't parseable by @nestjs/swagger's route validator; excluding from Swagger scan avoids a bootstrap crash without changing live Express route-matching behavior
   async getBlobContent(
-    @Param('blobPath') blobPath: string,
+    @Param('blobPath') blobPath: string | string[],
   ): Promise<{ content: string }> {
-    this.logger.debug(`Downloading blob content: ${blobPath}`);
-    const content = await this.blobService.downloadBlobContent(blobPath);
+    // path-to-regexp v7+ named wildcards (`*blobPath`) yield an array of path
+    // segments instead of the old single-string `(*)` capture — rejoin to preserve behavior.
+    const path = Array.isArray(blobPath) ? blobPath.join('/') : blobPath;
+    this.logger.debug(`Downloading blob content: ${path}`);
+    const content = await this.blobService.downloadBlobContent(path);
     return { content };
   }
 }
