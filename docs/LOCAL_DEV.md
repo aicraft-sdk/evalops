@@ -309,7 +309,7 @@ Or simply open http://localhost:4200 and log in through the UI.
 | `AZURE_STORAGE_ACCOUNT_NAME`      | —                       | Azure Blob Storage account                            |
 | `AZURE_STORAGE_CONTAINER_NAME`    | —                       | Blob container name                                   |
 | `AZURE_STORAGE_CONNECTION_STRING` | —                       | Full connection string (alternative to account name)  |
-| `INTEGRATION_SERVICE_URL`         | `http://localhost:3004` | Used by evaluation-service for artifact notifications |
+| `CORE_SERVICE_URL`                | `http://localhost:3002` | Used by evaluation-service for artifact notifications |
 
 ---
 
