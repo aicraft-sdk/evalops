@@ -21,7 +21,7 @@ import { HttpClientService } from '@evalops/shared-common';
 import { ConfigService } from '@nestjs/config';
 import { ExecutionResult } from '../app/sandbox-execution/sandbox-execution.dto';
 
-const TEST_INTEGRATION_SERVICE_URL = 'http://localhost:3004';
+const TEST_CORE_SERVICE_URL = 'http://localhost:3002';
 const TEST_SANDBOX_ID = 'sandbox-123';
 const TEST_EVALUATOR_ID = 'evaluator-123';
 const TEST_ORG_ID = 'org-123';
@@ -72,7 +72,7 @@ const mockHttpClient = {
 const mockConfigService = {
   get: jest.fn().mockImplementation((key: string) => {
     const config: Record<string, string> = {
-      INTEGRATION_SERVICE_URL: TEST_INTEGRATION_SERVICE_URL,
+      CORE_SERVICE_URL: TEST_CORE_SERVICE_URL,
     };
     return config[key];
   }),

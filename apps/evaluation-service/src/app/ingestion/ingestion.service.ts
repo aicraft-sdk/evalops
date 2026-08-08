@@ -128,8 +128,8 @@ export class IngestionService {
     artifactHashes: Record<string, string>
   ): Promise<void> {
     const integrationUrl = this.configService.get<string>(
-      'INTEGRATION_SERVICE_URL',
-      'http://integration-service:3004'
+      'CORE_SERVICE_URL',
+      'http://core-service:3002'
     );
     const serviceSecret = this.configService.get<string>('SERVICE_SECRET', '');
 

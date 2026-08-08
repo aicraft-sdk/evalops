@@ -62,7 +62,7 @@ describe('SandboxExecutionService', () => {
 
     configService.get.mockImplementation((key: string) => {
       const defaults: Record<string, any> = {
-        INTEGRATION_SERVICE_URL: 'http://localhost:3004',
+        CORE_SERVICE_URL: 'http://localhost:3002',
       };
       return defaults[key];
     });
