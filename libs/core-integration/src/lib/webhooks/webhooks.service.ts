@@ -416,7 +416,7 @@ export class WebhooksService {
 
       // Add run link if available
       const targetUrl = runId
-        ? `${process.env.FRONTEND_URL || 'http://localhost:4200'}/runs/${runId}`
+        ? `${process.env['FRONTEND_URL'] || 'http://localhost:4200'}/runs/${runId}`
         : undefined;
 
       const statusPayload = {
