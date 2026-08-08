@@ -37,7 +37,7 @@ env_vars = {
     'AUTH_SERVICE_URL': 'http://localhost:3001',
     'CORE_SERVICE_URL': 'http://localhost:3002',
     'EVALUATION_SERVICE_URL': 'http://localhost:3003',
-    'INTEGRATION_SERVICE_URL': 'http://localhost:3004',
+    'INTEGRATION_SERVICE_URL': 'http://localhost:3002',
     'ANALYTICS_SERVICE_URL': 'http://localhost:3005',
     'PYTHON_WORKER_URL': 'http://localhost:5055',
     'OPENSANDBOX_SERVER_URL': 'http://localhost:8080',
