@@ -25,7 +25,8 @@
       "@evalops/sdk-formatters": ["libs/sdk-formatters/src/index.ts"],
       "@evalops/dev-runtime": ["libs/dev-runtime/src/index.ts"],
       "@evalops/shared-db/sqlite-schema": ["libs/shared-db/src/lib/schema/sqlite-index.ts"],
-      "@evalops/core-integration": ["libs/core-integration/src/index.ts"]
+      "@evalops/core-integration": ["libs/core-integration/src/index.ts"],
+      "@evalops/core-analytics": ["libs/core-analytics/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]

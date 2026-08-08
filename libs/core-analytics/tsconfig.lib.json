@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../dist/libs/core-analytics",
+    "rootDir": "src",
+    "declaration": true,
+    "composite": true,
+    "types": ["node"],
+    "skipLibCheck": true,
+    "paths": {
+      "@evalops/shared-db": ["dist/libs/shared-db/src/index"],
+      "@evalops/shared-auth": ["dist/libs/shared-auth/src/index"],
+      "@evalops/shared-common": ["dist/libs/shared-common/src/index"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": [
+    "jest.config.ts",
+    "jest.config.cts",
+    "src/**/*.spec.ts",
+    "src/**/*.test.ts"
+  ]
+}
