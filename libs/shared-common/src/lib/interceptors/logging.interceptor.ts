@@ -7,11 +7,11 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
-import { randomUUID } from 'crypto';
-import { trace, context as otelContext } from '@opentelemetry/api';
-const pino = require('pino') as typeof import('pino');
+import { buildBaseLogFields, LoggableRequest } from '../logging/log-fields';
+import { structuredLogger } from '../logging/structured-logger';
+import { getRequestStartMs } from '../middleware/request-timing.middleware';
 
-const structuredLogger = pino({ base: undefined, timestamp: pino.stdTimeFunctions.isoTime });
+type RequestWithLogMarker = LoggableRequest & { __evalopsLogged?: boolean };
 
 /**
  * Structured request/response logging interceptor.
@@ -19,6 +19,13 @@ const structuredLogger = pino({ base: undefined, timestamp: pino.stdTimeFunction
  * statusCode, durationMs.
  *
  * Injects x-request-id header into the response if not already present.
+ *
+ * Note: this interceptor only ever sees requests that made it PAST any
+ * Guards (Guards run before Interceptors in NestJS's request lifecycle).
+ * Exceptions thrown by Guards (e.g. JwtAuthGuard 401s, ThrottlerGuard 429s)
+ * are logged instead by LoggingExceptionFilter, the global APP_FILTER
+ * backstop — both share `buildBaseLogFields`/`structuredLogger` so their
+ * output cannot drift apart in shape.
  */
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
@@ -26,56 +33,34 @@ export class LoggingInterceptor implements NestInterceptor {
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const http = context.switchToHttp();
-    const request = http.getRequest<{
-      method: string;
-      path: string;
-      headers: Record<string, string>;
-      user?: { organizationId?: string; sub?: string; userId?: string; id?: string };
-    }>();
+    const request = http.getRequest<RequestWithLogMarker>();
     const response = http.getResponse<{
       statusCode: number;
       setHeader: (key: string, value: string) => void;
     }>();
 
-    const requestId = request.headers['x-request-id'] ?? randomUUID();
-    response.setHeader('x-request-id', requestId);
+    const fields = buildBaseLogFields(request);
+    response.setHeader('x-request-id', fields.requestId);
 
-    const span = trace.getSpan(otelContext.active());
-    const spanContext = span?.spanContext();
-    const traceId = spanContext?.traceId ?? null;
-    const spanId = spanContext?.spanId ?? null;
-    const organizationId = request.user?.organizationId ?? null;
-    // cf:shortcut: request.user.id is checked last because this repo's JwtStrategy
-    // implementations (api-gateway/auth-service/core-service/evaluation-service) all
-    // return { id: payload.sub, ... } from validate(), not `sub`/`userId` directly —
-    // without this fallback userId would always be null for real authenticated requests.
-    const userId = request.user?.sub ?? request.user?.userId ?? request.user?.id ?? null;
-
-    const startMs = Date.now();
-    const { method, path } = request;
+    const startMs = getRequestStartMs(request);
 
     return next.handle().pipe(
       tap({
         next: () => {
+          const durationMs = Date.now() - startMs;
           structuredLogger.info({
-            traceId,
-            spanId,
-            organizationId,
-            userId,
-            requestId,
-            method,
-            path,
+            ...fields,
             statusCode: response.statusCode,
-            durationMs: Date.now() - startMs,
+            durationMs,
           });
           // Keep emitting through Nest's Logger too, for consistency with existing
           // log-aggregation expectations during transition — remove once a logging
           // backend is chosen (Out of Scope for this plan).
           this.logger.log(
             JSON.stringify({
-              traceId, spanId, organizationId, userId, requestId,
-              method, path, statusCode: response.statusCode,
-              durationMs: Date.now() - startMs,
+              ...fields,
+              statusCode: response.statusCode,
+              durationMs,
             }),
           );
         },
@@ -83,25 +68,19 @@ export class LoggingInterceptor implements NestInterceptor {
           const statusCode = err?.status ?? 500;
           const durationMs = Date.now() - startMs;
           const errorMessage = String(err);
-          structuredLogger.error({
-            traceId,
-            spanId,
-            organizationId,
-            userId,
-            requestId,
-            method,
-            path,
+          const logPayload = {
+            ...fields,
             statusCode,
             durationMs,
             error: errorMessage,
-          });
-          this.logger.error(
-            JSON.stringify({
-              traceId, spanId, organizationId, userId, requestId,
-              method, path, statusCode,
-              durationMs, error: errorMessage,
-            }),
-          );
+          };
+          structuredLogger.error(logPayload);
+          this.logger.error(JSON.stringify(logPayload));
+          // Tell LoggingExceptionFilter (the global APP_FILTER, which sees
+          // EVERY unhandled exception regardless of where it originated)
+          // that this exact request/exception was already logged here, so
+          // it does not emit a duplicate line for the same event.
+          request.__evalopsLogged = true;
         },
       }),
     );

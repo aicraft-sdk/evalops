@@ -171,6 +171,40 @@ export class GatewayController {
       decoded = next;
     }
 
-    return decoded.split('/').includes('..');
+    // Treat BOTH `/` and `\` as path separators. Node's URL parser (and
+    // thus axios, which gateway.service.ts uses to build the actual
+    // outbound request) treats `\` as equivalent to `/` for special
+    // (http/https) schemes — so `..\` must be rejected exactly like `../`.
+    // This matters even when the collapsed result stays under the same
+    // `/api/<service>` prefix: e.g. `/api/integration/webhooks/github/..\
+    // deliver` collapses to `/api/integration/webhooks/deliver`, which is
+    // still "under" `/api/integration/` but is a COMPLETELY DIFFERENT
+    // downstream route than the one Express's literal route-matching (and
+    // this route's @Public() exemption) actually evaluated. A prefix-only
+    // check would miss that; rejecting on the presence of a `..` segment
+    // (after normalizing separators) does not.
+    if (decoded.split(/[/\\]/).includes('..')) {
+      return true;
+    }
+
+    // Defense-in-depth structural backstop: construct the exact URL the
+    // way axios/Node will when gateway.service.ts sends the outbound
+    // request, and compare its normalized pathname against the
+    // already-decoded one (re-decoding the normalized result first, so
+    // benign percent-re-encoding of reserved characters like spaces does
+    // not produce a false positive). ANY remaining divergence means Node's
+    // URL parser rewrote or collapsed something that the gateway's
+    // guards/route-matching never saw — reject rather than trying to
+    // enumerate every future separator or encoding variant by hand.
+    try {
+      const normalized = new URL(decoded, 'http://gateway.internal').pathname;
+      if (decodeURIComponent(normalized) !== decoded) {
+        return true;
+      }
+    } catch {
+      return true;
+    }
+
+    return false;
   }
 }

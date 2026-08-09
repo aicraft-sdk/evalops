@@ -85,6 +85,36 @@ describe('LoggingInterceptor structured output', () => {
     });
   });
 
+  it('marks the request as already-logged on the error path, so LoggingExceptionFilter (which catches every exception, including ones this interceptor already saw) does not log the same event twice', (done) => {
+    jest.spyOn(otelApi.trace, 'getSpan').mockReturnValue(undefined);
+    const interceptor = new LoggingInterceptor();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    jest.spyOn((interceptor as any).logger, 'error').mockImplementation();
+
+    const requestObj: Record<string, unknown> = {
+      method: 'GET',
+      path: '/api/core/prompts',
+      headers: {},
+    };
+    const context = {
+      switchToHttp: () => ({
+        getRequest: () => requestObj,
+        getResponse: () => ({ statusCode: 200, setHeader: jest.fn() }),
+      }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+    const thrown = { status: 500, message: 'boom' };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const next = { handle: () => throwError(() => thrown) } as any;
+
+    interceptor.intercept(context, next).subscribe({
+      error: () => {
+        expect(requestObj['__evalopsLogged']).toBe(true);
+        done();
+      },
+    });
+  });
+
   it('dual-emits through structuredLogger.error on the error path, mirroring the success branch fields', (done) => {
     jest.spyOn(otelApi.trace, 'getSpan').mockReturnValue({
       spanContext: () => ({ traceId: 'trace-err', spanId: 'span-err' }),

@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { LoggingInterceptor } from '@evalops/shared-common';
+import { LoggingInterceptor, LoggingExceptionFilter } from '@evalops/shared-common';
 import { JwtAuthGuard } from '@evalops/shared-auth';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -30,6 +30,7 @@ import { HealthModule } from './health/health.module';
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
+    { provide: APP_FILTER, useClass: LoggingExceptionFilter },
   ],
 })
 export class AppModule {}

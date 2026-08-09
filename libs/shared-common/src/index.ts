@@ -22,6 +22,20 @@ export * from './lib/redis/redis.module';
 export * from './lib/interceptors/logging.interceptor';
 export { OrgContextInterceptor } from './lib/interceptors/org-context.interceptor';
 
+// Filters
+export { LoggingExceptionFilter } from './lib/filters/logging-exception.filter';
+
+// Logging
+export { structuredLogger } from './lib/logging/structured-logger';
+export { buildBaseLogFields } from './lib/logging/log-fields';
+export type { LoggableRequest, BaseLogFields } from './lib/logging/log-fields';
+
+// Middleware
+export {
+  requestTimingMiddleware,
+  getRequestStartMs,
+} from './lib/middleware/request-timing.middleware';
+
 // Request context (AsyncLocalStorage for per-request org isolation)
 export { requestContext } from './lib/context/request-context';
 export type { RequestContext } from './lib/context/request-context';

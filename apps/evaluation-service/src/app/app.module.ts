@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
@@ -21,6 +21,7 @@ import { JwtAuthGuard } from '@evalops/shared-auth';
 import {
   LoggingInterceptor,
   OrgContextInterceptor,
+  LoggingExceptionFilter,
 } from '@evalops/shared-common';
 import { JwtStrategy } from './auth/jwt.strategy';
 
@@ -59,6 +60,7 @@ import { JwtStrategy } from './auth/jwt.strategy';
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
     { provide: APP_INTERCEPTOR, useClass: OrgContextInterceptor },
+    { provide: APP_FILTER, useClass: LoggingExceptionFilter },
   ],
 })
 export class AppModule {}

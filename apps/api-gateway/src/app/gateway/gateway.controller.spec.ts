@@ -184,6 +184,96 @@ describe('GatewayController proxy() path-traversal protection', () => {
     expect(res.json).toHaveBeenCalledWith({ received: true });
   });
 
+  it('rejects a raw backslash traversal segment (..\\) with 400 and never forwards the request', async () => {
+    // Node's URL parser (and axios, used by gateway.service.ts to build the
+    // outbound request) treats `\` as equivalent to `/` for http/https
+    // schemes, so `new URL('http://host/api/webhooks/github/..\\deliver')`
+    // actually collapses to `/api/webhooks/deliver` — a DIFFERENT
+    // downstream path than the one the gateway's route-matching/guards
+    // evaluated. A curl --path-as-is client can send this literally.
+    const req = mockReq('/api/integration/webhooks/github/..\\deliver');
+    const res = mockRes();
+
+    await controller.proxyIntegrationWebhookGithub(req, res, {}, {});
+
+    expect(gatewayService.proxyRequest).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringMatching(/invalid|traversal/i),
+      }),
+    );
+  });
+
+  it('rejects a percent-encoded backslash traversal segment (%2e%2e%5c) with 400', async () => {
+    const req = mockReq('/api/integration/webhooks/github/%2e%2e%5cdeliver');
+    const res = mockRes();
+
+    await controller.proxyIntegrationWebhookGithub(req, res, {}, {});
+
+    expect(gatewayService.proxyRequest).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('does not false-positive on a legitimate path containing an encoded space', async () => {
+    // Guards against a naive "does URL-normalization change anything"
+    // structural check rejecting benign percent-encoded characters (which
+    // WHATWG URL re-encodes on the pathname getter) as if they were
+    // traversal attempts.
+    const req = mockReq('/api/integration/webhooks/github/name%20with%20space');
+    const res = mockRes();
+
+    await controller.proxyIntegrationWebhookGithub(req, res, {}, {});
+
+    expect(gatewayService.proxyRequest).toHaveBeenCalledWith(
+      'integration',
+      '/webhooks/github/name%20with%20space',
+      undefined,
+      {},
+      {},
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+
+  it('rejects a backslash traversal segment on every route that shares the proxy() method', async () => {
+    const routes: Array<
+      [
+        (
+          req: Request,
+          res: Response,
+          body: unknown,
+          headers: Record<string, string>,
+        ) => Promise<unknown>,
+        string,
+      ]
+    > = [
+      [controller.proxyAuth.bind(controller), '/api/auth/..\\core/secrets'],
+      [controller.proxyCore.bind(controller), '/api/core/..\\evaluation/x'],
+      [
+        controller.proxyEvaluation.bind(controller),
+        '/api/evaluation/..\\auth/x',
+      ],
+      [
+        controller.proxyIntegration.bind(controller),
+        '/api/integration/..\\core/x',
+      ],
+      [
+        controller.proxyAnalytics.bind(controller),
+        '/api/analytics/..\\core/x',
+      ],
+    ];
+
+    for (const [handler, path] of routes) {
+      const req = mockReq(path);
+      const res = mockRes();
+
+      await handler(req, res, {}, {});
+
+      expect(gatewayService.proxyRequest).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(400);
+    }
+  });
+
   it('rejects traversal on every route that shares the proxy() method, not just the webhook route', async () => {
     // The fix lives in the shared private proxy() helper used by all 5
     // @All()-decorated route handlers. Prove that here directly rather than
