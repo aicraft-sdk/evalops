@@ -12,6 +12,33 @@ import { Request, Response } from 'express';
 import { GatewayService } from './gateway.service';
 import { Public } from '@evalops/shared-auth';
 
+// Headers that must never be forwarded verbatim from the gateway to a
+// downstream service in this internal gateway -> trusted-downstream-service
+// proxy:
+//  - host: must be the downstream host, not the gateway's
+//  - connection / transfer-encoding: hop-by-hop headers that are meaningless
+//    (or actively wrong) once re-sent by a brand new outbound HTTP client
+//  - content-length: gatewayService.proxyRequest's outbound HTTP client
+//    (axios) recalculates this from the actual serialized body
+//  - content-type: gatewayService.proxyRequest already sets an explicit
+//    default ('application/json') for the outbound request; blindly
+//    forwarding the client's content-type would silently override that
+//    existing, deliberate behavior
+// Deliberately a DENYLIST, not an allowlist: a narrow allowlist has twice
+// silently dropped a header some downstream route actually needs (most
+// recently X-Hub-Signature-256/X-GitHub-Event for GitHub webhook HMAC
+// verification and X-Service-Token for ServiceAuthGuard) — forwarding
+// broadly and excluding only headers with a concrete, demonstrated reason
+// to exclude avoids repeating that bug class for the next new
+// auth/signature scheme on any downstream route.
+const NON_FORWARDABLE_HEADERS = new Set([
+  'host',
+  'connection',
+  'content-length',
+  'content-type',
+  'transfer-encoding',
+]);
+
 @Controller()
 export class GatewayController {
   constructor(private readonly gatewayService: GatewayService) {}
@@ -122,15 +149,16 @@ export class GatewayController {
         servicePath = '/' + servicePath;
       }
 
-      // Forward authorization header
+      // Forward all incoming headers to the downstream service except the
+      // small denylist above. Node/Express lowercases all incoming header
+      // names on req.headers, so the denylist lookup and the forwarded key
+      // are both already lowercase.
       const forwardHeaders: Record<string, string> = {};
-      if (req.headers.authorization) {
-        forwardHeaders['Authorization'] = req.headers.authorization as string;
-      }
-
-      // Forward other relevant headers
-      if (req.headers['x-request-id']) {
-        forwardHeaders['x-request-id'] = req.headers['x-request-id'] as string;
+      for (const [name, value] of Object.entries(req.headers)) {
+        if (value === undefined || NON_FORWARDABLE_HEADERS.has(name)) {
+          continue;
+        }
+        forwardHeaders[name] = Array.isArray(value) ? value.join(', ') : value;
       }
 
       const result = await this.gatewayService.proxyRequest(

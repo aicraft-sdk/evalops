@@ -74,8 +74,11 @@ describe('GatewayController proxy() path-traversal protection', () => {
   let controller: GatewayController;
   let gatewayService: { proxyRequest: jest.Mock };
 
-  function mockReq(path: string): Request {
-    return { path, headers: {} } as unknown as Request;
+  function mockReq(
+    path: string,
+    headers: Record<string, string> = {},
+  ): Request {
+    return { path, headers } as unknown as Request;
   }
 
   function mockRes(): Response {
@@ -314,5 +317,89 @@ describe('GatewayController proxy() path-traversal protection', () => {
       expect(gatewayService.proxyRequest).not.toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(400);
     }
+  });
+});
+
+/**
+ * proxy()'s header-forwarding logic previously only forwarded `Authorization`
+ * and `x-request-id`, silently dropping headers downstream routes actually
+ * require: `X-Hub-Signature-256`/`X-GitHub-Event` (GitHub webhook HMAC
+ * verification in WebhooksController) and `X-Service-Token`
+ * (ServiceAuthGuard). These tests prove the fix: a denylist-based approach
+ * that forwards everything except a small set of hop-by-hop /
+ * connection-specific headers unsafe to forward verbatim.
+ */
+describe('GatewayController proxy() header forwarding', () => {
+  let controller: GatewayController;
+  let gatewayService: { proxyRequest: jest.Mock };
+
+  function mockReq(
+    path: string,
+    headers: Record<string, string> = {},
+  ): Request {
+    return { path, headers } as unknown as Request;
+  }
+
+  function mockRes(): Response {
+    const res: Partial<Response> = {};
+    res.status = jest.fn().mockReturnValue(res);
+    res.json = jest.fn().mockReturnValue(res);
+    return res as Response;
+  }
+
+  beforeEach(() => {
+    gatewayService = {
+      proxyRequest: jest.fn().mockResolvedValue({ received: true }),
+    };
+    controller = new GatewayController(
+      gatewayService as unknown as GatewayService,
+    );
+  });
+
+  it('forwards headers downstream routes require that the old narrow allowlist dropped (X-Hub-Signature-256, X-GitHub-Event, X-Service-Token)', async () => {
+    const req = mockReq('/api/integration/webhooks/deliver', {
+      authorization: 'Bearer user-jwt',
+      'x-hub-signature-256': 'sha256=deadbeef',
+      'x-github-event': 'push',
+      'x-service-token': 'internal-secret',
+    });
+    const res = mockRes();
+
+    await controller.proxyIntegration(req, res, {}, {});
+
+    expect(gatewayService.proxyRequest).toHaveBeenCalledWith(
+      'integration',
+      '/webhooks/deliver',
+      undefined,
+      {},
+      expect.objectContaining({
+        authorization: 'Bearer user-jwt',
+        'x-hub-signature-256': 'sha256=deadbeef',
+        'x-github-event': 'push',
+        'x-service-token': 'internal-secret',
+      }),
+    );
+  });
+
+  it('excludes hop-by-hop and connection-specific headers (host, connection, content-length, content-type, transfer-encoding) from the forwarded headers', async () => {
+    const req = mockReq('/api/core/prompts', {
+      authorization: 'Bearer user-jwt',
+      host: 'api-gateway.internal:3000',
+      connection: 'keep-alive',
+      'content-length': '42',
+      'content-type': 'application/json',
+      'transfer-encoding': 'chunked',
+    });
+    const res = mockRes();
+
+    await controller.proxyCore(req, res, {}, {});
+
+    const forwardedHeaders = gatewayService.proxyRequest.mock.calls[0][4];
+    expect(forwardedHeaders).toEqual({ authorization: 'Bearer user-jwt' });
+    expect(forwardedHeaders).not.toHaveProperty('host');
+    expect(forwardedHeaders).not.toHaveProperty('connection');
+    expect(forwardedHeaders).not.toHaveProperty('content-length');
+    expect(forwardedHeaders).not.toHaveProperty('content-type');
+    expect(forwardedHeaders).not.toHaveProperty('transfer-encoding');
   });
 });
