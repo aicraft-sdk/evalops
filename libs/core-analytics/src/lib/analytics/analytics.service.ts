@@ -1,5 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { MetricsRepository } from '@evalops/shared-db';
+import { MetricsRepository, runs as runsTable } from '@evalops/shared-db';
+
+type RunMetrics = {
+  latencyP50?: { mean?: number };
+  latencyP95?: { mean?: number };
+  exactMatch?: { mean?: number };
+  llmAsJudgeWinRate?: { mean?: number };
+};
 
 export interface TrendData {
   date: string;
@@ -177,7 +184,7 @@ export class AnalyticsService {
     };
   }
 
-  private calculatePeriodMetrics(runs: any[]): {
+  private calculatePeriodMetrics(runs: (typeof runsTable.$inferSelect)[]): {
     avgLatency: number;
     avgCost: number;
     avgQuality: number;
@@ -201,7 +208,7 @@ export class AnalyticsService {
       totalCost += run.cost || 0;
 
       if (run.metrics && typeof run.metrics === 'object') {
-        const metrics = run.metrics as any;
+        const metrics = run.metrics as RunMetrics;
         const latencyP50 = metrics.latencyP50?.mean || 0;
         const latencyP95 = metrics.latencyP95?.mean || 0;
         totalLatency += (latencyP50 + latencyP95) / 2;

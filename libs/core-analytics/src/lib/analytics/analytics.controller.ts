@@ -9,7 +9,7 @@ export class AnalyticsController {
   @UseGuards(JwtAuthGuard)
   @Get('trends')
   async getTrends(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { organizationId: string },
     @Query('days') days?: string,
   ) {
     return this.analyticsService.getTrends(
@@ -21,7 +21,7 @@ export class AnalyticsController {
   @UseGuards(JwtAuthGuard)
   @Get('cost-breakdown')
   async getCostBreakdown(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { organizationId: string },
     @Query('days') days?: string,
   ) {
     return this.analyticsService.getCostBreakdown(
@@ -33,7 +33,7 @@ export class AnalyticsController {
   @UseGuards(JwtAuthGuard)
   @Get('performance-comparison')
   async getPerformanceComparison(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { organizationId: string },
     @Query('days') days?: string,
   ) {
     return this.analyticsService.getPerformanceComparison(

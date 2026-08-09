@@ -9,7 +9,7 @@ export class AuditController {
   @UseGuards(JwtAuthGuard)
   @Get()
   async getAuditTrail(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { organizationId: string },
     @Query('limit') limit?: string,
   ) {
     return this.auditService.getAuditTrail(
