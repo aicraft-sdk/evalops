@@ -89,8 +89,6 @@ This starts:
 - Auth Service on http://localhost:3001
 - Core Service on http://localhost:3002
 - Evaluation Service on http://localhost:3003
-- Integration Service on http://localhost:3004
-- Analytics Service on http://localhost:3005
 
 **Option B: Start Services Individually**
 
@@ -109,12 +107,6 @@ npm run dev:core
 
 # Terminal 5: Evaluation Service
 npm run dev:evaluation
-
-# Terminal 6: Integration Service
-npm run dev:integration
-
-# Terminal 7: Analytics Service
-npm run dev:analytics
 ```
 
 ### 6. Verify Services Are Running
@@ -126,8 +118,6 @@ Open your browser and check:
 - **Auth Service Health**: http://localhost:3001/health
 - **Core Service Health**: http://localhost:3002/health
 - **Evaluation Service Health**: http://localhost:3003/health
-- **Integration Service Health**: http://localhost:3004/health
-- **Analytics Service Health**: http://localhost:3005/health
 
 ## Quick Setup with Docker Compose (Alternative)
 

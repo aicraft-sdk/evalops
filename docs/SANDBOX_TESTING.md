@@ -41,12 +41,12 @@ Before testing, ensure:
 
 Unit tests mock external dependencies and test individual service methods:
 
-**Location**: `apps/*/src/**/*.spec.ts`
+**Location**: `apps/*/src/**/*.spec.ts` and `libs/*/src/**/*.spec.ts`
 
 **Key Test Files**:
 
-- `apps/integration-service/src/app/sandbox/sandbox.service.spec.ts` - SandboxService unit tests
-- `apps/integration-service/src/app/sandbox/sandbox-security.service.spec.ts` - Security service tests
+- `libs/core-integration/src/lib/sandbox/sandbox.service.spec.ts` - SandboxService unit tests
+- `libs/core-integration/src/lib/sandbox/sandbox-security.service.spec.ts` - Security service tests
 - `apps/evaluation-service/src/app/sandbox-execution/sandbox-execution.service.spec.ts` - Execution service tests
 
 **Run Unit Tests**:
@@ -55,8 +55,8 @@ Unit tests mock external dependencies and test individual service methods:
 # All unit tests
 npm run test:unit
 
-# Specific service
-nx test integration-service --testFile=sandbox.service.spec.ts
+# Specific project
+nx test core-integration --testFile=sandbox.service.spec.ts
 nx test evaluation-service --testFile=sandbox-execution.service.spec.ts
 ```
 
@@ -111,7 +111,7 @@ curl -X POST http://localhost:3000/api/sandboxes \
 **Via Service** (TypeScript):
 
 ```typescript
-import { SandboxService } from '@evalops/integration-service';
+import { SandboxService } from '@evalops/core-integration';
 
 const sandboxId = await sandboxService.createSandbox({
   cpu: '1.0',
@@ -526,8 +526,8 @@ tail -f ~/.sandbox/logs/server.log
 **Check Sandbox Metrics** (if monitoring enabled):
 
 ```bash
-# Metrics endpoint (if implemented)
-curl http://localhost:3004/api/sandboxes/metrics \
+# Metrics endpoint (if implemented) — via API Gateway, routed to core-service
+curl http://localhost:3000/api/sandboxes/metrics \
   -H "Authorization: Bearer <token>"
 ```
 

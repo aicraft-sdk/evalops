@@ -2,7 +2,7 @@
 
 ## Overview
 
-EvalOps is a microservices platform built as an Nx monorepo. Seven NestJS services communicate through a single API Gateway. All services share a PostgreSQL database via Drizzle ORM and an optional Redis instance for rate limiting and idempotency.
+EvalOps is a microservices platform built as an Nx monorepo. Four NestJS services communicate through a single API Gateway. All services share a PostgreSQL database via Drizzle ORM and an optional Redis instance for rate limiting and idempotency.
 
 ---
 
@@ -16,16 +16,17 @@ Client (browser / SDK)
 │   API Gateway    │  :3000  NestJS proxy — CORS, JWT forwarding, routing
 └───────┬──────────┘
         │  Routes by prefix
-   ┌────┴─────────────────────────────────────────┐
-   │              │              │                │
-   ▼              ▼              ▼                ▼
-Auth :3001   Core :3002   Eval :3003    Integration :3004
-                                              │
-                                         Analytics :3005
-                                              │
-                                    ┌─────────┴──────────┐
-                                    │   PostgreSQL + Redis│
-                                    └────────────────────┘
+   ┌────┴─────────────────────────┐
+   │              │                │
+   ▼              ▼                ▼
+Auth :3001   Core :3002       Eval :3003
+             (+ integration
+              + analytics)
+                  │                │
+                  ▼                ▼
+             ┌────────────────────────┐
+             │   PostgreSQL + Redis   │
+             └────────────────────────┘
 ```
 
 ### API Gateway (port 3000)
@@ -39,7 +40,7 @@ Path routing:
 | `/api/auth/*` | auth-service :3001 |
 | `/api/core/*` | core-service :3002 |
 | `/api/evaluation/*` | evaluation-service :3003 |
-| `/api/integration/*` | integration-service :3004 |
+| `/api/integration/*` | core-service :3002 |
 | `/api/analytics/*` | core-service :3002 |
 
 ### Auth Service (port 3001)
@@ -64,7 +65,9 @@ JWT payload shape:
 
 ### Core Service (port 3002)
 
-Manages all durable entities that eval specs reference:
+Manages all durable entities that eval specs reference, plus the integration and analytics
+functionality formerly owned by the now-decommissioned `integration-service` and
+`analytics-service` (see "Integration and Analytics (within Core Service)" below):
 - **Prompts** — versioned LLM prompt strings with variable placeholders
 - **Datasets** — collections of `{input, expectedOutput, metadata}` samples
 - **Agents** — AgentMD-formatted agent definitions with model configs and versions
@@ -80,23 +83,22 @@ The evaluation engine:
 - **Evaluation engine** — orchestrates evaluators (exact match, LLM judge, rule-based, RAG metrics, safety)
 - **Policy engine** — compares run scores to policy thresholds; emits pass/warn/fail verdicts
 
-### Integration Service (port 3004)
+### Integration and Analytics (within Core Service)
 
-External integrations:
+`integration-service` and `analytics-service` were permanently deleted; both apps' real
+functionality now lives inside `core-service` via `libs/core-integration` and
+`libs/core-analytics` respectively. The API Gateway routes both `/api/integration/*` and
+`/api/analytics/*` to `core-service :3002`.
+
+Integration (`libs/core-integration`):
 - **Artifacts** — stores run outputs in Azure Blob Storage; serves presigned SAS download URLs; receives completion notifications from evaluation-service via `POST /artifacts/:runId/notify` (protected by `ServiceAuthGuard`)
 - **Webhooks** — outbound webhook delivery on run completion events
 - **Alerts** — configurable alerting on policy failures
 
-### Analytics Service (port 3005) — relocated to `core-service`
-
-Read-side analytics queries, now served by `core-service` via `libs/core-analytics`
-(the API Gateway routes `/api/analytics/*` to `core-service :3002`):
+Analytics (`libs/core-analytics`):
 - **Dashboard** — aggregated metrics: total runs, pass rate, avg cost, p95 latency
 - **Cost analytics** — per-provider, per-model token cost breakdown over time
 - **Audit trail** — append-only log of every mutation across the platform
-
-`analytics-service` itself remains deployed as an empty shell pending decommission
-in a later phase.
 
 ---
 
@@ -253,7 +255,7 @@ Evaluation Service — IngestionController
     │
     │ POST /api/integration/artifacts/:runId/notify  [X-Service-Token]
     ▼
-Integration Service — ArtifactsController.notifyRunComplete()
+Core Service (libs/core-integration) — ArtifactsController.notifyRunComplete()
     └─ Logs artifact hashes, triggers async post-processing
 ```
 
@@ -312,8 +314,6 @@ Each service exposes interactive API docs at `/api/docs`:
 | Auth Service | http://localhost:3001/api/docs |
 | Core Service | http://localhost:3002/api/docs |
 | Evaluation Service | http://localhost:3003/api/docs |
-| Integration Service | http://localhost:3004/api/docs |
-| Analytics Service | http://localhost:3005/api/docs |
 
 ---
 
@@ -332,9 +332,7 @@ api-gateway  (Deployment, 2+ replicas)
     │
     ├─► auth-service       (Deployment)
     ├─► core-service       (Deployment)
-    ├─► evaluation-service (Deployment)
-    ├─► integration-service (Deployment)
-    └─► analytics-service  (Deployment)
+    └─► evaluation-service (Deployment)
 
 frontend  (nginx static, Deployment)
 

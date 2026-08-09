@@ -116,8 +116,6 @@ npx drizzle-kit push
 | Auth Service Swagger        | http://localhost:3001/api/docs |
 | Core Service Swagger        | http://localhost:3002/api/docs |
 | Evaluation Service Swagger  | http://localhost:3003/api/docs |
-| Integration Service Swagger | http://localhost:3004/api/docs |
-| Analytics Service Swagger   | http://localhost:3005/api/docs |
 | Python Worker               | http://localhost:5055/docs     |
 | OpenSandbox Server          | http://localhost:8080          |
 | Tilt Dashboard              | http://localhost:10350         |
@@ -198,8 +196,6 @@ npx nx serve api-gateway       # Port 3000
 npx nx serve auth-service      # Port 3001
 npx nx serve core-service      # Port 3002
 npx nx serve evaluation-service # Port 3003
-npx nx serve integration-service # Port 3004
-npx nx serve analytics-service  # Port 3005
 npx nx run frontend:serve       # Port 4200
 ```
 

@@ -81,8 +81,6 @@ npm run test:e2e
 nx test auth-service
 nx test core-service
 nx test evaluation-service
-nx test integration-service
-nx test analytics-service
 
 # Test a specific library
 nx test sdk

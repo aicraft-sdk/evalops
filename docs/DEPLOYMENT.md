@@ -43,8 +43,6 @@ nx serve api-gateway
 nx serve auth-service
 nx serve core-service
 nx serve evaluation-service
-nx serve integration-service
-nx serve analytics-service
 ```
 
 ## Docker Deployment
