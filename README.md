@@ -41,7 +41,7 @@ EvalOps is an Nx monorepo built as seven NestJS microservices plus a React front
 
 | Service               | Port | Responsibility                                     |
 | --------------------- | ---- | -------------------------------------------------- |
-| `api-gateway`         | 3000 | Request routing, CORS, JWT forwarding              |
+| `api-gateway`         | 3000 | Request routing, CORS, JWT auth enforcement + forwarding |
 | `auth-service`        | 3001 | Users, organizations, JWT auth, RBAC               |
 | `core-service`        | 3002 | Prompts, datasets, agents, eval specs, templates   |
 | `evaluation-service`  | 3003 | Runs, evaluation engine, policies, trace ingestion |

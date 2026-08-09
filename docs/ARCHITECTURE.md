@@ -30,7 +30,7 @@ Auth :3001   Core :3002   Eval :3003    Integration :3004
 
 ### API Gateway (port 3000)
 
-Single entry point. Proxies all `/api/<prefix>/*` requests to the matching downstream service using `@nestjs/http-proxy-middleware` (or direct Axios). Handles CORS globally and forwards the JWT `Authorization` header unchanged — downstream services validate the token independently.
+Single entry point. Proxies all `/api/<prefix>/*` requests to the matching downstream service using `@nestjs/http-proxy-middleware` (or direct Axios). Handles CORS globally. Enforces `JwtAuthGuard` at the gateway itself (registered as `APP_GUARD`, alongside `ThrottlerGuard`) — unauthenticated requests are now rejected here rather than only downstream. Routes that must stay public opt out with `@Public()`, e.g. the GitHub webhook sub-path (`/api/integration/webhooks/github/*`, which authenticates via HMAC signature, not a Bearer JWT) and the gateway's own scaffold root route. The gateway also rejects path-traversal sequences (including percent-encoded and backslash forms) in the proxied path before forwarding. Downstream services still validate the token independently as a second layer of defense.
 
 Path routing:
 
@@ -263,18 +263,23 @@ Integration Service — ArtifactsController.notifyRunComplete()
 
 ### Structured Logging
 
-`LoggingInterceptor` (registered globally) emits JSON on every request:
+`LoggingInterceptor` (registered globally in every service, including `api-gateway` and `auth-service`) emits pino-backed JSON on every request:
 
 ```json
 {
   "requestId": "uuid",
+  "traceId": "otel-trace-id",
+  "spanId": "otel-span-id",
   "method": "GET",
   "path": "/api/core/prompts",
   "statusCode": 200,
   "durationMs": 42,
-  "organizationId": "org-abc"
+  "organizationId": "org-abc",
+  "userId": "user-123"
 }
 ```
+
+`LoggingExceptionFilter` (registered globally as `APP_FILTER`) is a backstop that emits the same log shape for requests rejected by a Guard (e.g. a 401 from `JwtAuthGuard`) before they ever reach `LoggingInterceptor`. `requestTimingMiddleware` stamps arrival time before Guards run so `durationMs` stays accurate even for guard-rejected requests.
 
 ### OpenTelemetry
 
