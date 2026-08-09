@@ -80,11 +80,26 @@ export class LoggingInterceptor implements NestInterceptor {
           );
         },
         error: (err: { status?: number }) => {
+          const statusCode = err?.status ?? 500;
+          const durationMs = Date.now() - startMs;
+          const errorMessage = String(err);
+          structuredLogger.error({
+            traceId,
+            spanId,
+            organizationId,
+            userId,
+            requestId,
+            method,
+            path,
+            statusCode,
+            durationMs,
+            error: errorMessage,
+          });
           this.logger.error(
             JSON.stringify({
               traceId, spanId, organizationId, userId, requestId,
-              method, path, statusCode: err?.status ?? 500,
-              durationMs: Date.now() - startMs, error: String(err),
+              method, path, statusCode,
+              durationMs, error: errorMessage,
             }),
           );
         },

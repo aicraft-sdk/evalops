@@ -1,8 +1,22 @@
+const mockStructuredLogger = { info: jest.fn(), error: jest.fn() };
+jest.mock('pino', () => {
+  const pinoFactory = jest.fn(() => mockStructuredLogger);
+  (pinoFactory as unknown as { stdTimeFunctions: { isoTime: string } }).stdTimeFunctions = {
+    isoTime: 'iso',
+  };
+  return pinoFactory;
+});
+
 import { LoggingInterceptor } from './logging.interceptor';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import * as otelApi from '@opentelemetry/api';
 
 describe('LoggingInterceptor structured output', () => {
+  beforeEach(() => {
+    mockStructuredLogger.info.mockClear();
+    mockStructuredLogger.error.mockClear();
+  });
+
   it('logs trace_id, span_id, org_id, user_id, request_id on success', (done) => {
     jest.spyOn(otelApi.trace, 'getSpan').mockReturnValue({
       spanContext: () => ({ traceId: 'trace-abc', spanId: 'span-123' }),
@@ -66,6 +80,53 @@ describe('LoggingInterceptor structured output', () => {
         const parsed = JSON.parse(loggedJson as string);
         expect(parsed.traceId).toBeNull();
         expect(parsed.spanId).toBeNull();
+        done();
+      },
+    });
+  });
+
+  it('dual-emits through structuredLogger.error on the error path, mirroring the success branch fields', (done) => {
+    jest.spyOn(otelApi.trace, 'getSpan').mockReturnValue({
+      spanContext: () => ({ traceId: 'trace-err', spanId: 'span-err' }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    const interceptor = new LoggingInterceptor();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    jest.spyOn((interceptor as any).logger, 'error').mockImplementation();
+
+    const context = {
+      switchToHttp: () => ({
+        getRequest: () => ({
+          method: 'POST',
+          path: '/api/integration/webhooks/github/int-1',
+          headers: {},
+          user: { organizationId: 'org-2', sub: 'user-2' },
+        }),
+        getResponse: () => ({ statusCode: 200, setHeader: jest.fn() }),
+      }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+    const thrown = { status: 401, message: 'Unauthorized' };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const next = { handle: () => throwError(() => thrown) } as any;
+
+    interceptor.intercept(context, next).subscribe({
+      error: () => {
+        expect(mockStructuredLogger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            traceId: 'trace-err',
+            spanId: 'span-err',
+            organizationId: 'org-2',
+            userId: 'user-2',
+            requestId: expect.any(String),
+            method: 'POST',
+            path: '/api/integration/webhooks/github/int-1',
+            statusCode: 401,
+            durationMs: expect.any(Number),
+            error: expect.any(String),
+          }),
+        );
         done();
       },
     });

@@ -46,6 +46,28 @@ export class GatewayController {
     return this.proxy('evaluation', req, res, body, headers);
   }
 
+  // GitHub authenticates webhook deliveries via HMAC signature
+  // (x-hub-signature-256), never a Bearer JWT — so this specific sub-path must
+  // be exempt from the gateway's global JwtAuthGuard. It MUST stay declared
+  // ABOVE the generic `integration/*` route below: Nest registers Express
+  // routes in class-declaration order, and Express matches the first route
+  // whose pattern fits, not the most specific one. If the generic wildcard
+  // were declared first, it would swallow this request and the @Public()
+  // exemption below would never be reached. Do not "clean up" this as a
+  // duplicate of proxyIntegration — signature verification still happens
+  // downstream in WebhooksController; this only removes the gateway's JWT
+  // guard for this one sub-path so the request can reach that verification.
+  @Public()
+  @All('integration/webhooks/github/*')
+  async proxyIntegrationWebhookGithub(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Body() body: any,
+    @Headers() headers: Record<string, string>,
+  ) {
+    return this.proxy('integration', req, res, body, headers);
+  }
+
   @All('integration/*')
   async proxyIntegration(
     @Req() req: Request,
