@@ -170,7 +170,11 @@ All routes go through the API Gateway on port 3000.
 | `/api/core/*`        | core-service        | `GET /api/core/prompts`, `POST /api/core/agents`, `GET /api/core/eval-specs`    |
 | `/api/evaluation/*`  | evaluation-service  | `POST /api/evaluation/runs`, `POST /api/evaluation/ingestion/events`            |
 | `/api/integration/*` | integration-service | `GET /api/integration/artifacts/:runId/:file`, `POST /api/integration/webhooks` |
-| `/api/analytics/*`   | analytics-service   | `GET /api/analytics/dashboard`, `GET /api/analytics/audit-trail`                |
+| `/api/analytics/*`   | core-service         | `GET /api/analytics/dashboard`, `GET /api/analytics/audit-trail`                |
+
+> `analytics-service` no longer serves the `/api/analytics/*` prefix — its analytics/audit modules
+> were relocated into `libs/core-analytics`, now mounted on `core-service`. `analytics-service`
+> remains deployed as an empty shell pending decommission in a later phase.
 
 Interactive Swagger docs are available at `/api/docs` on each service port.
 

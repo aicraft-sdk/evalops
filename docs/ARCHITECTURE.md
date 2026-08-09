@@ -40,7 +40,7 @@ Path routing:
 | `/api/core/*` | core-service :3002 |
 | `/api/evaluation/*` | evaluation-service :3003 |
 | `/api/integration/*` | integration-service :3004 |
-| `/api/analytics/*` | analytics-service :3005 |
+| `/api/analytics/*` | core-service :3002 |
 
 ### Auth Service (port 3001)
 
@@ -87,12 +87,16 @@ External integrations:
 - **Webhooks** — outbound webhook delivery on run completion events
 - **Alerts** — configurable alerting on policy failures
 
-### Analytics Service (port 3005)
+### Analytics Service (port 3005) — relocated to `core-service`
 
-Read-side analytics queries:
+Read-side analytics queries, now served by `core-service` via `libs/core-analytics`
+(the API Gateway routes `/api/analytics/*` to `core-service :3002`):
 - **Dashboard** — aggregated metrics: total runs, pass rate, avg cost, p95 latency
 - **Cost analytics** — per-provider, per-model token cost breakdown over time
 - **Audit trail** — append-only log of every mutation across the platform
+
+`analytics-service` itself remains deployed as an empty shell pending decommission
+in a later phase.
 
 ---
 
