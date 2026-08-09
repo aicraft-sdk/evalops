@@ -6,8 +6,6 @@ import { JwtModule } from '@nestjs/jwt';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { HealthController } from './health/health.controller';
-import { AnalyticsModule } from './analytics/analytics.module';
-import { AuditModule } from './audit/audit.module';
 import { JwtAuthGuard } from '@evalops/shared-auth';
 import { SharedDbModule } from '@evalops/shared-db';
 import {
@@ -32,8 +30,6 @@ import {
       inject: [ConfigService],
     }),
     SharedDbModule,
-    AnalyticsModule,
-    AuditModule,
   ],
   controllers: [AppController, HealthController],
   providers: [

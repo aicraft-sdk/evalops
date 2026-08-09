@@ -1,4 +1,8 @@
 import { Module } from '@nestjs/common';
+import { AnalyticsModule } from './analytics/analytics.module';
+import { AuditModule } from './audit/audit.module';
 
-@Module({})
+@Module({
+  imports: [AnalyticsModule, AuditModule],
+})
 export class CoreAnalyticsModule {}
