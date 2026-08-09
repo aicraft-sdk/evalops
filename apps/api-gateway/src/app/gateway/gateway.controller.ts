@@ -6,6 +6,7 @@ import {
   Body,
   Headers,
   Param,
+  BadRequestException,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { GatewayService } from './gateway.service';
@@ -99,6 +100,20 @@ export class GatewayController {
       // Extract path after service name
       // e.g., /api/core/prompts -> /prompts
       const fullPath = req.path;
+
+      // Reject directory-traversal sequences BEFORE building the outbound
+      // URL. Nest/Express route matching happens before this point and does
+      // not normalize `..` segments, so a request can match a @Public()
+      // route (e.g. the GitHub webhook carve-out) while carrying a `..`
+      // segment that axios/Node's URL parser later collapses into a
+      // different, guarded downstream route. This check applies to every
+      // caller of the shared proxy() method, not just webhook routes.
+      if (this.containsPathTraversal(fullPath)) {
+        throw new BadRequestException(
+          'Invalid path: directory traversal sequences are not allowed',
+        );
+      }
+
       const servicePrefix = `/api/${serviceName}`;
       let servicePath = fullPath.replace(servicePrefix, '') || '/';
       
@@ -132,5 +147,30 @@ export class GatewayController {
       const message = error.message || 'Internal server error';
       return res.status(status).json({ message });
     }
+  }
+
+  private containsPathTraversal(path: string): boolean {
+    // Express's req.path is NOT percent-decoded by default (verified
+    // empirically against express@4.21), so a raw `..` check alone misses
+    // encoded forms (%2e%2e, ..%2f, %2e%2e%2f). Decode iteratively — up to
+    // a small fixed bound — to also catch double-encoded sequences
+    // (%252e%252e) without looping forever on pathological input.
+    // Malformed percent-encoding (URIError) is itself treated as
+    // suspicious and rejected rather than allowed through.
+    let decoded = path;
+    for (let i = 0; i < 5; i++) {
+      let next: string;
+      try {
+        next = decodeURIComponent(decoded);
+      } catch {
+        return true;
+      }
+      if (next === decoded) {
+        break;
+      }
+      decoded = next;
+    }
+
+    return decoded.split('/').includes('..');
   }
 }
