@@ -9,7 +9,7 @@ import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { randomUUID } from 'crypto';
 import { trace, context as otelContext } from '@opentelemetry/api';
-import * as pino from 'pino';
+const pino = require('pino') as typeof import('pino');
 
 const structuredLogger = pino({ base: undefined, timestamp: pino.stdTimeFunctions.isoTime });
 

@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
-import { OrgContextInterceptor } from '@evalops/shared-common';
+import { LoggingInterceptor, OrgContextInterceptor } from '@evalops/shared-common';
 import { SharedDbModule } from '@evalops/shared-db';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -30,6 +30,7 @@ import { TokensModule } from './tokens/tokens.module';
   controllers: [AppController, HealthController],
   providers: [
     AppService,
+    { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
     { provide: APP_INTERCEPTOR, useClass: OrgContextInterceptor },
   ],
 })
