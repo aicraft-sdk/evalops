@@ -17,8 +17,6 @@ replicaCount:
   authService: 1
   coreService: 1
   evaluationService: 1
-  integrationService: 1
-  analyticsService: 1
   frontend: 1
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -43,10 +41,6 @@ services:
     port: 3002
   evaluationService:
     port: 3003
-  integrationService:
-    port: 3004
-  analyticsService:
-    port: 3005
   frontend:
     port: 80
 

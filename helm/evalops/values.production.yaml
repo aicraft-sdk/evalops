@@ -6,8 +6,6 @@ replicaCount:
   authService: 2
   coreService: 2
   evaluationService: 3
-  integrationService: 2
-  analyticsService: 2
   frontend: 2
 
 image:
