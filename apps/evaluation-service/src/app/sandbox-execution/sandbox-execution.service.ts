@@ -21,7 +21,7 @@ import {
 @Injectable()
 export class SandboxExecutionService {
   private readonly logger = new Logger(SandboxExecutionService.name);
-  private readonly integrationServiceUrl: string;
+  private readonly coreServiceUrl: string;
 
   constructor(
     private httpClient: HttpClientService,
@@ -29,9 +29,9 @@ export class SandboxExecutionService {
     private customEvaluatorsRepository: CustomEvaluatorsRepository,
     private coreClient: CoreClientService,
   ) {
-    this.integrationServiceUrl =
-      this.configService.get<string>('INTEGRATION_SERVICE_URL') ||
-      'http://localhost:3004';
+    this.coreServiceUrl =
+      this.configService.get<string>('CORE_SERVICE_URL') ||
+      'http://localhost:3002';
   }
 
   async executeCustomEvaluator(
@@ -347,7 +347,7 @@ export class SandboxExecutionService {
     this.logger.debug('Creating sandbox via integration service');
 
     const response = await this.httpClient.post<{ sandboxId: string }>(
-      `${this.integrationServiceUrl}/api/sandboxes`,
+      `${this.coreServiceUrl}/api/sandboxes`,
       { config },
       {
         headers: {
@@ -372,7 +372,7 @@ export class SandboxExecutionService {
     });
 
     const response = await this.httpClient.post<ExecutionResult>(
-      `${this.integrationServiceUrl}/api/sandboxes/${sandboxId}/execute`,
+      `${this.coreServiceUrl}/api/sandboxes/${sandboxId}/execute`,
       {
         code,
         language,
@@ -393,7 +393,7 @@ export class SandboxExecutionService {
     this.logger.debug(`Deleting sandbox: ${sandboxId}`);
 
     await this.httpClient.delete(
-      `${this.integrationServiceUrl}/api/sandboxes/${sandboxId}`,
+      `${this.coreServiceUrl}/api/sandboxes/${sandboxId}`,
       {
         timeout: 10000,
       },
@@ -406,7 +406,7 @@ export class SandboxExecutionService {
     try {
       // Call integration-service to download blob content
       const response = await this.httpClient.get<{ content: string }>(
-        `${this.integrationServiceUrl}/api/artifacts/blob/${encodeURIComponent(filePath)}`,
+        `${this.coreServiceUrl}/api/artifacts/blob/${encodeURIComponent(filePath)}`,
         {
           headers: {
             'Content-Type': 'application/json',

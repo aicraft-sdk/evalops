@@ -121,8 +121,6 @@ tilt logs <service-name>
 - `auth-service` - Authentication service
 - `core-service` - Core business logic service
 - `evaluation-service` - Evaluation engine service
-- `integration-service` - Integration and webhooks service
-- `analytics-service` - Analytics service
 - `python-worker` - Python FastAPI worker
 - `postgres` - PostgreSQL database (Docker)
 - `redis` - Redis cache (Docker)

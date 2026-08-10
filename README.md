@@ -8,7 +8,7 @@ EvalOps lets you run structured evaluations against prompts, datasets, and agent
 
 ## Architecture
 
-EvalOps is an Nx monorepo built as seven NestJS microservices plus a React frontend, communicating through a single API Gateway.
+EvalOps is an Nx monorepo built as four NestJS microservices plus a React frontend and a Python worker, communicating through a single API Gateway.
 
 ```
                       Browser
@@ -25,28 +25,25 @@ EvalOps is an Nx monorepo built as seven NestJS microservices plus a React front
     ┌─────▼────┐   ┌──────▼──────┐   ┌──────▼─────┐
     │   Auth   │   │    Core     │   │ Evaluation  │
     │  :3001   │   │   :3002     │   │   :3003     │
-    └──────────┘   └─────────────┘   └─────────────┘
-          ┌──────────────────────────────┐
-    ┌─────▼──────┐              ┌────────▼───────┐
-    │ Integration│              │   Analytics    │
-    │   :3004    │              │    :3005       │
-    └────────────┘              └────────────────┘
-          │                            │
-    ┌─────▼────────────────────────────▼─────┐
-    │          PostgreSQL + Redis             │
-    └─────────────────────────────────────────┘
+    └──────────┘   └──────┬──────┘   └─────────────┘
+                           │
+                    (integration + analytics
+                     libs mounted on core)
+                           │
+    ┌──────────────────────▼──────────────────────┐
+    │          PostgreSQL + Redis                  │
+    └───────────────────────────────────────────────┘
 ```
+
 
 ### Services
 
 | Service               | Port | Responsibility                                     |
 | --------------------- | ---- | -------------------------------------------------- |
-| `api-gateway`         | 3000 | Request routing, CORS, JWT forwarding              |
+| `api-gateway`         | 3000 | Request routing, CORS, JWT auth enforcement + forwarding |
 | `auth-service`        | 3001 | Users, organizations, JWT auth, RBAC               |
-| `core-service`        | 3002 | Prompts, datasets, agents, eval specs, templates   |
+| `core-service`        | 3002 | Prompts, datasets, agents, eval specs, templates, Azure Blob artifacts, webhooks, alerts, dashboard metrics, cost analytics, audit trail |
 | `evaluation-service`  | 3003 | Runs, evaluation engine, policies, trace ingestion |
-| `integration-service` | 3004 | Azure Blob artifacts, webhooks, alerts             |
-| `analytics-service`   | 3005 | Dashboard metrics, cost analytics, audit trail     |
 | `python-worker`       | 5055 | FastAPI service for advanced LLM evaluations       |
 
 ### Shared Libraries
@@ -139,10 +136,8 @@ evalops/
 │   ├── frontend/              # React 18 + Vite + Shadcn UI
 │   ├── api-gateway/           # NestJS — routing proxy (port 3000)
 │   ├── auth-service/          # NestJS — auth + users (port 3001)
-│   ├── core-service/          # NestJS — core data (port 3002)
-│   ├── evaluation-service/    # NestJS — evals + runs (port 3003)
-│   ├── integration-service/   # NestJS — integrations (port 3004)
-│   └── analytics-service/     # NestJS — analytics (port 3005)
+│   ├── core-service/          # NestJS — core data, integrations, analytics (port 3002)
+│   └── evaluation-service/    # NestJS — evals + runs (port 3003)
 ├── libs/
 │   ├── shared-db/             # Drizzle schema + migrations
 │   ├── shared-auth/           # Guards, decorators, RBAC
@@ -169,8 +164,13 @@ All routes go through the API Gateway on port 3000.
 | `/api/auth/*`        | auth-service        | `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/user`         |
 | `/api/core/*`        | core-service        | `GET /api/core/prompts`, `POST /api/core/agents`, `GET /api/core/eval-specs`    |
 | `/api/evaluation/*`  | evaluation-service  | `POST /api/evaluation/runs`, `POST /api/evaluation/ingestion/events`            |
-| `/api/integration/*` | integration-service | `GET /api/integration/artifacts/:runId/:file`, `POST /api/integration/webhooks` |
-| `/api/analytics/*`   | analytics-service   | `GET /api/analytics/dashboard`, `GET /api/analytics/audit-trail`                |
+| `/api/integration/*` | core-service        | `GET /api/integration/artifacts/:runId/:file`, `POST /api/integration/webhooks` |
+| `/api/analytics/*`   | core-service        | `GET /api/analytics/dashboard`, `GET /api/analytics/audit-trail`                |
+
+> `integration-service` and `analytics-service` have been fully decommissioned and removed from
+> the repo. Their functionality was relocated into `libs/core-integration` and `libs/core-analytics`,
+> both mounted on `core-service`, which the gateway now routes `/api/integration/*` and
+> `/api/analytics/*` to.
 
 Interactive Swagger docs are available at `/api/docs` on each service port.
 

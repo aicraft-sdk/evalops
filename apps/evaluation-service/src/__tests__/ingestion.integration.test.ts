@@ -45,7 +45,7 @@ const mockHttpService = {
 const mockConfigService = {
   get: jest.fn().mockImplementation((key: string, defaultValue?: string) => {
     const config: Record<string, string> = {
-      INTEGRATION_SERVICE_URL: 'http://localhost:3004',
+      CORE_SERVICE_URL: 'http://localhost:3002',
       SERVICE_SECRET: 'test-secret',
     };
     return config[key] ?? defaultValue;

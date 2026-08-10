@@ -1,0 +1,26 @@
+{
+  "name": "core-analytics",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/core-analytics/src",
+  "projectType": "library",
+  "tags": ["scope:core-analytics", "type:lib"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/core-analytics",
+        "main": "libs/core-analytics/src/index.ts",
+        "tsConfig": "libs/core-analytics/tsconfig.lib.json"
+      }
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "options": {
+        "jestConfig": "libs/core-analytics/jest.config.cts",
+        "passWithNoTests": true
+      }
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import { initTelemetry } from '@evalops/shared-common';
+import { initTelemetry, requestTimingMiddleware } from '@evalops/shared-common';
 initTelemetry('auth-service');
 
 import { Logger, ValidationPipe } from '@nestjs/common';
@@ -8,6 +8,12 @@ import { AppModule } from './app/app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Stamp request arrival time before Guards/Interceptors run, so
+  // LoggingExceptionFilter can compute an accurate durationMs even for
+  // requests a Guard rejects before any Interceptor ever sees them.
+  app.use(requestTimingMiddleware);
+
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);

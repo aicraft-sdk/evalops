@@ -27,8 +27,8 @@ OpenSandbox provides Docker/Kubernetes-based sandboxing with network egress cont
 │  └──────────────┘      └──────────────┬───────────┘   │
 │                                        │                 │
 │  ┌──────────────┐      ┌──────────────▼───────────┐   │
-│  │ Integration   │──────│  SandboxService          │   │
-│  │ Service       │      │  (integration-service)  │   │
+│  │ Core Service  │──────│  SandboxService          │   │
+│  │ (integration) │      │  (libs/core-integration) │   │
 │  └──────────────┘      └──────────────┬───────────┘   │
 │                                        │                 │
 │  ┌──────────────┐      ┌──────────────▼───────────┐   │
@@ -53,14 +53,14 @@ OpenSandbox provides Docker/Kubernetes-based sandboxing with network egress cont
 - Validates input/output schemas
 - Tracks evaluator usage
 
-**SandboxService** (`integration-service`):
+**SandboxService** (`core-service`, via `libs/core-integration`):
 
 - Manages sandbox lifecycle (create, execute, delete)
 - Enforces security policies
 - Handles audit logging and monitoring
 - Communicates with OpenSandbox server
 
-**SandboxSecurityService** (`integration-service`):
+**SandboxSecurityService** (`core-service`, via `libs/core-integration`):
 
 - Validates code before execution
 - Enforces network policies
@@ -110,7 +110,7 @@ console.log(result.output); // 0.85
 ### Creating a Sandbox with Custom Configuration
 
 ```typescript
-import { SandboxService } from '@evalops/integration-service';
+import { SandboxService } from '@evalops/core-integration';
 
 const service = new SandboxService(...);
 
@@ -351,7 +351,7 @@ interface EvaluationResult extends ExecutionResult {
 
 ### Service URLs
 
-**Integration Service**:
+**Core Service** (integration routes, via `libs/core-integration`):
 
 - Sandbox endpoints: `POST /api/sandboxes`, `POST /api/sandboxes/:id/execute`, `DELETE /api/sandboxes/:id`
 
@@ -508,7 +508,7 @@ The monitoring service detects:
 
 ## API Endpoints
 
-### Integration Service
+### Core Service (integration routes)
 
 **POST** `/api/sandboxes`
 

@@ -50,8 +50,8 @@ export class GatewayService {
         'integration',
         {
           baseUrl:
-            this.configService.get('INTEGRATION_SERVICE_URL') ||
-            'http://localhost:3004',
+            this.configService.get('CORE_SERVICE_URL') ||
+            'http://localhost:3002',
           timeout: 30000,
         },
       ],
@@ -59,8 +59,8 @@ export class GatewayService {
         'analytics',
         {
           baseUrl:
-            this.configService.get('ANALYTICS_SERVICE_URL') ||
-            'http://localhost:3005',
+            this.configService.get('CORE_SERVICE_URL') ||
+            'http://localhost:3002',
           timeout: 30000,
         },
       ],

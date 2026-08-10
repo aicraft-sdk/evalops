@@ -7,13 +7,25 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
-import { randomUUID } from 'crypto';
+import { buildBaseLogFields, LoggableRequest } from '../logging/log-fields';
+import { structuredLogger } from '../logging/structured-logger';
+import { getRequestStartMs } from '../middleware/request-timing.middleware';
+
+type RequestWithLogMarker = LoggableRequest & { __evalopsLogged?: boolean };
 
 /**
  * Structured request/response logging interceptor.
- * Logs: method, path, statusCode, durationMs, organizationId, x-request-id
+ * Logs: traceId, spanId, organizationId, userId, requestId, method, path,
+ * statusCode, durationMs.
  *
  * Injects x-request-id header into the response if not already present.
+ *
+ * Note: this interceptor only ever sees requests that made it PAST any
+ * Guards (Guards run before Interceptors in NestJS's request lifecycle).
+ * Exceptions thrown by Guards (e.g. JwtAuthGuard 401s, ThrottlerGuard 429s)
+ * are logged instead by LoggingExceptionFilter, the global APP_FILTER
+ * backstop — both share `buildBaseLogFields`/`structuredLogger` so their
+ * output cannot drift apart in shape.
  */
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
@@ -21,51 +33,54 @@ export class LoggingInterceptor implements NestInterceptor {
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const http = context.switchToHttp();
-    const request = http.getRequest<{
-      method: string;
-      path: string;
-      headers: Record<string, string>;
-      user?: { organizationId?: string };
-    }>();
+    const request = http.getRequest<RequestWithLogMarker>();
     const response = http.getResponse<{
       statusCode: number;
       setHeader: (key: string, value: string) => void;
     }>();
 
-    // Ensure a correlation ID exists on the request
-    const requestId =
-      request.headers['x-request-id'] ?? randomUUID();
-    response.setHeader('x-request-id', requestId);
+    const fields = buildBaseLogFields(request);
+    response.setHeader('x-request-id', fields.requestId);
 
-    const startMs = Date.now();
-    const { method, path } = request;
+    const startMs = getRequestStartMs(request);
 
     return next.handle().pipe(
       tap({
         next: () => {
+          const durationMs = Date.now() - startMs;
+          structuredLogger.info({
+            ...fields,
+            statusCode: response.statusCode,
+            durationMs,
+          });
+          // Keep emitting through Nest's Logger too, for consistency with existing
+          // log-aggregation expectations during transition — remove once a logging
+          // backend is chosen (Out of Scope for this plan).
           this.logger.log(
             JSON.stringify({
-              requestId,
-              method,
-              path,
+              ...fields,
               statusCode: response.statusCode,
-              durationMs: Date.now() - startMs,
-              organizationId: request.user?.organizationId ?? null,
+              durationMs,
             }),
           );
         },
         error: (err: { status?: number }) => {
-          this.logger.error(
-            JSON.stringify({
-              requestId,
-              method,
-              path,
-              statusCode: err?.status ?? 500,
-              durationMs: Date.now() - startMs,
-              organizationId: request.user?.organizationId ?? null,
-              error: String(err),
-            }),
-          );
+          const statusCode = err?.status ?? 500;
+          const durationMs = Date.now() - startMs;
+          const errorMessage = String(err);
+          const logPayload = {
+            ...fields,
+            statusCode,
+            durationMs,
+            error: errorMessage,
+          };
+          structuredLogger.error(logPayload);
+          this.logger.error(JSON.stringify(logPayload));
+          // Tell LoggingExceptionFilter (the global APP_FILTER, which sees
+          // EVERY unhandled exception regardless of where it originated)
+          // that this exact request/exception was already logged here, so
+          // it does not emit a duplicate line for the same event.
+          request.__evalopsLogged = true;
         },
       }),
     );

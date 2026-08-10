@@ -296,17 +296,11 @@ jobs:
           CORE_PID=$!
           npm run dev:evaluation > /tmp/evaluation.log 2>&1 &
           EVALUATION_PID=$!
-          npm run dev:integration > /tmp/integration.log 2>&1 &
-          INTEGRATION_PID=$!
-          npm run dev:analytics > /tmp/analytics.log 2>&1 &
-          ANALYTICS_PID=$!
-          echo "Started services: gateway=$GATEWAY_PID, auth=$AUTH_PID, core=$CORE_PID, evaluation=$EVALUATION_PID, integration=$INTEGRATION_PID, analytics=$ANALYTICS_PID"
+          echo "Started services: gateway=$GATEWAY_PID, auth=$AUTH_PID, core=$CORE_PID, evaluation=$EVALUATION_PID"
           echo "GATEWAY_PID=$GATEWAY_PID" >> $GITHUB_ENV
           echo "AUTH_PID=$AUTH_PID" >> $GITHUB_ENV
           echo "CORE_PID=$CORE_PID" >> $GITHUB_ENV
           echo "EVALUATION_PID=$EVALUATION_PID" >> $GITHUB_ENV
-          echo "INTEGRATION_PID=$INTEGRATION_PID" >> $GITHUB_ENV
-          echo "ANALYTICS_PID=$ANALYTICS_PID" >> $GITHUB_ENV
         env:
           DATABASE_URL: postgresql://evalops:test_password@localhost:5432/evalops_test
           REDIS_HOST: localhost
@@ -369,7 +363,7 @@ jobs:
       - name: Stop services
         if: always()
         run: |
-          kill $GATEWAY_PID $AUTH_PID $CORE_PID $EVALUATION_PID $INTEGRATION_PID $ANALYTICS_PID 2>/dev/null || true
+          kill $GATEWAY_PID $AUTH_PID $CORE_PID $EVALUATION_PID 2>/dev/null || true
 
   # ────────────────────────────────────────────────────────────────────────────
   docker-build:
@@ -384,8 +378,6 @@ jobs:
           - auth-service
           - core-service
           - evaluation-service
-          - integration-service
-          - analytics-service
           - frontend
     steps:
       - uses: actions/checkout@v4

@@ -2,8 +2,6 @@
   "auth-service" (dict "port" .Values.services.authService.port "replicas" .Values.replicaCount.authService "otelName" "auth-service")
   "core-service" (dict "port" .Values.services.coreService.port "replicas" .Values.replicaCount.coreService "otelName" "core-service")
   "evaluation-service" (dict "port" .Values.services.evaluationService.port "replicas" .Values.replicaCount.evaluationService "otelName" "evaluation-service")
-  "integration-service" (dict "port" .Values.services.integrationService.port "replicas" .Values.replicaCount.integrationService "otelName" "integration-service")
-  "analytics-service" (dict "port" .Values.services.analyticsService.port "replicas" .Values.replicaCount.analyticsService "otelName" "analytics-service")
 -}}
 {{- range $name, $svc := $services }}
 ---

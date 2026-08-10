@@ -321,8 +321,6 @@ EvalOps Doctor — environment check
   ✅  auth-service  (:3001)
   ✅  core-service  (:3002)
   ✅  evaluation-service  (:3003)
-  ✅  integration-service  (:3004)
-  ✅  analytics-service  (:3005)
   ✅  Service env vars  (JWT_SECRET and SERVICE_SECRET set)
 
 Everything looks good!

@@ -203,8 +203,6 @@ curl http://localhost:3000/health
 curl http://localhost:3001/health  # Auth
 curl http://localhost:3002/health  # Core
 curl http://localhost:3003/health  # Evaluation
-curl http://localhost:3004/health  # Integration
-curl http://localhost:3005/health  # Analytics
 ```
 
 ### Register First User
@@ -234,8 +232,6 @@ Or simply open **http://localhost:4200** and register through the UI.
 | Auth Service Swagger        | http://localhost:3001/api/docs | Auth API docs          |
 | Core Service Swagger        | http://localhost:3002/api/docs | Core API docs          |
 | Evaluation Service Swagger  | http://localhost:3003/api/docs | Evaluation API docs    |
-| Integration Service Swagger | http://localhost:3004/api/docs | Integration API docs   |
-| Analytics Service Swagger   | http://localhost:3005/api/docs | Analytics API docs     |
 | Python Worker               | http://localhost:5055/docs     | Python worker API docs |
 | OpenSandbox Server          | http://localhost:8080          | OpenSandbox API        |
 | Tilt Dashboard              | http://localhost:10350         | Tilt dev dashboard     |

@@ -123,7 +123,7 @@ describe('Fix 3: WebhooksService uses createRunWithWebhookEvent', () => {
   const webhooksSrc = fs.readFileSync(
     path.join(
       __dirname,
-      '../../../integration-service/src/app/webhooks/webhooks.service.ts',
+      '../../../../libs/core-integration/src/lib/webhooks/webhooks.service.ts',
     ),
     'utf8',
   );

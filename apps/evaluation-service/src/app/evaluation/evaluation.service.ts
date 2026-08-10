@@ -43,7 +43,7 @@ export interface EvaluationResult {
 export class EvaluationService {
   private readonly logger = new Logger(EvaluationService.name);
 
-  private readonly integrationServiceUrl: string;
+  private readonly coreServiceUrl: string;
 
   constructor(
     private runsRepository: RunsRepository,
@@ -55,9 +55,9 @@ export class EvaluationService {
     private runner: EvaluationRunnerService,
     private reviewsService?: ReviewsService,
   ) {
-    this.integrationServiceUrl =
-      this.configService.get('INTEGRATION_SERVICE_URL') ||
-      'http://localhost:3004';
+    this.coreServiceUrl =
+      this.configService.get('CORE_SERVICE_URL') ||
+      'http://localhost:3002';
   }
 
   async executeRun(runId: string, authToken?: string): Promise<void> {
@@ -262,7 +262,7 @@ export class EvaluationService {
     try {
       await firstValueFrom(
         this.httpService.post(
-          `${this.integrationServiceUrl}/api/alerts/check/${runId}`,
+          `${this.coreServiceUrl}/api/alerts/check/${runId}`,
           {},
           {
             headers: {

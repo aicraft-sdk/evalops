@@ -80,8 +80,6 @@ export async function runDoctor(_args: string[]): Promise<void> {
       { name: 'auth-service',        port: 3001 },
       { name: 'core-service',        port: 3002 },
       { name: 'evaluation-service',  port: 3003 },
-      { name: 'integration-service', port: 3004 },
-      { name: 'analytics-service',   port: 3005 },
     ];
     const localBase = apiUrl.replace(':3000', '');
     for (const svc of services) {
