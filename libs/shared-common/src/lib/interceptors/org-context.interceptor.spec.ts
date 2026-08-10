@@ -41,8 +41,7 @@ describe('OrgContextInterceptor', () => {
 
   function buildContext(user?: {
     organizationId?: string;
-    sub?: string;
-    userId?: string;
+    id?: string;
     role?: string;
   }): ExecutionContext {
     return {
@@ -172,7 +171,7 @@ describe('OrgContextInterceptor', () => {
   });
 
   it('propagates userId and role through requestContext', async () => {
-    const ctx = buildContext({ organizationId: 'org-1', sub: 'user-123', role: 'admin' });
+    const ctx = buildContext({ organizationId: 'org-1', id: 'user-123', role: 'admin' });
     let capturedUserId: string | undefined;
     let capturedRole: string | undefined;
 

@@ -36,7 +36,11 @@ export class OrganizationsRepository {
    * synchronous transaction callbacks, while the node-postgres driver used
    * in production requires an async one — the same callback cannot satisfy
    * both dialects. Real atomicity (both writes or neither) is only
-   * guaranteed on the production Postgres path.
+   * guaranteed on the production Postgres path. To avoid leaving an
+   * orphaned, unmanageable org (and unbounded duplicate-name accumulation
+   * on retry) if the second insert fails, the dev-mode branch explicitly
+   * deletes the just-created org row on membership-insert failure before
+   * rethrowing.
    */
   async createWithAdminMember(
     data: typeof organizations.$inferInsert,
@@ -60,7 +64,12 @@ export class OrganizationsRepository {
 
     if (isDevMode) {
       const [org] = await db.insert(organizations).values(orgData).returning();
-      await db.insert(organizationMembers).values(memberData(org));
+      try {
+        await db.insert(organizationMembers).values(memberData(org));
+      } catch (err) {
+        await db.delete(organizations).where(eq(organizations.id, org.id));
+        throw err;
+      }
       return org;
     }
 
