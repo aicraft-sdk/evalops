@@ -98,3 +98,67 @@ test('rejects look-alike headings that merely start with a required word', () =>
     'expected missing "Agent Operating Rules" to be reported despite the "Agent Operating Systems We Support" look-alike heading'
   );
 });
+
+test('rejects headings that only appear inside a fenced code block (no real sections)', () => {
+  // Adversarial case: all 5 required heading strings appear verbatim, but only
+  // inside a ``` fenced "example format" block. None of them are real headings
+  // in the document, so all 5 sections should still be reported as missing.
+  const content = [
+    '# AGENTS.md',
+    '',
+    'Example format for reference:',
+    '',
+    '```',
+    '## Project / Scope',
+    '## Non-Negotiable Constraints',
+    '## Build, Run & Test',
+    '## Security & Safety',
+    '## Agent Operating Rules',
+    '```',
+    '',
+    'None of the above are real sections - just an example. This file has no actual content.',
+    '',
+  ].join('\n');
+
+  const errors = lintAgentsMd(content);
+
+  assert.equal(errors.length, REQUIRED_SECTIONS.length);
+  for (const section of REQUIRED_SECTIONS) {
+    assert.ok(
+      errors.some((e) => e.includes(section.name)),
+      `expected missing "${section.name}" to be reported despite the fenced-code-block look-alike heading`
+    );
+  }
+});
+
+test('accepts a legitimate AGENTS.md that has an unrelated code fence elsewhere in the document', () => {
+  // The fix must not be so aggressive that it breaks ordinary code examples
+  // that don't contain heading-lookalike text.
+  const content = [
+    '# AGENTS.md',
+    '',
+    '## Project / Scope',
+    'Describes the project.',
+    '',
+    '## Non-Negotiable Constraints',
+    'Rules that must not be broken.',
+    '',
+    '## Build, Run & Test',
+    'Run the tests with:',
+    '',
+    '```bash',
+    'npm test',
+    'echo "done"',
+    '```',
+    '',
+    '## Security & Safety',
+    'Do not commit secrets.',
+    '',
+    '## Agent Operating Rules',
+    'Read the README first.',
+    '',
+  ].join('\n');
+
+  const errors = lintAgentsMd(content);
+  assert.deepEqual(errors, []);
+});

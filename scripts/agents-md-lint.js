@@ -35,6 +35,36 @@ export const REQUIRED_SECTIONS = [
 ];
 
 /**
+ * Strip fenced code-block regions (``` ... ```) from markdown content before
+ * heading detection. Without this, a heading-lookalike string inside an
+ * "example format" code fence (e.g. documenting what a section header looks
+ * like) would satisfy the heading-presence regex even though it isn't a real
+ * heading. Each stripped fence line is replaced with a blank line so line
+ * numbers/positions of surrounding content are otherwise unaffected.
+ *
+ * Only triple-backtick fences are handled (the reproduced bug case). Fences
+ * are matched by fence-state tracking so unterminated/odd fence counts don't
+ * silently swallow the rest of the document.
+ */
+export function stripFencedCodeBlocks(content) {
+  const lines = content.split('\n');
+  const result = [];
+  let inFence = false;
+
+  for (const line of lines) {
+    const isFenceMarker = /^\s*```/.test(line);
+    if (isFenceMarker) {
+      inFence = !inFence;
+      result.push('');
+      continue;
+    }
+    result.push(inFence ? '' : line);
+  }
+
+  return result.join('\n');
+}
+
+/**
  * Check whether `content` has a markdown heading matching `section.pattern`.
  * Matches any heading level and an optional numeric prefix (e.g. "## 1. Build, Run & Test").
  * The pattern must match the FULL canonical section title, not a prefix — this
@@ -53,13 +83,17 @@ export function hasRequiredSection(content, section) {
 export function lintAgentsMd(content) {
   const errors = [];
 
+  // Size check operates on the ORIGINAL unmodified content — stripping fences
+  // must only affect heading detection, not the real file size limit.
   const byteLength = Buffer.byteLength(content, 'utf8');
   if (byteLength > MAX_SIZE_BYTES) {
     errors.push(`exceeds size limit (${byteLength} bytes > ${MAX_SIZE_BYTES} bytes)`);
   }
 
+  const contentForHeadingCheck = stripFencedCodeBlocks(content);
+
   for (const section of REQUIRED_SECTIONS) {
-    if (!hasRequiredSection(content, section)) {
+    if (!hasRequiredSection(contentForHeadingCheck, section)) {
       errors.push(`missing required section: ${section.name}`);
     }
   }
