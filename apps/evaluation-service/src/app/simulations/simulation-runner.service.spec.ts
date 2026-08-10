@@ -65,6 +65,7 @@ describe('SimulationRunnerService', () => {
     agentVersion: null,
     status: 'running',
     decision: null,
+    policyScore: null,
     startedAt: new Date(),
     completedAt: null,
     metrics: null,

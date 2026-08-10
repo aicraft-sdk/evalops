@@ -5,7 +5,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export default [
   ...baseConfig,
   {
-    ignores: ['**/eslint.config.mjs', '**/drizzle.config.ts'],
+    ignores: [
+      '**/eslint.config.mjs',
+      '**/drizzle.config.ts',
+      '**/jest.config.cts',
+    ],
   },
   {
     ignores: ['**/*.spec.ts', '**/*.test.ts'],
