@@ -103,6 +103,7 @@ npm install
 # 2. Set up environment
 cp .env.example .env
 # Edit .env — set JWT_SECRET, SERVICE_SECRET and at least one AI provider key
+# For optional features (Redis, Azure, SSO, OpenSandbox) copy vars from .env.optional.example
 
 # 3. Start Postgres + Redis via Docker
 docker run -d --name evalops-postgres -p 5432:5432 \
@@ -269,7 +270,7 @@ See **[docs/TESTING.md](docs/TESTING.md)** for comprehensive testing instruction
 
 ## Environment Variables
 
-See [`.env.example`](.env.example) for the full reference. Minimum required:
+See [`.env.example`](.env.example) (required vars) and [`.env.optional.example`](.env.optional.example) (Redis, Azure, SSO, OpenSandbox) for the full reference. Minimum required:
 
 ```env
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/evalops
