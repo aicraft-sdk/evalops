@@ -536,7 +536,8 @@ flowchart TB
   GW -->|"/api/analytics/*"| CORE
   CORE --- CI["libs/core-integration<br/>artifacts, webhooks, alerts, sandbox"]
   CORE --- CA["libs/core-analytics<br/>dashboard, cost, audit trail"]
-  EVAL -.HTTP.-> SBX["OpenSandbox Server<br/>(external, BYO backend)"]
+  EVAL -->|"/api/sandboxes/*"| CORE
+  CORE -.HTTP.-> SBX["OpenSandbox Server<br/>(external, BYO backend)"]
   AUTH --> DB[("PostgreSQL + Redis")]
   CORE --> DB
   EVAL --> DB
@@ -555,9 +556,12 @@ flowchart TB
               <code class="inline">/api/evaluation/*</code> to evaluation-service (3003), and both
               <code class="inline">/api/integration/*</code> and <code class="inline">/api/analytics/*</code>
               also to core-service, since that's where those libraries now live. The CLI, JS/Python SDKs,
-              and the GitHub Action all call the gateway the same way the frontend does. Evaluation-service
-              calls out to an external OpenSandbox server for isolated code execution. All three data-owning
-              services share one PostgreSQL database (with Redis for rate limiting/idempotency).
+              and the GitHub Action all call the gateway the same way the frontend does. For isolated code
+              execution, evaluation-service calls core-service's internal sandbox API
+              (<code class="inline">/api/sandboxes/*</code>), and core-service — via
+              <code class="inline">libs/core-integration</code> — is the one that calls out to an external
+              OpenSandbox server. All three data-owning services share one PostgreSQL database (with Redis
+              for rate limiting/idempotency).
             </p>
           </details>
         </figure>
@@ -635,8 +639,9 @@ sequenceDiagram
               A developer or CI job triggers a run through the CLI, SDK, or GitHub Action. That
               client sends a JWT-authenticated request to the API Gateway, which forwards it to
               evaluation-service. Evaluation-service executes the configured evaluators (exact
-              match, rule-based, LLM-as-judge, RAG metrics, safety checks — some may run inside an
-              external OpenSandbox for isolation), then hands the resulting scores to the policy
+              match, rule-based, LLM-as-judge, RAG metrics, safety checks — some may run inside a
+              sandbox, via core-service's sandbox API, which in turn calls an external OpenSandbox
+              server for isolation), then hands the resulting scores to the policy
               engine, which compares them against configured pass/warn/fail thresholds. The verdict
               flows back through the gateway to the caller, which exits with code 0 on pass/warn or
               1 on fail — enabling it to gate a CI pipeline.
@@ -672,7 +677,7 @@ sequenceDiagram
           </div>
           <div class="feature">
             <strong>Sandboxed code execution</strong>
-            <span>An HTTP client (<code class="inline">SandboxService</code>) against an external OpenSandbox server — bring your own sandbox backend, not a bundled Docker runner.</span>
+            <span>Evaluation-service calls core-service's sandbox API, which uses an HTTP client (<code class="inline">SandboxService</code>) against an external OpenSandbox server — bring your own sandbox backend, not a bundled Docker runner.</span>
           </div>
           <div class="feature">
             <strong>Webhook &amp; CI/CD integrations</strong>
@@ -680,7 +685,7 @@ sequenceDiagram
           </div>
           <div class="feature">
             <strong>JWT auth at the gateway</strong>
-            <span><code class="inline">JwtAuthGuard</code> + <code class="inline">RbacGuard</code> enforced as a global <code class="inline">APP_GUARD</code> on every service, gateway included. SSO is not built yet.</span>
+            <span><code class="inline">JwtAuthGuard</code> + <code class="inline">RbacGuard</code> enforced as a global <code class="inline">APP_GUARD</code> on every service, gateway included. Microsoft Entra ID (Azure AD) SSO is implemented and env-gated; other SSO providers are not yet supported.</span>
           </div>
           <div class="feature">
             <strong>Audit trail &amp; structured logging</strong>
@@ -940,7 +945,17 @@ def test_pipeline():
               The gateway enforces this itself now (not just downstream), and also rejects
               path-traversal sequences in proxied paths before forwarding.
             </p>
-            <p><strong>SSO is not implemented yet</strong> — do not assume it exists.</p>
+            <p>
+              <strong>Microsoft Entra ID (Azure AD) SSO is implemented</strong> via MSAL
+              (<code class="inline">apps/auth-service/src/app/auth/microsoft/</code>), reachable
+              through the gateway's <code class="inline">/api/auth/*</code> proxy as
+              <code class="inline">GET /api/auth/microsoft</code> (login redirect) and
+              <code class="inline">GET /api/auth/microsoft/callback</code> (issues a real JWT, sets
+              an httpOnly cookie). It's env-config-gated — disabled unless
+              <code class="inline">MICROSOFT_CLIENT_ID</code>, <code class="inline">MICROSOFT_CLIENT_SECRET</code>,
+              and <code class="inline">MICROSOFT_TENANT_ID</code> are set. SSO currently supports
+              Microsoft Entra ID only; other providers are not yet implemented.
+            </p>
           </div>
           <div class="card">
             <h3>Authorization <span class="badge">RBAC</span></h3>
