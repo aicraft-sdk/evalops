@@ -1,6 +1,6 @@
-import { Controller, Get, Post, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Param, UseGuards } from '@nestjs/common';
 import { PoliciesService } from './policies.service';
-import { JwtAuthGuard, CurrentUser } from '@evalops/shared-auth';
+import { JwtAuthGuard, CurrentUser, AuthenticatedUser } from '@evalops/shared-auth';
 
 @Controller('policies')
 export class PoliciesController {
@@ -8,7 +8,7 @@ export class PoliciesController {
 
   @UseGuards(JwtAuthGuard)
   @Get()
-  async getPolicies(@CurrentUser() user: any) {
+  async getPolicies(@CurrentUser() user: AuthenticatedUser) {
     return this.policiesService.getActivePolicies(user.organizationId);
   }
 

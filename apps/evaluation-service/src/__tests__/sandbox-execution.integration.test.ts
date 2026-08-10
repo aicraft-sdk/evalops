@@ -11,8 +11,7 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, HttpStatus } from '@nestjs/common';
-import request from 'supertest';
+import { INestApplication } from '@nestjs/common';
 import nock from 'nock';
 import { SandboxExecutionService } from '../app/sandbox-execution/sandbox-execution.service';
 import { CustomEvaluatorsRepository } from '@evalops/shared-db';

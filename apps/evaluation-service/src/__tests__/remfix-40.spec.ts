@@ -10,7 +10,6 @@
  * Fix 4: update() return types — T | undefined (source-level assertions)
  */
 
-/* eslint-disable @typescript-eslint/no-require-imports */
 import * as fs from 'fs';
 import * as path from 'path';
 

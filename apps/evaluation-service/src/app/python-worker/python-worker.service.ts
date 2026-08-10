@@ -4,22 +4,33 @@ import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { getErrorMessage } from '@evalops/shared-common';
 
+/**
+ * Structural shape of an HTTP client error that carries a response status.
+ * Used instead of `any` to keep the pre-existing duck-typed status check.
+ */
+interface HttpErrorLike {
+  response?: {
+    status?: number;
+    data?: { detail?: string };
+  };
+}
+
 export interface PythonEvaluationRequest {
   evalSpecId: string;
   datasetSamples: Array<{
     input: string;
     expected_output?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   }>;
   modelConfig: {
     provider: string;
     model: string;
     temperature?: number;
     max_tokens?: number;
-    [key: string]: any;
+    [key: string]: unknown;
   };
   evaluationType: 'model_graded' | 'exact_match' | 'similarity';
-  gradingCriteria?: Record<string, any>;
+  gradingCriteria?: Record<string, unknown>;
 }
 
 export interface PythonEvaluationResponse {
@@ -30,7 +41,7 @@ export interface PythonEvaluationResponse {
 export interface PythonTaskStatus {
   task_id: string;
   status: string;
-  result?: any;
+  result?: unknown;
   error?: string;
   updated_at: string;
 }
@@ -38,7 +49,7 @@ export interface PythonTaskStatus {
 export interface CodeExecutionRequest {
   code: string;
   language: 'python' | 'javascript';
-  input_data?: any;
+  input_data?: unknown;
   sandbox_config?: {
     cpu?: string;
     memory?: string;
@@ -53,7 +64,7 @@ export interface CodeExecutionResult {
   task_id: string;
   status: string;
   result?: {
-    output?: any;
+    output?: unknown;
     stdout?: string;
     stderr?: string;
     exit_code?: number;
@@ -86,7 +97,7 @@ export class PythonWorkerService {
         this.httpService.get(`${this.baseUrl}/health`, { timeout: 5000 }),
       );
       return response.data?.service === 'healthy';
-    } catch (error) {
+    } catch {
       this.logger.warn('Python worker health check failed');
       return false;
     }
@@ -160,7 +171,7 @@ export class PythonWorkerService {
   async executeCode(
     code: string,
     language: 'python' | 'javascript',
-    inputData?: any,
+    inputData?: unknown,
     sandboxConfig?: CodeExecutionRequest['sandbox_config'],
     timeoutSeconds?: number,
   ): Promise<CodeExecutionResult> {
@@ -189,16 +200,15 @@ export class PythonWorkerService {
     } catch (error: unknown) {
       const message = getErrorMessage(error);
       this.logger.error(`Failed to execute code: ${message}`, error instanceof Error ? error.stack : undefined);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const httpError = error as any;
-      if (httpError?.response?.status === 408) {
-        throw new Error(
-          `Code execution timed out: ${httpError.response?.data?.detail || message}`,
-        );
+      const httpError = error as HttpErrorLike;
+      const status = httpError?.response?.status;
+      const detail = httpError?.response?.data?.detail;
+      if (status === 408) {
+        throw new Error(`Code execution timed out: ${detail || message}`);
       }
-      if (httpError?.response?.status === 400) {
+      if (status === 400) {
         throw new Error(
-          `Invalid code execution request: ${httpError.response?.data?.detail || message}`,
+          `Invalid code execution request: ${detail || message}`,
         );
       }
       throw error;

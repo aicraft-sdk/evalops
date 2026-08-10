@@ -5,10 +5,10 @@ import { firstValueFrom } from 'rxjs';
 import { getErrorMessage } from '@evalops/shared-common';
 
 export interface FlowExecutionResponse {
-  response: any;
+  response: unknown;
   cost: number;
   duration: number;
-  outputs: any;
+  outputs: unknown;
 }
 
 @Injectable()
@@ -32,7 +32,7 @@ export class PromptFlowService {
   async executeFlow(
     flowId: string,
     workspaceId: string,
-    inputs: any,
+    inputs: unknown,
     seed?: number,
   ): Promise<FlowExecutionResponse> {
     try {
@@ -79,7 +79,7 @@ export class PromptFlowService {
     }
   }
 
-  async listFlows(workspaceId: string): Promise<any[]> {
+  async listFlows(workspaceId: string): Promise<unknown[]> {
     try {
       const endpoint = `${this.baseUrl}/flow/api/v1.0/subscriptions/${this.subscriptionId}/resourceGroups/${this.resourceGroup}/providers/Microsoft.MachineLearningServices/workspaces/${workspaceId}/flows`;
 
@@ -101,7 +101,7 @@ export class PromptFlowService {
     }
   }
 
-  async getFlowDetails(flowId: string, workspaceId: string): Promise<any> {
+  async getFlowDetails(flowId: string, workspaceId: string): Promise<unknown> {
     try {
       const endpoint = `${this.baseUrl}/flow/api/v1.0/subscriptions/${this.subscriptionId}/resourceGroups/${this.resourceGroup}/providers/Microsoft.MachineLearningServices/workspaces/${workspaceId}/flows/${flowId}`;
 
@@ -134,7 +134,7 @@ export class PromptFlowService {
     }
   }
 
-  private estimateFlowCost(duration: number, inputs: any): number {
+  private estimateFlowCost(duration: number, inputs: unknown): number {
     const baseCost = 0.001;
     const timeCost = (duration / 1000) * 0.0001;
     const inputComplexity = JSON.stringify(inputs).length / 1000;

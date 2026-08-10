@@ -10,6 +10,18 @@ import {
 } from './otlp.dto';
 
 /**
+ * Flattened JSON-compatible value produced when converting an OTLP
+ * AttributeValue (string/int/double/bool/array/kvlist/bytes) to plain JSON.
+ */
+type OtlpAttributeJsonValue =
+  | string
+  | number
+  | boolean
+  | OtlpAttributeJsonValue[]
+  | { [key: string]: OtlpAttributeJsonValue }
+  | undefined;
+
+/**
  * OTLP Service
  *
  * Converts OTLP spans to TraceSpan format and stores them in trace_spans table.
@@ -79,10 +91,10 @@ export class OtlpService {
     }
 
     // Convert hex strings to UUID format if needed (OTLP uses hex, we store as-is)
-    const traceId = this.hexToUuid(otlpSpan.traceId) || otlpSpan.traceId;
-    const spanId = this.hexToUuid(otlpSpan.spanId) || otlpSpan.spanId;
+    const traceId = this.hexToUuid() || otlpSpan.traceId;
+    const spanId = this.hexToUuid() || otlpSpan.spanId;
     const parentSpanId = otlpSpan.parentSpanId
-      ? this.hexToUuid(otlpSpan.parentSpanId) || otlpSpan.parentSpanId
+      ? this.hexToUuid() || otlpSpan.parentSpanId
       : null;
 
     // Convert timestamps (nanoseconds to Date)
@@ -150,8 +162,10 @@ export class OtlpService {
   /**
    * Convert OTLP attributes to flat JSON object
    */
-  private convertAttributes(attributes: OtlpAttribute[]): Record<string, any> {
-    const result: Record<string, any> = {};
+  private convertAttributes(
+    attributes: OtlpAttribute[]
+  ): Record<string, OtlpAttributeJsonValue> {
+    const result: Record<string, OtlpAttributeJsonValue> = {};
 
     for (const attr of attributes) {
       if (!attr.value) continue;
@@ -168,7 +182,9 @@ export class OtlpService {
   /**
    * Extract value from OTLP AttributeValue
    */
-  private extractAttributeValue(value: OtlpAttributeValue): any {
+  private extractAttributeValue(
+    value: OtlpAttributeValue
+  ): OtlpAttributeJsonValue {
     if (value.stringValue !== undefined) return value.stringValue;
     if (value.intValue !== undefined) return BigInt(value.intValue).toString();
     if (value.doubleValue !== undefined) return value.doubleValue;
@@ -177,7 +193,7 @@ export class OtlpService {
       return value.arrayValue.values.map((v) => this.extractAttributeValue(v));
     }
     if (value.kvlistValue?.values) {
-      const obj: Record<string, any> = {};
+      const obj: Record<string, OtlpAttributeJsonValue> = {};
       for (const kv of value.kvlistValue.values) {
         if (kv.value) {
           obj[kv.key] = this.extractAttributeValue(kv.value);
@@ -205,7 +221,7 @@ export class OtlpService {
    * OTLP uses hex strings: trace_id is 32 hex chars, span_id is 16 hex chars
    * We store them as-is (hex strings) for compatibility with OTLP standard
    */
-  private hexToUuid(hex: string): string | null {
+  private hexToUuid(): string | null {
     // For now, we'll store hex strings as-is
     // If needed in the future, we can convert 32-char hex to UUID format
     // OTLP standard uses hex, so keeping as hex is more compatible

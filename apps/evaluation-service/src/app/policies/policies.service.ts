@@ -6,11 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { RunsRepository } from '@evalops/shared-db';
-import {
-  Policy,
-  Run,
-  PolicyViolation as DBPolicyViolation,
-} from '@evalops/shared-db';
+import { Policy, Run } from '@evalops/shared-db';
 import { ReviewsService } from '../reviews/reviews.service';
 
 export interface PolicyResult {
@@ -266,8 +262,7 @@ export class PoliciesService {
         if (baselineValue !== undefined && baselineValue !== null) {
           violation.baselineComparison = this.compareWithBaseline(
             metricValue,
-            baselineValue,
-            rule
+            baselineValue
           );
         }
       }
@@ -366,8 +361,7 @@ export class PoliciesService {
 
   private compareWithBaseline(
     currentValue: number,
-    baselineValue: number,
-    rule: PolicyRule
+    baselineValue: number
   ): BaselineComparison {
     const percentageChange =
       ((currentValue - baselineValue) / baselineValue) * 100;

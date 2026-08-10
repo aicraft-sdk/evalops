@@ -10,10 +10,19 @@ import {
   UseGuards,
   Request,
 } from '@nestjs/common';
+import type { Request as ExpressRequest } from 'express';
 import { ReviewsService } from './reviews.service';
-import { JwtAuthGuard, CurrentUser } from '@evalops/shared-auth';
+import { JwtAuthGuard, CurrentUser, AuthenticatedUser } from '@evalops/shared-auth';
 import { InsertRunAnnotation, InsertReviewQueueItem } from '@evalops/shared-db';
 import { extractTokenFromRequest } from '@evalops/shared-common';
+
+interface QueueItemFilters {
+  status?: string;
+  priority?: string;
+  assigneeId?: string;
+  sourceType?: string;
+  tags?: string[];
+}
 
 @Controller('reviews')
 export class ReviewsController {
@@ -25,7 +34,7 @@ export class ReviewsController {
   @Post('annotations')
   async createAnnotation(
     @Body() body: Omit<InsertRunAnnotation, 'organizationId' | 'authorId'>,
-    @CurrentUser() user: any
+    @CurrentUser() user: AuthenticatedUser
   ) {
     return this.reviewsService.createAnnotation(
       body,
@@ -38,7 +47,7 @@ export class ReviewsController {
   @Get('annotations')
   async listAnnotations(
     @Query('runId') runId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Query('spanId') spanId?: string
   ) {
     if (!runId) {
@@ -53,7 +62,10 @@ export class ReviewsController {
 
   @UseGuards(JwtAuthGuard)
   @Get('annotations/:id')
-  async getAnnotation(@Param('id') id: string, @CurrentUser() user: any) {
+  async getAnnotation(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser
+  ) {
     return this.reviewsService.getAnnotation(id, user.organizationId);
   }
 
@@ -62,14 +74,17 @@ export class ReviewsController {
   async updateAnnotation(
     @Param('id') id: string,
     @Body() body: Partial<InsertRunAnnotation>,
-    @CurrentUser() user: any
+    @CurrentUser() user: AuthenticatedUser
   ) {
     return this.reviewsService.updateAnnotation(id, body, user.organizationId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Delete('annotations/:id')
-  async deleteAnnotation(@Param('id') id: string, @CurrentUser() user: any) {
+  async deleteAnnotation(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser
+  ) {
     await this.reviewsService.deleteAnnotation(id, user.organizationId);
     return { success: true };
   }
@@ -78,7 +93,7 @@ export class ReviewsController {
   @Get('runs/:runId/annotations')
   async getRunAnnotations(
     @Param('runId') runId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Query('spanId') spanId?: string
   ) {
     return this.reviewsService.getAnnotationsForRun(
@@ -93,7 +108,7 @@ export class ReviewsController {
   @UseGuards(JwtAuthGuard)
   @Get('queue')
   async listQueueItems(
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Query('status') status?: string,
     @Query('priority') priority?: string,
     @Query('assigneeId') assigneeId?: string,
@@ -101,7 +116,7 @@ export class ReviewsController {
     @Query('tags') tags?: string,
     @Query('limit') limit?: string
   ) {
-    const filters: any = {};
+    const filters: QueueItemFilters = {};
     if (status) filters.status = status;
     if (priority) filters.priority = priority;
     if (assigneeId) filters.assigneeId = assigneeId;
@@ -121,7 +136,7 @@ export class ReviewsController {
   @Post('queue')
   async createQueueItem(
     @Body() body: Omit<InsertReviewQueueItem, 'organizationId' | 'createdBy'>,
-    @CurrentUser() user: any
+    @CurrentUser() user: AuthenticatedUser
   ) {
     return this.reviewsService.createQueueItem(
       body,
@@ -132,7 +147,10 @@ export class ReviewsController {
 
   @UseGuards(JwtAuthGuard)
   @Get('queue/:id')
-  async getQueueItem(@Param('id') id: string, @CurrentUser() user: any) {
+  async getQueueItem(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser
+  ) {
     return this.reviewsService.getQueueItem(id, user.organizationId);
   }
 
@@ -141,7 +159,7 @@ export class ReviewsController {
   async updateQueueItem(
     @Param('id') id: string,
     @Body() body: Partial<InsertReviewQueueItem>,
-    @CurrentUser() user: any
+    @CurrentUser() user: AuthenticatedUser
   ) {
     return this.reviewsService.updateQueueItem(id, body, user.organizationId);
   }
@@ -155,8 +173,8 @@ export class ReviewsController {
       datasetId?: string;
       datasetName?: string;
     },
-    @CurrentUser() user: any,
-    @Request() req: any
+    @CurrentUser() user: AuthenticatedUser,
+    @Request() req: ExpressRequest
   ) {
     const token = extractTokenFromRequest(req);
     return this.reviewsService.promoteToDataset(
@@ -178,17 +196,14 @@ export class ReviewsController {
       scenarioId?: string;
       scenarioName?: string;
     },
-    @CurrentUser() user: any,
-    @Request() req: any
+    @CurrentUser() user: AuthenticatedUser
   ) {
-    const token = extractTokenFromRequest(req);
     return this.reviewsService.promoteToScenario(
       id,
       body.suiteId,
       body.scenarioId || null,
       body.scenarioName || null,
-      user.organizationId,
-      token
+      user.organizationId
     );
   }
 }

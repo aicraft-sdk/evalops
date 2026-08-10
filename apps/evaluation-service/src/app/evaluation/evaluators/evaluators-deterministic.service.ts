@@ -61,7 +61,7 @@ export class EvaluatorsDeterministicService {
           : 0;
       }
       return 0;
-    } catch (e: unknown) {
+    } catch {
       return 0;
     }
   }
@@ -73,7 +73,7 @@ export class EvaluatorsDeterministicService {
 
       const parsed = JSON.parse(response);
       return this.validateSchema(parsed, config.schema) ? 1 : 0;
-    } catch (e: unknown) {
+    } catch {
       return 0;
     }
   }

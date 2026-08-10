@@ -1,9 +1,5 @@
 import { describe, it, expect } from '@jest/globals';
-import {
-  formatJsonSummary,
-  type SuiteRunResult,
-  type ScenarioRun,
-} from './json-formatter';
+import { formatJsonSummary, type SuiteRunResult } from './json-formatter';
 import type { Run } from '@evalops/shared-db';
 import type { PolicyViolation } from '../app/policies/policies.service';
 

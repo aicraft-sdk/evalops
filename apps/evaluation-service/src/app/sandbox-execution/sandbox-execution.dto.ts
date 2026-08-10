@@ -11,7 +11,7 @@ export interface SandboxConfig {
 }
 
 export interface ExecutionResult {
-  output: any;
+  output: unknown;
   error?: string;
   executionTime: number; // milliseconds
   resourceUsage: {
@@ -27,7 +27,7 @@ export interface ExecutionResult {
 
 export interface CustomEvaluatorExecutionRequest {
   evaluatorId: string;
-  input: any;
+  input: unknown;
   runId?: string;
   config?: SandboxConfig;
 }
@@ -35,7 +35,7 @@ export interface CustomEvaluatorExecutionRequest {
 export interface CodeExecutionRequest {
   code: string;
   language: 'python' | 'javascript';
-  input?: any;
+  input?: unknown;
   config?: SandboxConfig;
 }
 
@@ -49,5 +49,5 @@ export interface EvaluationResult extends ExecutionResult {
   evaluatorId?: string;
   runId?: string;
   score?: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }

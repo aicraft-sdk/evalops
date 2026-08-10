@@ -32,7 +32,7 @@ export async function getGitCommitSha(): Promise<string | null> {
     }).trim();
 
     return sha || null;
-  } catch (error) {
+  } catch {
     // Git command failed (not a git repo, git not installed, etc.)
     return null;
   }
@@ -61,7 +61,7 @@ export function getGitCommitShaSync(): string | null {
     }).trim();
 
     return sha || null;
-  } catch (error) {
+  } catch {
     return null;
   }
 }

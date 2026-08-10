@@ -74,17 +74,29 @@ function parseArgs(): CliOptions {
 /**
  * Get suite ID by name
  */
+interface SuiteSummary {
+  id: string;
+  name: string;
+}
+
+interface ScenarioSummary {
+  id: string;
+  name: string;
+  order: number;
+}
+
 async function getSuiteIdByName(
   suiteName: string,
   orgId: string,
   apiUrl: string,
   headers: Record<string, string>
 ): Promise<string> {
-  const response = await axios.get(`${apiUrl}/api/evaluation/simulations/suites`, {
-    headers,
-  });
+  const response = await axios.get<SuiteSummary[]>(
+    `${apiUrl}/api/evaluation/simulations/suites`,
+    { headers }
+  );
 
-  const suite = response.data.find((s: any) => s.name === suiteName);
+  const suite = response.data.find((s) => s.name === suiteName);
   if (!suite) {
     throw new Error(`Suite "${suiteName}" not found in organization ${orgId}`);
   }
@@ -105,7 +117,7 @@ async function waitForRunCompletion(
   const timeoutMs = timeoutSeconds * 1000;
 
   while (Date.now() - startTime < timeoutMs) {
-    const response = await axios.get(
+    const response = await axios.get<Run>(
       `${apiUrl}/api/evaluation/runs/${runId}`,
       { headers }
     );
@@ -133,11 +145,9 @@ async function getPolicyViolations(
   try {
     // Policy violations are typically included in the run response
     // If not, we can query them separately
-    const response = await axios.get(
-      `${apiUrl}/api/evaluation/runs/${runId}`,
-      { headers }
-    );
-    const run = response.data;
+    await axios.get<Run>(`${apiUrl}/api/evaluation/runs/${runId}`, {
+      headers,
+    });
 
     // If violations are not in run response, return empty array
     // The CLI can still work with just the decision field
@@ -158,7 +168,7 @@ async function main() {
 
     const authConfig = getAuthConfig();
     const headers = getAuthHeaders(authConfig);
-    const apiUrl = authConfig.apiUrl!;
+    const apiUrl = authConfig.apiUrl || 'http://localhost:3000';
 
     // Determine suite ID
     let suiteId: string;
@@ -189,27 +199,28 @@ async function main() {
     }
 
     // Get suite details and scenarios first
-    const suiteResponse = await axios.get(
+    const suiteResponse = await axios.get<SuiteSummary>(
       `${apiUrl}/api/evaluation/simulations/suites/${suiteId}`,
       { headers }
     );
     const suite = suiteResponse.data;
 
-    const scenariosResponse = await axios.get(
+    const scenariosResponse = await axios.get<ScenarioSummary[]>(
       `${apiUrl}/api/evaluation/simulations/suites/${suiteId}/scenarios`,
       { headers }
     );
-    const scenarios = scenariosResponse.data.sort((a: any, b: any) => a.order - b.order);
+    const scenarios = scenariosResponse.data.sort((a, b) => a.order - b.order);
 
     // Execute suite
     const startedAt = new Date();
-    const response = await axios.post(
+    const response = await axios.post<{ runs: Array<{ id: string }> }>(
       `${apiUrl}/api/evaluation/simulations/suites/${suiteId}/run`,
       { commitSha },
       { headers }
     );
 
     const { runs: initialRuns } = response.data;
+    const timeoutSeconds = options.timeout ?? 600;
 
     // Poll for completion of all runs
     console.log(`Waiting for ${initialRuns.length} scenario(s) to complete...`);
@@ -219,7 +230,7 @@ async function main() {
         run.id,
         apiUrl,
         headers,
-        options.timeout!
+        timeoutSeconds
       );
       completedRuns.push(completedRun);
       console.log(
@@ -262,7 +273,7 @@ async function main() {
     };
 
     // Format and write output
-    const outputDir = path.resolve(options.outputDir!);
+    const outputDir = path.resolve(options.outputDir ?? './test-results');
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
@@ -295,9 +306,12 @@ async function main() {
       console.log('\n✅ Suite passed: All scenarios completed successfully');
       process.exit(0);
     }
-  } catch (error: any) {
-    console.error('Error running suite:', error.message);
-    if (error.response) {
+  } catch (error: unknown) {
+    console.error(
+      'Error running suite:',
+      error instanceof Error ? error.message : String(error)
+    );
+    if (axios.isAxiosError(error) && error.response) {
       console.error('API Error:', error.response.data);
     }
     process.exit(1);

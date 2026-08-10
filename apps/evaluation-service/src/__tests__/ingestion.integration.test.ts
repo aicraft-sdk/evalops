@@ -175,7 +175,7 @@ describe('Ingestion Pipeline (integration)', () => {
 
       expect(mockRunsRepository.appendTraceEvents).toHaveBeenCalledTimes(2);
       const calls = mockRunsRepository.appendTraceEvents.mock.calls;
-      const runIds = calls.map((c: any[]) => c[0]);
+      const runIds = calls.map((c: unknown[]) => c[0]);
       expect(runIds).toContain('run-A');
       expect(runIds).toContain('run-B');
     });

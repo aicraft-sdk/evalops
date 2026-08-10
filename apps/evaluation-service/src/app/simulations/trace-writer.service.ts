@@ -81,11 +81,11 @@ export class TraceWriterService {
     name: string,
     parentSpanId: string,
     traceId: string,
-    attributes?: Record<string, any>,
+    attributes?: Record<string, unknown>,
     events?: Array<{
       name: string;
       timestamp: Date;
-      attributes?: Record<string, any>;
+      attributes?: Record<string, unknown>;
     }>
   ): Promise<TraceSpan> {
     const spanId = this.generateSpanId();
@@ -119,11 +119,11 @@ export class TraceWriterService {
    */
   async endSpan(
     spanId: string,
-    attributes?: Record<string, any>,
+    attributes?: Record<string, unknown>,
     events?: Array<{
       name: string;
       timestamp: Date;
-      attributes?: Record<string, any>;
+      attributes?: Record<string, unknown>;
     }>
   ): Promise<void> {
     const updateData: Partial<InsertTraceSpan> = {
@@ -139,7 +139,7 @@ export class TraceWriterService {
 
       if (existing) {
         updateData.attributes = {
-          ...(existing.attributes as Record<string, any>),
+          ...(existing.attributes as Record<string, unknown>),
           ...attributes,
         };
       } else {
@@ -155,7 +155,7 @@ export class TraceWriterService {
         .where(eq(traceSpans.spanId, spanId));
 
       if (existing) {
-        const existingEvents = (existing.events as any[]) || [];
+        const existingEvents = (existing.events as unknown[]) || [];
         updateData.events = [
           ...existingEvents,
           ...events.map((e) => ({

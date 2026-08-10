@@ -9,8 +9,9 @@ import {
   Query,
   Request,
 } from '@nestjs/common';
+import type { Request as ExpressRequest } from 'express';
 import { RunsService } from './runs.service';
-import { JwtAuthGuard, CurrentUser } from '@evalops/shared-auth';
+import { JwtAuthGuard, CurrentUser, AuthenticatedUser } from '@evalops/shared-auth';
 import { InsertRun } from '@evalops/shared-db';
 import { extractTokenFromRequest } from '@evalops/shared-common';
 
@@ -21,7 +22,7 @@ export class RunsController {
   @UseGuards(JwtAuthGuard)
   @Get()
   async getRuns(
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Query('limit') limit?: string,
   ) {
     return this.runsService.getRuns(
@@ -40,8 +41,8 @@ export class RunsController {
   @Post()
   async createRun(
     @Body() body: InsertRun,
-    @CurrentUser() user: any,
-    @Request() req: any,
+    @CurrentUser() user: AuthenticatedUser,
+    @Request() req: ExpressRequest,
   ) {
     const token = extractTokenFromRequest(req);
     return this.runsService.createRun(

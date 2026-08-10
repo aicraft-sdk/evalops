@@ -18,7 +18,7 @@ describe('git-utils', () => {
     process.env = { ...originalEnv };
     jest.clearAllMocks();
     // Default to successful git command (returns string when encoding: 'utf-8' is used)
-    mockExecSync.mockReturnValue('abc123def456\n' as any);
+    mockExecSync.mockReturnValue('abc123def456\n' as unknown as Buffer);
   });
 
   afterEach(() => {
