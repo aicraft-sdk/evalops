@@ -120,13 +120,45 @@ export class OrganizationsRepository {
     return org;
   }
 
+  /**
+   * Defense-in-depth: only `name` (the sole legitimately-mutable
+   * organization field) is ever written from caller-supplied `data`. `id`
+   * and `createdAt` can never appear in the SET clause, and `updatedAt` is
+   * always set server-side — never taken from `data` even if present.
+   * Without this, a caller-supplied `id` in the update body would let
+   * `db.update(organizations).set({...data})` change the row's primary key
+   * outright — the same client-supplied id/timestamp injection class closed
+   * for `POST /organizations` (see `createWithAdminMember`'s spread-order
+   * comment). The primary defense is the controller's DTO/ValidationPipe
+   * layer stripping these fields from the HTTP request body; this explicit
+   * allowlist is the second layer at the data-access boundary — a new
+   * schema column added later does not silently become writable here.
+   *
+   * Typed against `$inferSelect`, not `$inferInsert` — none of the 5
+   * consuming apps enable `strictNullChecks`, under which `$inferInsert`'s
+   * conditional NotNull/HasDefault branding silently collapses to only the
+   * required columns when this file is recompiled under each app's own
+   * (non-strict) tsconfig. `$inferSelect` has no such branding and stays
+   * fully typed regardless (see runs.repository.ts for the same fix).
+   */
   async update(
     id: string,
-    data: Partial<typeof organizations.$inferInsert>,
+    data: Partial<typeof organizations.$inferSelect>,
   ): Promise<typeof organizations.$inferSelect | undefined> {
+    const safeData: Partial<typeof organizations.$inferSelect> = {};
+    if (data.name !== undefined) safeData.name = data.name;
+
+    // Cast needed: `.set()`'s inferred parameter type is derived from the
+    // same NotNull/HasDefault conditional branding as `$inferInsert` (see
+    // the class doc comment above) and collapses to only `name` under this
+    // app's non-strict tsconfig — `safeData`/`updatedAt` are already the
+    // real, allowlisted values being written; this only widens the type
+    // TypeScript checks against, not what's actually sent to the database.
     const [org] = await db
       .update(organizations)
-      .set({ ...data })
+      .set({ ...safeData, updatedAt: new Date() } as Partial<
+        typeof organizations.$inferInsert
+      >)
       .where(eq(organizations.id, id))
       .returning();
     return org;

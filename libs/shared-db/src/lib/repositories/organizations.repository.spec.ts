@@ -19,6 +19,7 @@
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import type { organizations } from '../schema';
 
 process.env['EVALOPS_DEV_MODE'] = '1';
 
@@ -51,11 +52,6 @@ const { OrganizationsRepository } = require('./organizations.repository');
 const { getSqliteDb, _resetSqliteDb } = require('@evalops/dev-runtime');
 
 describe('OrganizationsRepository.createWithAdminMember (dev-mode SQLite)', () => {
-  afterAll(() => {
-    _resetSqliteDb();
-    rmSync(tmpDir, { recursive: true, force: true });
-  });
-
   it('does not leave an orphaned organization row when the admin-membership insert fails', async () => {
     const repo = new OrganizationsRepository();
 
@@ -73,4 +69,78 @@ describe('OrganizationsRepository.createWithAdminMember (dev-mode SQLite)', () =
 
     expect(orphaned).toEqual([]);
   });
+});
+
+describe('OrganizationsRepository.update (dev-mode SQLite)', () => {
+  it('never lets a caller-supplied id/createdAt override the row identity/creation time, and always sets updatedAt server-side', async () => {
+    const sqliteDb = getSqliteDb();
+    const realOrgId = 'real-org-id';
+    const originalCreatedAt = new Date('2000-01-01T00:00:00.000Z');
+    const repo = new OrganizationsRepository();
+
+    // Seed via the repository's own (dev-mode-safe) create path — matches
+    // the explicit id/createdAt pattern already used by AuthService.register
+    // — rather than a raw INSERT, so the row's shape matches exactly what a
+    // real write through this repository produces.
+    await repo.create({
+      id: realOrgId,
+      name: 'Real Org',
+      createdAt: originalCreatedAt,
+    } as typeof organizations.$inferInsert);
+
+    // Simulates an admin-update request body that (via a spoofed/bypassed
+    // DTO) still carries id/createdAt/updatedAt alongside the legitimate
+    // `name` change — mirrors the injection closed for POST /organizations.
+    const attackerSuppliedId = 'attacker-controlled-id';
+    const attackerSuppliedTimestamp = new Date('1999-01-01T00:00:00.000Z');
+    const result = await repo.update(realOrgId, {
+      id: attackerSuppliedId,
+      createdAt: attackerSuppliedTimestamp,
+      updatedAt: attackerSuppliedTimestamp,
+      name: 'Renamed Real Org',
+    } as Partial<typeof organizations.$inferSelect>);
+
+    // The real row's identity must never change.
+    expect(result?.id).toBe(realOrgId);
+    // The legitimate field change must still apply.
+    expect(result?.name).toBe('Renamed Real Org');
+
+    // Assert the persisted row directly via raw SQL (not the ORM-mapped
+    // `.returning()` object) — this dev-mode SQLite connection reuses the
+    // Postgres-declared `organizations` table's timestamp columns verbatim
+    // (see dev-runtime's sqlite-db.ts), which is known not to round-trip
+    // `RETURNING` timestamp values back into JS `Date`s cleanly. Reading the
+    // actual stored column values is the ground truth for what was written.
+    const [rawRow] = sqliteDb.$client
+      .prepare(
+        'SELECT id, created_at as createdAt, updated_at as updatedAt FROM organizations WHERE id = ?',
+      )
+      .all(realOrgId) as { id: string; createdAt: string; updatedAt: string }[];
+
+    // createdAt must never be overridable by the caller.
+    expect(new Date(rawRow.createdAt).getTime()).toBe(
+      originalCreatedAt.getTime(),
+    );
+    // updatedAt must be set server-side, never the caller-supplied value.
+    expect(new Date(rawRow.updatedAt).getTime()).not.toBe(
+      attackerSuppliedTimestamp.getTime(),
+    );
+
+    // No row was created/renamed under the attacker-supplied id.
+    const hijacked = sqliteDb.$client
+      .prepare('SELECT * FROM organizations WHERE id = ?')
+      .all(attackerSuppliedId);
+    expect(hijacked).toEqual([]);
+
+    // The real row is still addressable under its real id.
+    const stillReal = sqliteDb.$client
+      .prepare('SELECT * FROM organizations WHERE id = ?')
+      .all(realOrgId);
+    expect(stillReal).toHaveLength(1);
+  });
+});
+
+afterAll(() => {
+  _resetSqliteDb();
+  rmSync(tmpDir, { recursive: true, force: true });
 });
