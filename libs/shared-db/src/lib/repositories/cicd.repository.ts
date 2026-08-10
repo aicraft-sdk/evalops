@@ -9,6 +9,37 @@ import {
 } from '../schema';
 import { eq, desc } from 'drizzle-orm';
 
+// Insert (full-row) payloads are built from $inferSelect — required columns
+// picked explicitly, everything else (auto-generated or DB-defaulted)
+// optional — never $inferInsert directly, and update (partial) payloads
+// use plain Partial<$inferSelect>: drizzle's $inferInsert conditional
+// types (NotNull/HasDefault branding) silently collapse to only the
+// required columns (dropping optional/nullable columns from the type
+// entirely, with or without Partial<>) when compiled under
+// strictNullChecks: false — which every backend app's tsconfig uses today
+// (only shared-db's own tsconfig sets strict: true). $inferSelect does not
+// depend on that branding and stays fully typed either way. See
+// runs.repository.update-types.spec.ts / agents.repository.ts for the
+// reproduction.
+type CreateCicdRunData = Pick<
+  typeof cicdRuns.$inferSelect,
+  'integrationId' | 'organizationId'
+> &
+  Partial<Omit<typeof cicdRuns.$inferSelect, 'integrationId' | 'organizationId'>>;
+
+type UpdateCicdRunData = Partial<typeof cicdRuns.$inferSelect>;
+
+type CreateWebhookEventData = Pick<
+  typeof webhookEvents.$inferSelect,
+  'integrationId' | 'eventType' | 'payload' | 'organizationId'
+> &
+  Partial<
+    Omit<
+      typeof webhookEvents.$inferSelect,
+      'integrationId' | 'eventType' | 'payload' | 'organizationId'
+    >
+  >;
+
 @Injectable()
 export class CicdRepository {
   // CI/CD Integrations
@@ -45,10 +76,9 @@ export class CicdRepository {
 
   // CI/CD Runs
   async createRun(
-    data: Record<string, unknown>,
+    data: CreateCicdRunData,
   ): Promise<typeof cicdRuns.$inferSelect> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const [run] = await db.insert(cicdRuns).values(data as any).returning();
+    const [run] = await db.insert(cicdRuns).values([data]).returning();
     return run;
   }
 
@@ -65,12 +95,11 @@ export class CicdRepository {
 
   async updateRun(
     id: string,
-    data: Record<string, unknown>,
+    data: UpdateCicdRunData,
   ): Promise<typeof cicdRuns.$inferSelect | undefined> {
     const [run] = await db
       .update(cicdRuns)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .set(data as any)
+      .set(data)
       .where(eq(cicdRuns.id, id))
       .returning();
     return run;
@@ -78,12 +107,11 @@ export class CicdRepository {
 
   // Webhook Events
   async createWebhookEvent(
-    data: Record<string, unknown>,
+    data: CreateWebhookEventData,
   ): Promise<typeof webhookEvents.$inferSelect> {
     const [event] = await db
       .insert(webhookEvents)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .values(data as any)
+      .values([data])
       .returning();
     return event;
   }
@@ -96,8 +124,8 @@ export class CicdRepository {
    * audit trail. Wrapping both inserts in a transaction prevents that.
    */
   async createRunWithWebhookEvent(
-    webhookData: Record<string, unknown>,
-    runData: Record<string, unknown>,
+    webhookData: CreateWebhookEventData,
+    runData: CreateCicdRunData,
   ): Promise<{
     event: typeof webhookEvents.$inferSelect;
     run: typeof cicdRuns.$inferSelect;
@@ -105,15 +133,10 @@ export class CicdRepository {
     return db.transaction(async (tx) => {
       const [event] = await tx
         .insert(webhookEvents)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .values(webhookData as any)
+        .values([webhookData])
         .returning();
 
-      const [run] = await tx
-        .insert(cicdRuns)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .values(runData as any)
-        .returning();
+      const [run] = await tx.insert(cicdRuns).values([runData]).returning();
 
       return { event, run };
     });

@@ -2,11 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { AlertsRepository } from '@evalops/shared-db';
-import {
-  type AlertConfig,
-  type AlertEvent,
-  type InsertAlertEvent,
-} from '@evalops/shared-db';
+import { type AlertConfig, type AlertEvent } from '@evalops/shared-db';
 
 /**
  * Handles alert event creation and notification dispatch (webhook, Slack, email).
@@ -47,7 +43,7 @@ export class AlertNotificationService {
       },
       notificationsSent: [],
       resolved: false,
-    } as InsertAlertEvent);
+    });
 
     const alertConfigs = await this.alertsRepository.findConfigsByOrg(
       alertData.organizationId,

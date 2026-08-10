@@ -74,10 +74,15 @@ export class RunsRepository {
     artifactHashes: Record<string, string>,
   ): Promise<void> {
     await db.transaction(async (tx) => {
+      // Partial<$inferSelect> — see the note on update() above for why
+      // $inferInsert is not used here.
+      const completionData: Partial<typeof runs.$inferSelect> = {
+        status: 'completed',
+        completedAt: new Date(),
+      };
       await tx
         .update(runs)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .set({ status: 'completed', completedAt: new Date() } as any)
+        .set(completionData)
         .where(eq(runs.id, id));
       await tx
         .update(runs)

@@ -5,7 +5,7 @@ import * as crypto from 'crypto';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { CicdRepository } from '@evalops/shared-db';
-import { InsertWebhookEvent, InsertCicdRun, CicdRun } from '@evalops/shared-db';
+import { CicdRun } from '@evalops/shared-db';
 import { EvaluationClientService } from '../evaluation-client/evaluation-client.service';
 
 /** Shape of a CI/CD integration's `config` jsonb column, as used by this service. */
@@ -117,12 +117,12 @@ export class WebhooksService {
     if (isMainBranch) {
       // Atomically create the webhook event and its CI/CD run so neither
       // record is left orphaned if the second write fails.
-      const cicdRunData: InsertCicdRun = {
+      const cicdRunData = {
         integrationId,
         externalRunId: `push-${payload.head_commit.id}`,
         branch: payload.ref.replace('refs/heads/', ''),
         commit: payload.head_commit.id,
-        status: 'pending',
+        status: 'pending' as const,
         startedAt: new Date(),
         metadata: {
           commitMessage: payload.head_commit.message,
@@ -147,7 +147,7 @@ export class WebhooksService {
       await this.triggerEvaluationRun(integrationId, cicdRun, organizationId);
     } else {
       // Non-main-branch push: record the event only (no CI/CD run needed)
-      const webhookEvent: InsertWebhookEvent = {
+      const webhookEvent = {
         integrationId,
         eventType: 'push',
         payload,
@@ -166,13 +166,13 @@ export class WebhooksService {
     if (['opened', 'synchronize'].includes(payload.action)) {
       // Atomically create the webhook event and its CI/CD run so neither
       // record is left orphaned if the second write fails.
-      const cicdRunData: InsertCicdRun = {
+      const cicdRunData = {
         integrationId,
         externalRunId: `pr-${payload.pull_request.number}-${payload.pull_request.head.sha}`,
         branch: payload.pull_request.head.ref,
         commit: payload.pull_request.head.sha,
         pullRequestNumber: payload.pull_request.number,
-        status: 'pending',
+        status: 'pending' as const,
         startedAt: new Date(),
         metadata: {
           prTitle: payload.pull_request.title,
@@ -197,7 +197,7 @@ export class WebhooksService {
       await this.triggerEvaluationRun(integrationId, cicdRun, organizationId);
     } else {
       // Other PR actions (closed, labeled, etc.): record event only
-      const webhookEvent: InsertWebhookEvent = {
+      const webhookEvent = {
         integrationId,
         eventType: 'pull_request',
         payload,
