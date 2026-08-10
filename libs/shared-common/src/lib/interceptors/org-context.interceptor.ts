@@ -48,8 +48,13 @@ export class OrgContextInterceptor implements NestInterceptor {
       return next.handle();
     }
 
+    // Matches the real shape every JwtStrategy.validate() across services
+    // returns on request.user (see AuthenticatedUser in @evalops/shared-auth):
+    // `.id`, not `.sub`/`.userId`. `role` is a separate, service-specific
+    // singular field (not part of AuthenticatedUser) used only for the RLS
+    // app.role session variable — left as-is here.
     const request = context.switchToHttp().getRequest<{
-      user?: { organizationId?: string; sub?: string; userId?: string; role?: string };
+      user?: { organizationId?: string; id?: string; role?: string };
     }>();
 
     // Fail-closed: if a user is present but has no orgId, the JWT is malformed.
@@ -58,7 +63,7 @@ export class OrgContextInterceptor implements NestInterceptor {
     }
 
     const orgId: string = request.user?.organizationId ?? '';
-    const userId: string = request.user?.sub ?? request.user?.userId ?? '';
+    const userId: string = request.user?.id ?? '';
     const role: string = request.user?.role ?? '';
 
     return new Observable((subscriber) => {

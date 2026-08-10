@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
+import { RedisModule } from '@evalops/shared-common';
+import { RateLimitGuard } from '@evalops/shared-auth';
 import { OrganizationsController } from './organizations.controller';
 import { OrganizationsService } from './organizations.service';
 
 @Module({
-  imports: [],
+  imports: [RedisModule],
   controllers: [OrganizationsController],
-  providers: [OrganizationsService],
+  providers: [OrganizationsService, RateLimitGuard],
   exports: [OrganizationsService],
 })
 export class OrganizationsModule {}

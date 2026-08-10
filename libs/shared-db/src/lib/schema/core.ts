@@ -7,6 +7,7 @@ import {
   boolean,
   index,
   jsonb,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { createInsertSchema } from 'drizzle-zod';
@@ -71,6 +72,33 @@ export const organizations = pgTable('organizations', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
+
+// Organization membership table — tracks a user's role in an organization
+// that is NOT their `users.organizationId` "home" org. Used by the
+// self-service create-organization flow: creating a new org does not touch
+// the creator's home-org row (`users.organizationId`/`users.role`), it only
+// adds a row here scoping their ORG_ADMIN role to the new org specifically.
+export const organizationMembers = pgTable(
+  'organization_members',
+  {
+    id: varchar('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    organizationId: varchar('organization_id').notNull(),
+    userId: varchar('user_id').notNull(),
+    role: varchar('role').notNull().default('member'),
+    createdAt: timestamp('created_at').defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('organization_members_org_user_unique').on(
+      table.organizationId,
+      table.userId,
+    ),
+  ],
+);
+
+export type OrganizationMember = typeof organizationMembers.$inferSelect;
+export type InsertOrganizationMember = typeof organizationMembers.$inferInsert;
 
 // Audit Trail table
 export const auditTrail = pgTable('audit_trail', {

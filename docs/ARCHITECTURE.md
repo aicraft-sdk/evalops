@@ -49,7 +49,14 @@ Owns all identity concerns. Exposes:
 - `POST /api/auth/register` / `POST /api/auth/login` — issue JWTs (local strategy via Passport)
 - `GET /api/auth/user` — return current user from JWT
 - `GET|POST /api/auth/users` — user management (admin only)
-- `GET|POST /api/auth/organizations` — org management (org_admin / admin)
+- `GET /api/auth/organizations/:id` — fetch an organization (any authenticated user)
+- `POST /api/auth/organizations` — self-service organization creation: any authenticated
+  user may create a brand new organization and becomes its `ORG_ADMIN` via an
+  `organization_members` row; rate-limited to 5 creations/60s per user via
+  `RateLimitGuard`/`@RateLimit`
+- `POST /api/auth/admin/organizations/:id` — admin-only update of an *existing*
+  organization's name (admin only, enforced by `RbacGuard`, validated by
+  `UpdateOrganizationDto`)
 - `POST /api/auth/admin/*` — admin panel routes (admin only, enforced by `RbacGuard`)
 
 JWT payload shape:
@@ -145,9 +152,18 @@ CREATE POLICY tenant_isolation ON prompts
 
 Users without an `organizationId` (e.g., personal accounts) bypass RLS via a separate `NULL` policy.
 
+The `organization_members` table (added for self-service organization creation — see
+`docs/2026-08-10-self-service-organization-creation-decision.md`) is the one exception to
+the blanket `tenant_isolation` pattern above: its INSERT policy checks
+`user_id = current_setting('app.user_id', true)` instead of `organization_id = app.org_id`,
+because a user creating a new org legitimately writes a membership row for an org that
+differs from their current session's `app.org_id`.
+
 ### Rate Limiting
 
 The ingestion endpoint (`POST /api/evaluation/ingestion/events`) is rate-limited to 100 requests per user per minute via `RateLimitGuard` (Redis-backed sliding window). The guard degrades gracefully when Redis is unavailable.
+
+`POST /api/auth/organizations` (self-service organization creation) is rate-limited to 5 creations per user per 60s using the same `RateLimitGuard`/`@RateLimit` mechanism, to prevent a single authenticated user from spinning up unbounded organizations.
 
 ---
 
@@ -159,7 +175,7 @@ Single source of truth for all database schema. All services import from `@evalo
 
 - `src/lib/schema/` — Drizzle table definitions organized by domain:
   - `auth.ts` — users, organizations, permissions
-  - `core.ts` — prompts, datasets, flows, agents, agent_versions, eval_specs, templates
+  - `core.ts` — prompts, datasets, flows, agents, agent_versions, eval_specs, templates, organization_members
   - `evaluation.ts` — runs, policies, policy_violations, baselines
   - `integration.ts` — webhooks, audit_log
 - `src/lib/db.ts` — `db` singleton (Drizzle over `postgres-js`)

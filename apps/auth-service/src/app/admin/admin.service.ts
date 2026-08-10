@@ -5,7 +5,7 @@ import {
   UpsertUserInput,
   organizations,
 } from '@evalops/shared-db';
-import { InsertOrganization } from '@evalops/shared-db';
+import { UpdateOrganizationDto } from './organization-update.dto';
 
 @Injectable()
 export class AdminService {
@@ -36,11 +36,11 @@ export class AdminService {
 
   async updateOrganization(
     organizationId: string,
-    organizationData: Partial<InsertOrganization>,
+    organizationData: UpdateOrganizationDto,
   ) {
     return this.organizationsRepository.update(
       organizationId,
-      organizationData as Partial<typeof organizations.$inferInsert>,
+      organizationData as Partial<typeof organizations.$inferSelect>,
     );
   }
 }

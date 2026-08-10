@@ -9,7 +9,7 @@ import {
 import { AdminService } from './admin.service';
 import { JwtAuthGuard, RbacGuard, Roles } from '@evalops/shared-auth';
 import { UserRole } from '@evalops/shared-auth';
-import { InsertOrganization } from '@evalops/shared-db';
+import { UpdateOrganizationDto } from './organization-update.dto';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -38,7 +38,7 @@ export class AdminController {
   @Post('organizations/:id')
   async updateOrganization(
     @Param('id') organizationId: string,
-    @Body() body: Partial<InsertOrganization>,
+    @Body() body: UpdateOrganizationDto,
   ) {
     return this.adminService.updateOrganization(organizationId, body);
   }
