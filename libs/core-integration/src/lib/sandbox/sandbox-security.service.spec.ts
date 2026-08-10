@@ -713,4 +713,102 @@ describe('SandboxSecurityService', () => {
       expect(result.valid).toBe(false);
     });
   });
+
+  describe('Function constructor bypass prevention — alias/binding tracking (round 2)', () => {
+    const aliasBypassVariants: { name: string; code: string }[] = [
+      {
+        name: 'simple const alias of Function identifier',
+        code: 'const F = Function; F("return process")();',
+      },
+      {
+        name: 'destructured alias of .constructor',
+        code: 'const { constructor: C } = {}; C("return process")();',
+      },
+      {
+        name: 'computed member access on globalThis built from string concat',
+        code: 'globalThis["Func" + "tion"]("return process")();',
+      },
+      {
+        name: 'aliased .constructor.constructor chain via const',
+        code: 'const c = [].constructor.constructor; c("return process")();',
+      },
+      {
+        name: 'globalThis computed access via String.fromCharCode obfuscation',
+        code: 'globalThis[String.fromCharCode(70,117,110,99,116,105,111,110)]("return process")();',
+      },
+      {
+        name: 'Function passed as argument to Reflect.construct',
+        code: 'Reflect.construct(Function, ["return process"])();',
+      },
+    ];
+
+    describe('validateCodeWithAST (structural AST path)', () => {
+      for (const { name, code } of aliasBypassVariants) {
+        it(`blocks: ${name}`, async () => {
+          const result = await service.validateCodeWithAST(code, 'javascript');
+
+          expect(result.valid).toBe(false);
+          expect(result.errors.length).toBeGreaterThan(0);
+        });
+      }
+    });
+
+    describe('legitimate benign code must not be flagged (false-positive guard)', () => {
+      it('allows normal array iteration and computed numeric/variable index access', async () => {
+        const code = `
+          const arr = [1, 2, 3, 4, 5];
+          let sum = 0;
+          for (let i = 0; i < arr.length; i++) {
+            sum += arr[i];
+          }
+          const first = arr[0];
+        `;
+
+        const result = await service.validateCodeWithAST(code, 'javascript');
+
+        expect(result.valid).toBe(true);
+        expect(result.errors).toHaveLength(0);
+      });
+
+      it('allows arrow functions and normal destructuring of plain data objects', async () => {
+        const code = `
+          const { a, b } = { a: 1, b: 2 };
+          const add = (x, y) => x + y;
+          const total = add(a, b);
+          const { name: userName } = { name: 'alice' };
+        `;
+
+        const result = await service.validateCodeWithAST(code, 'javascript');
+
+        expect(result.valid).toBe(true);
+        expect(result.errors).toHaveLength(0);
+      });
+
+      it('allows const aliasing of ordinary values and functions', async () => {
+        const code = `
+          function greet(name) { return 'hello ' + name; }
+          const g = greet;
+          const result = g('world');
+        `;
+
+        const result = await service.validateCodeWithAST(code, 'javascript');
+
+        expect(result.valid).toBe(true);
+        expect(result.errors).toHaveLength(0);
+      });
+
+      it('allows computed member access on plain objects with variable keys', async () => {
+        const code = `
+          const config = { host: 'localhost', port: 8080 };
+          const key = 'port';
+          const value = config[key];
+        `;
+
+        const result = await service.validateCodeWithAST(code, 'javascript');
+
+        expect(result.valid).toBe(true);
+        expect(result.errors).toHaveLength(0);
+      });
+    });
+  });
 });
