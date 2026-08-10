@@ -1,7 +1,7 @@
 import { render, type RenderOptions } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from 'next-themes'
-import { BrowserRouter } from 'wouter'
+import { Router } from 'wouter'
 import { ReactElement } from 'react'
 
 // Custom render function with providers
@@ -18,9 +18,9 @@ const AllTheProviders = ({ children }: { children: React.ReactNode }) => {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider attribute="class" defaultTheme="light">
-        <BrowserRouter>
+        <Router>
           {children}
-        </BrowserRouter>
+        </Router>
       </ThemeProvider>
     </QueryClientProvider>
   )

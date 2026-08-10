@@ -20,7 +20,7 @@ export default function TemplatePatterns() {
   const { toast } = useToast();
 
   // Fetch template patterns
-  const { data: patterns, isLoading } = useQuery({
+  const { data: patterns, isLoading } = useQuery<Record<string, unknown>>({
     queryKey: ['/api/templates/patterns'],
     enabled: isAuthenticated,
   });

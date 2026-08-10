@@ -56,18 +56,18 @@ export default function AdvancedEvals() {
   const { toast } = useToast();
 
   // Python worker status
-  const { data: workerStatus, isLoading: workerStatusLoading } = useQuery({
+  const { data: workerStatus, isLoading: workerStatusLoading } = useQuery<PythonWorkerStatus>({
     queryKey: ["/api/python-worker/status"],
     refetchInterval: 10000, // Check every 10 seconds
   });
 
   // Evaluation specs
-  const { data: evalSpecs = [], isLoading: evalSpecsLoading } = useQuery({
+  const { data: evalSpecs = [], isLoading: evalSpecsLoading } = useQuery<EvalSpec[]>({
     queryKey: ["/api/eval-specs"],
   });
 
   // Active evaluation tasks
-  const { data: activeTasks = [], isLoading: tasksLoading } = useQuery({
+  const { data: activeTasks = [], isLoading: tasksLoading } = useQuery<EvaluationTask[]>({
     queryKey: ["/api/evaluations/advanced"],
     refetchInterval: 2000, // Refresh every 2 seconds for real-time updates
   });
@@ -78,14 +78,10 @@ export default function AdvancedEvals() {
       useAdvancedEvals: boolean;
       evaluationType: string;
     }) => {
-      const response = await apiRequest("/api/runs/advanced", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          evalSpecId,
-          useAdvancedEvals,
-          evaluationType
-        }),
+      const response = await apiRequest("POST", "/api/runs/advanced", {
+        evalSpecId,
+        useAdvancedEvals,
+        evaluationType
       });
       return response.json();
     },

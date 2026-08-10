@@ -24,19 +24,27 @@ const addApiKeySchema = z.object({
 
 type AddApiKeyForm = z.infer<typeof addApiKeySchema>;
 
+interface ApiKey {
+  id: string;
+  provider: string;
+  displayName?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export default function SettingsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showKey, setShowKey] = useState<{ [keyId: string]: boolean }>({});
 
-  const { data: apiKeys = [], isLoading } = useQuery({
+  const { data: apiKeys = [], isLoading } = useQuery<ApiKey[]>({
     queryKey: ["/api/user/api-keys"],
   });
 
   const addApiKeyMutation = useMutation({
     mutationFn: async (data: AddApiKeyForm) => {
-      return apiRequest("/api/user/api-keys", "POST", data);
+      return apiRequest("POST", "/api/user/api-keys", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/user/api-keys"] });
@@ -58,7 +66,7 @@ export default function SettingsPage() {
 
   const deleteApiKeyMutation = useMutation({
     mutationFn: async (keyId: string) => {
-      return apiRequest(`/api/user/api-keys/${keyId}`, "DELETE");
+      return apiRequest("DELETE", `/api/user/api-keys/${keyId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/user/api-keys"] });
@@ -232,7 +240,7 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {apiKeys.map((apiKey: any) => (
+              {apiKeys.map((apiKey) => (
                 <div key={apiKey.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 border rounded-lg gap-3" data-testid={`api-key-${apiKey.id}`}>
                   <div className="flex items-center gap-3 flex-1">
                     <Key className="h-4 w-4 text-muted-foreground flex-shrink-0" />

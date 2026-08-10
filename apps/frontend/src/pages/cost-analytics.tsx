@@ -23,6 +23,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   PieChart as RechartsPieChart,
+  Pie,
   Cell,
   LineChart,
   Line,
@@ -72,15 +73,15 @@ const PROVIDER_COLORS = {
 export function CostAnalytics() {
   const [timeRange, setTimeRange] = useState("30");
 
-  const { data: costData = [], isLoading } = useQuery({
+  const { data: costData = [], isLoading } = useQuery<CostData[]>({
     queryKey: [`/api/analytics/cost-by-provider?days=${timeRange}`],
   });
 
-  const { data: modelUsage = [] } = useQuery({
+  const { data: modelUsage = [] } = useQuery<ModelUsage[]>({
     queryKey: [`/api/analytics/model-usage?days=${timeRange}`],
   });
 
-  const { data: costTrends = [] } = useQuery({
+  const { data: costTrends = [] } = useQuery<CostTrend[]>({
     queryKey: [`/api/analytics/cost-trends?days=${timeRange}`],
   });
 
