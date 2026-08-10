@@ -5,6 +5,33 @@ import { eq, and } from 'drizzle-orm';
 import { TraceEvent, Event, ToolCall } from '@evalops/sdk';
 
 /**
+ * Span `attributes` is a jsonb column with no static schema, so values read
+ * from it are `unknown`. These helpers safely coerce to the primitive type
+ * TraceEvent fields expect, falling back when the shape doesn't match.
+ */
+function asString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function asNumber(value: unknown, fallback = 0): number {
+  return typeof value === 'number' ? value : fallback;
+}
+
+function asOptionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function asOptionalNumber(value: unknown): number | undefined {
+  return typeof value === 'number' ? value : undefined;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+/**
  * Backward compatibility service for trace events
  * Converts spans back to TraceEvent format for frontend compatibility
  */
@@ -65,10 +92,12 @@ export class TraceCompatibilityService {
     // Group spans by traceId (each trace represents one TraceEvent)
     const tracesMap = new Map<string, TraceSpan[]>();
     for (const span of spans) {
-      if (!tracesMap.has(span.traceId)) {
-        tracesMap.set(span.traceId, []);
+      const traceSpansForId = tracesMap.get(span.traceId);
+      if (traceSpansForId) {
+        traceSpansForId.push(span);
+      } else {
+        tracesMap.set(span.traceId, [span]);
       }
-      tracesMap.get(span.traceId)!.push(span);
     }
 
     // Convert each trace to a TraceEvent
@@ -105,32 +134,32 @@ export class TraceCompatibilityService {
     }
 
     // Extract attributes from root span
-    const attrs = rootSpan.attributes as Record<string, any>;
-    const agentId = attrs.agent_id || '';
-    const agentVersion = attrs.agent_version || '';
-    const datasetId = attrs.dataset_id || '';
-    const datasetVersion = attrs.dataset_version || '';
+    const attrs = asRecord(rootSpan.attributes);
+    const agentId = asString(attrs.agent_id);
+    const agentVersion = asString(attrs.agent_version);
+    const datasetId = asString(attrs.dataset_id);
+    const datasetVersion = asString(attrs.dataset_version);
 
     // Collect events (llm.call spans)
     const events: Event[] = [];
     const llmSpans = spans.filter((s) => s.name === 'llm.call' && s.parentSpanId === rootSpan.spanId);
     for (const llmSpan of llmSpans) {
-      const llmAttrs = llmSpan.attributes as Record<string, any>;
-      const eventType = llmAttrs.event_type as string;
+      const llmAttrs = asRecord(llmSpan.attributes);
+      const eventType = asString(llmAttrs.event_type);
       if (eventType === 'user_message' || eventType === 'assistant_message') {
         events.push({
-          type: eventType as 'user_message' | 'assistant_message',
+          type: eventType,
           timestamp: llmSpan.startTime,
-          content: llmAttrs.content || '',
-          metadata: llmAttrs.metadata || {},
+          content: asString(llmAttrs.content),
+          metadata: asRecord(llmAttrs.metadata),
         });
       } else if (eventType === 'error') {
         events.push({
           type: 'error',
           timestamp: llmSpan.startTime,
           metadata: {
-            error: llmAttrs.error || '',
-            ...(llmAttrs.metadata || {}),
+            error: asString(llmAttrs.error),
+            ...asRecord(llmAttrs.metadata),
           },
         });
       }
@@ -142,28 +171,27 @@ export class TraceCompatibilityService {
       (s) => s.name === 'tool.call' && s.parentSpanId === rootSpan.spanId,
     );
     for (const toolCallSpan of toolCallSpans) {
-      const toolAttrs = toolCallSpan.attributes as Record<string, any>;
-      
+      const toolAttrs = asRecord(toolCallSpan.attributes);
+
       // Find corresponding tool.result span
       const toolResultSpan = spans.find(
         (s) => s.name === 'tool.result' && s.parentSpanId === toolCallSpan.spanId,
       );
+      const toolResultAttrs = toolResultSpan
+        ? asRecord(toolResultSpan.attributes)
+        : undefined;
 
       const duration = toolCallSpan.endTime && toolCallSpan.startTime
         ? toolCallSpan.endTime.getTime() - toolCallSpan.startTime.getTime()
         : undefined;
 
       toolCalls.push({
-        toolName: toolAttrs.tool_name || '',
-        arguments: toolAttrs.arguments || {},
+        toolName: asString(toolAttrs.tool_name),
+        arguments: asRecord(toolAttrs.arguments),
         timestamp: toolCallSpan.startTime,
         duration,
-        result: toolResultSpan
-          ? (toolResultSpan.attributes as Record<string, any>).result
-          : undefined,
-        error: toolResultSpan
-          ? (toolResultSpan.attributes as Record<string, any>).error || undefined
-          : undefined,
+        result: toolResultAttrs?.result,
+        error: toolResultAttrs ? asOptionalString(toolResultAttrs.error) : undefined,
       });
     }
 
@@ -175,9 +203,9 @@ export class TraceCompatibilityService {
       : undefined;
 
     // Extract token usage and cost from root span attributes
-    const promptTokens = attrs.prompt_tokens || 0;
-    const completionTokens = attrs.completion_tokens || 0;
-    const cost = attrs.cost || 0;
+    const promptTokens = asNumber(attrs.prompt_tokens);
+    const completionTokens = asNumber(attrs.completion_tokens);
+    const cost = asNumber(attrs.cost);
 
     return {
       runId: rootSpan.runId,
@@ -191,8 +219,8 @@ export class TraceCompatibilityService {
         startTime,
         endTime,
         totalDuration,
-        toolCallDuration: attrs.tool_call_duration_ms || undefined,
-        llmCallDuration: attrs.llm_call_duration_ms || undefined,
+        toolCallDuration: asOptionalNumber(attrs.tool_call_duration_ms),
+        llmCallDuration: asOptionalNumber(attrs.llm_call_duration_ms),
       },
       tokens: {
         promptTokens,

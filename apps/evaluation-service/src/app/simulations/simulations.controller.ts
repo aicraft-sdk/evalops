@@ -12,7 +12,8 @@ import {
 import { SimulationsService } from './simulations.service';
 import { TraceWriterService } from './trace-writer.service';
 import { SimulationRunnerService } from './simulation-runner.service';
-import { JwtAuthGuard, CurrentUser } from '@evalops/shared-auth';
+import { JwtAuthGuard, CurrentUser, AuthenticatedUser } from '@evalops/shared-auth';
+import type { Request as ExpressRequest } from 'express';
 import { extractTokenFromRequest } from '@evalops/shared-common';
 import {
   InsertSimulationSuite,
@@ -33,7 +34,7 @@ export class SimulationsController {
   @Post('suites')
   async createSuite(
     @Body() body: Omit<InsertSimulationSuite, 'organizationId' | 'createdBy'>,
-    @CurrentUser() user: any
+    @CurrentUser() user: AuthenticatedUser
   ) {
     return this.simulationsService.createSuite(
       body,
@@ -44,13 +45,13 @@ export class SimulationsController {
 
   @UseGuards(JwtAuthGuard)
   @Get('suites')
-  async getSuites(@CurrentUser() user: any) {
+  async getSuites(@CurrentUser() user: AuthenticatedUser) {
     return this.simulationsService.getSuites(user.organizationId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('suites/:id')
-  async getSuite(@Param('id') id: string, @CurrentUser() user: any) {
+  async getSuite(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.simulationsService.getSuite(id, user.organizationId);
   }
 
@@ -60,14 +61,14 @@ export class SimulationsController {
     @Param('id') id: string,
     @Body()
     body: Partial<Omit<InsertSimulationSuite, 'organizationId' | 'createdBy'>>,
-    @CurrentUser() user: any
+    @CurrentUser() user: AuthenticatedUser
   ) {
     return this.simulationsService.updateSuite(id, body, user.organizationId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Delete('suites/:id')
-  async deleteSuite(@Param('id') id: string, @CurrentUser() user: any) {
+  async deleteSuite(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     await this.simulationsService.deleteSuite(id, user.organizationId);
     return { message: 'Suite deleted successfully' };
   }
@@ -79,7 +80,7 @@ export class SimulationsController {
   async createScenario(
     @Param('suiteId') suiteId: string,
     @Body() body: Omit<InsertSimulationScenario, 'suiteId' | 'organizationId'>,
-    @CurrentUser() user: any
+    @CurrentUser() user: AuthenticatedUser
   ) {
     return this.simulationsService.createScenario(
       suiteId,
@@ -92,7 +93,7 @@ export class SimulationsController {
   @Get('suites/:suiteId/scenarios')
   async getScenarios(
     @Param('suiteId') suiteId: string,
-    @CurrentUser() user: any
+    @CurrentUser() user: AuthenticatedUser
   ) {
     return this.simulationsService.getScenariosForSuite(
       suiteId,
@@ -102,7 +103,7 @@ export class SimulationsController {
 
   @UseGuards(JwtAuthGuard)
   @Get('scenarios/:id')
-  async getScenario(@Param('id') id: string, @CurrentUser() user: any) {
+  async getScenario(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.simulationsService.getScenario(id, user.organizationId);
   }
 
@@ -112,7 +113,7 @@ export class SimulationsController {
     @Param('id') id: string,
     @Body()
     body: Partial<Omit<InsertSimulationScenario, 'suiteId' | 'organizationId'>>,
-    @CurrentUser() user: any
+    @CurrentUser() user: AuthenticatedUser
   ) {
     return this.simulationsService.updateScenario(
       id,
@@ -123,7 +124,7 @@ export class SimulationsController {
 
   @UseGuards(JwtAuthGuard)
   @Delete('scenarios/:id')
-  async deleteScenario(@Param('id') id: string, @CurrentUser() user: any) {
+  async deleteScenario(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     await this.simulationsService.deleteScenario(id, user.organizationId);
     return { message: 'Scenario deleted successfully' };
   }
@@ -134,7 +135,7 @@ export class SimulationsController {
   @Get('runs/:runId')
   async getSimulationRun(
     @Param('runId') runId: string,
-    @CurrentUser() user: any
+    @CurrentUser() user: AuthenticatedUser
   ) {
     const simulationRun = await this.simulationsService.getSimulationRunByRunId(
       runId,
@@ -165,8 +166,8 @@ export class SimulationsController {
   @Post('scenarios/:scenarioId/run')
   async executeScenario(
     @Param('scenarioId') scenarioId: string,
-    @CurrentUser() user: any,
-    @Request() req: any,
+    @CurrentUser() user: AuthenticatedUser,
+    @Request() req: ExpressRequest,
     @Body() body?: { commitSha?: string }
   ) {
     const token = extractTokenFromRequest(req);
@@ -183,8 +184,8 @@ export class SimulationsController {
   @Post('suites/:suiteId/run')
   async runSuite(
     @Param('suiteId') suiteId: string,
-    @CurrentUser() user: any,
-    @Request() req: any,
+    @CurrentUser() user: AuthenticatedUser,
+    @Request() req: ExpressRequest,
     @Body() body?: { commitSha?: string }
   ) {
     const token = extractTokenFromRequest(req);
@@ -215,7 +216,7 @@ export class SimulationsController {
 
   @UseGuards(JwtAuthGuard)
   @Get('runs/:runId/spans')
-  async getSpans(@Param('runId') runId: string, @CurrentUser() user: any) {
+  async getSpans(@Param('runId') runId: string, @CurrentUser() user: AuthenticatedUser) {
     // Verify simulation run exists
     const simulationRun = await this.simulationsService.getSimulationRunByRunId(
       runId,

@@ -76,17 +76,17 @@ export default function CustomEvaluators() {
   })
 
   // Fetch custom evaluators
-  const { data: evaluators = [], isLoading, refetch } = useQuery({
+  const { data: evaluators = [], isLoading, refetch } = useQuery<CustomEvaluator[]>({
     queryKey: ['/api/custom-evaluators'],
     queryFn: async () => {
       const params = new URLSearchParams()
       if (statusFilter !== 'all') params.append('status', statusFilter)
       if (typeFilter !== 'all') params.append('evaluatorType', typeFilter)
       params.append('includePublic', 'true')
-      
+
       const response = await fetch(`/api/custom-evaluators?${params}`)
       if (!response.ok) throw new Error('Failed to fetch evaluators')
-      return response.json() as CustomEvaluator[]
+      return (await response.json()) as CustomEvaluator[]
     }
   })
 
@@ -131,10 +131,7 @@ export default function CustomEvaluators() {
   // Update evaluator mutation
   const updateEvaluator = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<CustomEvaluator> }) => {
-      return apiRequest(`/api/custom-evaluators/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(updates)
-      })
+      return apiRequest('PUT', `/api/custom-evaluators/${id}`, updates)
     },
     onSuccess: () => {
       toast({
@@ -149,9 +146,7 @@ export default function CustomEvaluators() {
   // Delete evaluator mutation
   const deleteEvaluator = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest(`/api/custom-evaluators/${id}`, {
-        method: 'DELETE'
-      })
+      return apiRequest('DELETE', `/api/custom-evaluators/${id}`)
     },
     onSuccess: () => {
       toast({

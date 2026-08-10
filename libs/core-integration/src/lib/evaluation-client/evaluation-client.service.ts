@@ -3,6 +3,16 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 
+/**
+ * Shape of the evaluation run returned by the Evaluation Service's
+ * `/api/runs` endpoints, as consumed by callers of this client.
+ */
+export interface EvaluationRunResponse {
+  id: string;
+  status: string;
+  [key: string]: unknown;
+}
+
 @Injectable()
 export class EvaluationClientService {
   private readonly baseUrl: string;
@@ -23,8 +33,8 @@ export class EvaluationClientService {
     organizationId: string,
     triggeredBy?: string,
     token?: string,
-  ): Promise<any> {
-    const headers: any = {
+  ): Promise<EvaluationRunResponse> {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
     if (token) {
@@ -41,23 +51,29 @@ export class EvaluationClientService {
     };
 
     const response = await firstValueFrom(
-      this.httpService.post(`${this.baseUrl}/api/runs`, body, {
-        headers,
-      }),
+      this.httpService.post<EvaluationRunResponse>(
+        `${this.baseUrl}/api/runs`,
+        body,
+        { headers },
+      ),
     );
     return response.data;
   }
 
-  async getRunStatus(runId: string, token?: string): Promise<any> {
-    const headers: any = {};
+  async getRunStatus(
+    runId: string,
+    token?: string,
+  ): Promise<EvaluationRunResponse> {
+    const headers: Record<string, string> = {};
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
     const response = await firstValueFrom(
-      this.httpService.get(`${this.baseUrl}/api/runs/${runId}`, {
-        headers,
-      }),
+      this.httpService.get<EvaluationRunResponse>(
+        `${this.baseUrl}/api/runs/${runId}`,
+        { headers },
+      ),
     );
     return response.data;
   }

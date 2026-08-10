@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { db } from '@evalops/shared-db';
 import { traceSpans, runs, type TraceSpan } from '@evalops/shared-db';
-import { eq, and, gte, lte, sql, or, like, desc, asc } from 'drizzle-orm';
+import { eq, and, gte, lte, sql, like, desc, asc } from 'drizzle-orm';
 import {
   GetSpansQueryDto,
   SearchSpansQueryDto,
@@ -162,7 +162,11 @@ export class TracesService {
 
     // Second pass: build parent-child relationships
     for (const span of spans) {
-      const node = spanMap.get(span.spanId)!;
+      const node = spanMap.get(span.spanId);
+      if (!node) {
+        // Should not happen: every span was added to spanMap in the first pass
+        continue;
+      }
       if (span.parentSpanId) {
         const parentNode = spanMap.get(span.parentSpanId);
         if (parentNode) {

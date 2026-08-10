@@ -10,6 +10,14 @@ import { useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import type { EnhancedAuditEntry } from "@evalops/shared";
 
+// API responses are JSON-serialized, so Date columns (e.g. createdAt) arrive
+// as ISO strings, not Date instances. EnhancedAuditEntry is inferred from the
+// Drizzle schema (createdAt: Date | null) which reflects the DB row shape,
+// not the wire shape — override it to match what actually reaches the client.
+type AuditTrailEntry = Omit<EnhancedAuditEntry, "createdAt"> & {
+  createdAt: string;
+};
+
 export default function AuditTrail() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
@@ -28,7 +36,7 @@ export default function AuditTrail() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: auditEntries } = useQuery<EnhancedAuditEntry[]>({
+  const { data: auditEntries } = useQuery<AuditTrailEntry[]>({
     queryKey: ["/api/audit-trail"],
     enabled: isAuthenticated,
   });

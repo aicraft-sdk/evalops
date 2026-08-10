@@ -49,8 +49,18 @@ export class TokensController {
     });
 
     // Strip tokenHash from response; include raw token (shown once)
-    const { tokenHash: _hash, ...rest } = token;
-    return { ...rest, token: raw };
+    return {
+      id: token.id,
+      organizationId: token.organizationId,
+      userId: token.userId,
+      name: token.name,
+      scopes: token.scopes,
+      expiresAt: token.expiresAt,
+      lastUsedAt: token.lastUsedAt,
+      revokedAt: token.revokedAt,
+      createdAt: token.createdAt,
+      token: raw,
+    };
   }
 
   @Get()

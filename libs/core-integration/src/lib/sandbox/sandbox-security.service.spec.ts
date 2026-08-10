@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { SandboxSecurityService } from './sandbox-security.service';
-import { SandboxPolicies } from './sandbox-policies';
+import { SandboxPolicies, NetworkPolicy } from './sandbox-policies';
 
 describe('SandboxSecurityService', () => {
   let service: SandboxSecurityService;
@@ -34,7 +34,7 @@ describe('SandboxSecurityService', () => {
     policies = module.get(SandboxPolicies);
 
     configService.get.mockImplementation((key: string) => {
-      const defaults: Record<string, any> = {
+      const defaults: Record<string, boolean> = {
         OPENSANDBOX_REQUIRE_AST_VALIDATION: true,
       };
       return defaults[key];
@@ -166,7 +166,7 @@ describe('SandboxSecurityService', () => {
 
     it('should reject invalid egress policy', () => {
       const result = service.validateNetworkPolicy({
-        egressPolicy: 'invalid' as any,
+        egressPolicy: 'invalid' as unknown as NetworkPolicy['egressPolicy'],
         allowedDomains: [],
         blockedDomains: [],
         blockedIPRanges: [],
@@ -523,15 +523,18 @@ describe('SandboxSecurityService', () => {
         name: '<script>alert("xss")</script>',
         value: 42,
       };
-      const sanitized = service.sanitizeInput(input);
+      const sanitized = service.sanitizeInput(input) as Record<
+        string,
+        unknown
+      >;
 
-      expect(sanitized.name).not.toContain('<script>');
-      expect(sanitized.value).toBe(42);
+      expect(sanitized['name']).not.toContain('<script>');
+      expect(sanitized['value']).toBe(42);
     });
 
     it('should sanitize array input', () => {
       const input = ['<script>alert("xss")</script>', 'safe value'];
-      const sanitized = service.sanitizeInput(input);
+      const sanitized = service.sanitizeInput(input) as string[];
 
       expect(sanitized[0]).not.toContain('<script>');
       expect(sanitized[1]).toBe('safe value');
@@ -590,6 +593,222 @@ describe('SandboxSecurityService', () => {
       expect(result.errors).toContain(
         'AST validation not supported for language: rust'
       );
+    });
+
+    it('detects new Function() constructor calls via AST validation', async () => {
+      const code = 'const fn = new Function("return 1");';
+
+      const result = await service.validateCodeWithAST(code, 'javascript');
+
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some((e) => e.includes('new Function'))
+      ).toBe(true);
+    });
+  });
+
+  describe('Function constructor bypass prevention', () => {
+    const bypassVariants: { name: string; code: string }[] = [
+      {
+        name: 'bare Function() call without new',
+        code: 'Function("return process")()',
+      },
+      {
+        name: '.constructor escape on a function expression',
+        code: '(function(){}).constructor("return process")()',
+      },
+      {
+        name: '.constructor escape on an arrow function',
+        code: '(() => {}).constructor("return process")()',
+      },
+      {
+        name: 'globalThis bracket-notation Function access',
+        code: 'globalThis["Function"]("return process")()',
+      },
+      {
+        name: 'globalThis dot-notation Function access',
+        code: 'globalThis.Function("return process")()',
+      },
+      {
+        name: 'window dot-notation Function access',
+        code: 'window.Function("return process")()',
+      },
+      {
+        name: 'Array constructor chain ([].constructor.constructor)',
+        code: '[].constructor.constructor("return process")()',
+      },
+      {
+        name: 'String constructor chain ("".constructor.constructor)',
+        code: '"".constructor.constructor("return process")()',
+      },
+    ];
+
+    describe('validateCode (pattern-based path)', () => {
+      for (const { name, code } of bypassVariants) {
+        it(`blocks: ${name}`, () => {
+          const result = service.validateCode(code, 'javascript');
+
+          expect(result.valid).toBe(false);
+          expect(result.errors.length).toBeGreaterThan(0);
+        });
+      }
+
+      it('still blocks the already-fixed new Function(...) case (no regression)', () => {
+        const result = service.validateCode(
+          'new Function("return process")',
+          'javascript',
+        );
+
+        expect(result.valid).toBe(false);
+      });
+    });
+
+    describe('validateCodeWithAST (structural AST path)', () => {
+      for (const { name, code } of bypassVariants) {
+        it(`blocks: ${name}`, async () => {
+          const result = await service.validateCodeWithAST(code, 'javascript');
+
+          expect(result.valid).toBe(false);
+          expect(result.errors.length).toBeGreaterThan(0);
+        });
+      }
+
+      it('still blocks the already-fixed new Function(...) case (no regression)', async () => {
+        const result = await service.validateCodeWithAST(
+          'new Function("return process")',
+          'javascript',
+        );
+
+        expect(result.valid).toBe(false);
+        expect(result.errors.some((e) => e.includes('new Function'))).toBe(
+          true,
+        );
+      });
+    });
+
+    it('does not flag legitimate benign code that never touches Function or .constructor', () => {
+      const code = `
+        function add(a, b) { return a + b; }
+        const double = (x) => x * 2;
+        const total = add(1, double(2));
+      `;
+
+      const result = service.validateCode(code, 'javascript');
+
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('documents that .constructor access is now blocked outright as a conservative security posture', () => {
+      // Sandboxed AI-generated eval code has no legitimate need to introspect
+      // `.constructor` — it is the classic idiom for escaping to the global
+      // Function constructor (e.g. `x.constructor.constructor(...)`). We
+      // therefore deny `.constructor` access unconditionally rather than try
+      // to enumerate every escape shape built on top of it.
+      const result = service.validateCode(
+        'const ctor = someValue.constructor;',
+        'javascript',
+      );
+
+      expect(result.valid).toBe(false);
+    });
+  });
+
+  describe('Function constructor bypass prevention — alias/binding tracking (round 2)', () => {
+    const aliasBypassVariants: { name: string; code: string }[] = [
+      {
+        name: 'simple const alias of Function identifier',
+        code: 'const F = Function; F("return process")();',
+      },
+      {
+        name: 'destructured alias of .constructor',
+        code: 'const { constructor: C } = {}; C("return process")();',
+      },
+      {
+        name: 'computed member access on globalThis built from string concat',
+        code: 'globalThis["Func" + "tion"]("return process")();',
+      },
+      {
+        name: 'aliased .constructor.constructor chain via const',
+        code: 'const c = [].constructor.constructor; c("return process")();',
+      },
+      {
+        name: 'globalThis computed access via String.fromCharCode obfuscation',
+        code: 'globalThis[String.fromCharCode(70,117,110,99,116,105,111,110)]("return process")();',
+      },
+      {
+        name: 'Function passed as argument to Reflect.construct',
+        code: 'Reflect.construct(Function, ["return process"])();',
+      },
+    ];
+
+    describe('validateCodeWithAST (structural AST path)', () => {
+      for (const { name, code } of aliasBypassVariants) {
+        it(`blocks: ${name}`, async () => {
+          const result = await service.validateCodeWithAST(code, 'javascript');
+
+          expect(result.valid).toBe(false);
+          expect(result.errors.length).toBeGreaterThan(0);
+        });
+      }
+    });
+
+    describe('legitimate benign code must not be flagged (false-positive guard)', () => {
+      it('allows normal array iteration and computed numeric/variable index access', async () => {
+        const code = `
+          const arr = [1, 2, 3, 4, 5];
+          let sum = 0;
+          for (let i = 0; i < arr.length; i++) {
+            sum += arr[i];
+          }
+          const first = arr[0];
+        `;
+
+        const result = await service.validateCodeWithAST(code, 'javascript');
+
+        expect(result.valid).toBe(true);
+        expect(result.errors).toHaveLength(0);
+      });
+
+      it('allows arrow functions and normal destructuring of plain data objects', async () => {
+        const code = `
+          const { a, b } = { a: 1, b: 2 };
+          const add = (x, y) => x + y;
+          const total = add(a, b);
+          const { name: userName } = { name: 'alice' };
+        `;
+
+        const result = await service.validateCodeWithAST(code, 'javascript');
+
+        expect(result.valid).toBe(true);
+        expect(result.errors).toHaveLength(0);
+      });
+
+      it('allows const aliasing of ordinary values and functions', async () => {
+        const code = `
+          function greet(name) { return 'hello ' + name; }
+          const g = greet;
+          const result = g('world');
+        `;
+
+        const result = await service.validateCodeWithAST(code, 'javascript');
+
+        expect(result.valid).toBe(true);
+        expect(result.errors).toHaveLength(0);
+      });
+
+      it('allows computed member access on plain objects with variable keys', async () => {
+        const code = `
+          const config = { host: 'localhost', port: 8080 };
+          const key = 'port';
+          const value = config[key];
+        `;
+
+        const result = await service.validateCodeWithAST(code, 'javascript');
+
+        expect(result.valid).toBe(true);
+        expect(result.errors).toHaveLength(0);
+      });
     });
   });
 });

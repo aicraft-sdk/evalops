@@ -233,7 +233,7 @@ describe('Simulation Workflow (integration)', () => {
         content: 'system: You are helpful\nmodel:\n  provider: openai\n  model: gpt-4',
       };
 
-      mockCoreClient.getAgent.mockResolvedValue(mockAgent as any);
+      mockCoreClient.getAgent.mockResolvedValue(mockAgent);
 
       const turnSpan = {
         ...rootSpan,
@@ -248,8 +248,8 @@ describe('Simulation Workflow (integration)', () => {
       };
 
       mockTraceWriterService.createSpan
-        .mockResolvedValueOnce(turnSpan as any)
-        .mockResolvedValueOnce(llmSpan as any);
+        .mockResolvedValueOnce(turnSpan)
+        .mockResolvedValueOnce(llmSpan);
 
       mockAIProvider.generateResponse.mockResolvedValue({
         response: 'Hello! How can I help?',
@@ -408,12 +408,12 @@ describe('Simulation Workflow (integration)', () => {
       mockCoreClient.getAgent.mockResolvedValue({
         id: 'agent-123',
         content: 'system: You are helpful\nmodel:\n  provider: openai\n  model: gpt-4',
-      } as any);
+      });
 
       mockTraceWriterService.createSpan.mockResolvedValue({
         spanId: 'span-turn',
         name: 'simulation.turn',
-      } as any);
+      });
 
       mockAIProvider.generateResponse.mockResolvedValue({
         response: 'Response',

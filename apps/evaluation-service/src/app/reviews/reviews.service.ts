@@ -11,16 +11,9 @@ import {
   InsertRunAnnotation,
   ReviewQueueItem,
   InsertReviewQueueItem,
-  Run,
-  SampleResult,
-  TraceSpan,
 } from '@evalops/shared-db';
 import { db } from '@evalops/shared-db';
-import {
-  traceSpans,
-  sampleResults,
-  reviewQueueItems,
-} from '@evalops/shared-db';
+import { traceSpans, reviewQueueItems } from '@evalops/shared-db';
 import { eq, and } from 'drizzle-orm';
 
 @Injectable()
@@ -126,7 +119,7 @@ export class ReviewsService {
     data: Partial<InsertRunAnnotation>,
     organizationId: string
   ): Promise<RunAnnotation> {
-    const annotation = await this.getAnnotation(id, organizationId);
+    await this.getAnnotation(id, organizationId); // Verify exists and belongs to org
     return await this.sampleResultsRepository.updateAnnotation(id, data);
   }
 
@@ -297,8 +290,11 @@ export class ReviewsService {
     }
 
     // Extract sample data from run
+    // NOTE: input is used below to determine whether span/sample extraction
+    // succeeded; the corresponding expected-output value is not yet consumed
+    // because promoteToDataset does not call an addSample API on
+    // CoreClientService (see TODO below) — deferred until that API exists.
     let input: unknown;
-    let expectedOutput: unknown;
 
     if (queueItem.annotationId) {
       // If there's an annotation with a spanId, extract from that span
@@ -319,7 +315,6 @@ export class ReviewsService {
           // Extract from span attributes
           const attrs = span.attributes as Record<string, unknown>;
           input = attrs?.['input'] || attrs?.['user_message'] || attrs?.['message'];
-          expectedOutput = attrs?.['expected_output'] || attrs?.['expected'];
         }
       }
     }
@@ -330,7 +325,6 @@ export class ReviewsService {
       if (samples.length > 0) {
         const sample = samples[0]; // Use first sample
         input = sample.input;
-        expectedOutput = sample.expectedOutput;
       } else {
         throw new BadRequestException(
           `Cannot extract sample data from run ${run.id}`
@@ -339,7 +333,7 @@ export class ReviewsService {
     }
 
     // Get or create dataset
-    let targetDatasetId = datasetId;
+    const targetDatasetId = datasetId;
     if (!targetDatasetId) {
       if (!datasetName) {
         throw new BadRequestException(
@@ -390,8 +384,7 @@ export class ReviewsService {
     suiteId: string,
     scenarioId: string | null,
     scenarioName: string | null,
-    organizationId: string,
-    authToken?: string
+    organizationId: string
   ): Promise<{ scenarioId: string }> {
     const queueItem = await this.getQueueItem(queueItemId, organizationId);
     const run = await this.runsRepository.findById(queueItem.runId);
@@ -419,19 +412,11 @@ export class ReviewsService {
       );
     }
 
-    // Build turn definitions from spans
-    const turns = turnSpans.map((span) => {
-      const attrs = span.attributes as Record<string, unknown>;
-      return {
-        role: (attrs?.['role'] as string) || 'user',
-        content: attrs?.['content'] || attrs?.['message'] || attrs?.['user_message'],
-        metadata: (attrs?.['metadata'] as Record<string, unknown>) || {},
-      };
-    });
-
     // Create or update scenario
-    // Note: This would require adding scenario methods to CoreClientService
-    // For now, we'll update the queue item to track the promotion
+    // Note: This would require adding scenario methods to CoreClientService,
+    // including building turn definitions from turnSpans' attributes
+    // (role/content/metadata). For now, we'll update the queue item to
+    // track the promotion.
     const targetScenarioId = scenarioId || 'new-scenario-id'; // Placeholder
 
     await this.reviewQueueRepository.update(queueItemId, {

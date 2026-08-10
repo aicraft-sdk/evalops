@@ -173,12 +173,15 @@ export class AlertRuleService {
           run.evalSpecId,
         );
         const completedRuns = recentRuns
-          .filter((r) => r.status === 'completed' && r.duration !== null)
+          .filter(
+            (r): r is Run & { duration: number } =>
+              r.status === 'completed' && r.duration !== null,
+          )
           .slice(0, 20);
 
         if (completedRuns.length >= 5) {
           const durations = completedRuns
-            .map((r) => r.duration!)
+            .map((r) => r.duration)
             .sort((a, b) => a - b);
           const p95Index = Math.floor(durations.length * 0.95);
           const p95Latency = durations[p95Index];

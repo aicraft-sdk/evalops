@@ -7,20 +7,19 @@ import {
 } from '@nestjs/common';
 import { SandboxExecutionService } from './sandbox-execution.service';
 import { HttpClientService } from '@evalops/shared-common';
-import { CustomEvaluatorsRepository } from '@evalops/shared-db';
-import { CoreClientService } from '../core-client/core-client.service';
 import {
-  ExecutionResult,
-  SandboxConfig,
-  EvaluationResult,
-} from './sandbox-execution.dto';
+  CustomEvaluatorsRepository,
+  CustomEvaluator,
+  EvaluatorUsage,
+} from '@evalops/shared-db';
+import { CoreClientService } from '../core-client/core-client.service';
+import { ExecutionResult, SandboxConfig } from './sandbox-execution.dto';
 
 describe('SandboxExecutionService', () => {
   let service: SandboxExecutionService;
   let httpClient: jest.Mocked<HttpClientService>;
   let configService: jest.Mocked<ConfigService>;
   let customEvaluatorsRepository: jest.Mocked<CustomEvaluatorsRepository>;
-  let coreClient: jest.Mocked<CoreClientService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -58,10 +57,9 @@ describe('SandboxExecutionService', () => {
     httpClient = module.get(HttpClientService);
     configService = module.get(ConfigService);
     customEvaluatorsRepository = module.get(CustomEvaluatorsRepository);
-    coreClient = module.get(CoreClientService);
 
     configService.get.mockImplementation((key: string) => {
-      const defaults: Record<string, any> = {
+      const defaults: Record<string, string> = {
         CORE_SERVICE_URL: 'http://localhost:3002',
       };
       return defaults[key];
@@ -121,13 +119,17 @@ describe('SandboxExecutionService', () => {
         exitCode: 0,
       };
 
-      customEvaluatorsRepository.findById.mockResolvedValue(mockEvaluator as any);
+      customEvaluatorsRepository.findById.mockResolvedValue(
+        mockEvaluator as unknown as CustomEvaluator
+      );
       httpClient.get.mockResolvedValue({ content: TEST_CODE });
       httpClient.post
         .mockResolvedValueOnce({ sandboxId: TEST_SANDBOX_ID })
         .mockResolvedValueOnce(executionResult);
       httpClient.delete.mockResolvedValue(undefined);
-      customEvaluatorsRepository.createUsage.mockResolvedValue({} as any);
+      customEvaluatorsRepository.createUsage.mockResolvedValue(
+        {} as unknown as EvaluatorUsage
+      );
 
       const result = await service.executeCustomEvaluator(
         TEST_EVALUATOR_ID,
@@ -164,7 +166,7 @@ describe('SandboxExecutionService', () => {
       };
 
       customEvaluatorsRepository.findById.mockResolvedValue(
-        inactiveEvaluator as any
+        inactiveEvaluator as unknown as CustomEvaluator
       );
 
       await expect(
@@ -175,7 +177,9 @@ describe('SandboxExecutionService', () => {
     it('should validate input against schema', async () => {
       const invalidInput = { prompt: 'Hello' };
 
-      customEvaluatorsRepository.findById.mockResolvedValue(mockEvaluator as any);
+      customEvaluatorsRepository.findById.mockResolvedValue(
+        mockEvaluator as unknown as CustomEvaluator
+      );
 
       await expect(
         service.executeCustomEvaluator(TEST_EVALUATOR_ID, invalidInput)
@@ -190,13 +194,17 @@ describe('SandboxExecutionService', () => {
         exitCode: 0,
       };
 
-      customEvaluatorsRepository.findById.mockResolvedValue(mockEvaluator as any);
+      customEvaluatorsRepository.findById.mockResolvedValue(
+        mockEvaluator as unknown as CustomEvaluator
+      );
       httpClient.get.mockResolvedValue({ content: TEST_CODE });
       httpClient.post
         .mockResolvedValueOnce({ sandboxId: TEST_SANDBOX_ID })
         .mockResolvedValueOnce(executionResult);
       httpClient.delete.mockResolvedValue(undefined);
-      customEvaluatorsRepository.createUsage.mockResolvedValue({} as any);
+      customEvaluatorsRepository.createUsage.mockResolvedValue(
+        {} as unknown as EvaluatorUsage
+      );
 
       const result = await service.executeCustomEvaluator(
         TEST_EVALUATOR_ID,
@@ -207,7 +215,9 @@ describe('SandboxExecutionService', () => {
     });
 
     it('should handle sandbox cleanup on error', async () => {
-      customEvaluatorsRepository.findById.mockResolvedValue(mockEvaluator as any);
+      customEvaluatorsRepository.findById.mockResolvedValue(
+        mockEvaluator as unknown as CustomEvaluator
+      );
       httpClient.get.mockResolvedValue({ content: TEST_CODE });
       httpClient.post
         .mockResolvedValueOnce({ sandboxId: TEST_SANDBOX_ID })
@@ -232,13 +242,17 @@ describe('SandboxExecutionService', () => {
         exitCode: 0,
       };
 
-      customEvaluatorsRepository.findById.mockResolvedValue(mockEvaluator as any);
+      customEvaluatorsRepository.findById.mockResolvedValue(
+        mockEvaluator as unknown as CustomEvaluator
+      );
       httpClient.get.mockResolvedValue({ content: TEST_CODE });
       httpClient.post
         .mockResolvedValueOnce({ sandboxId: TEST_SANDBOX_ID })
         .mockResolvedValueOnce(executionResult);
       httpClient.delete.mockResolvedValue(undefined);
-      customEvaluatorsRepository.createUsage.mockResolvedValue({} as any);
+      customEvaluatorsRepository.createUsage.mockResolvedValue(
+        {} as unknown as EvaluatorUsage
+      );
 
       await service.executeCustomEvaluator(TEST_EVALUATOR_ID, TEST_INPUT);
 
@@ -252,13 +266,17 @@ describe('SandboxExecutionService', () => {
     });
 
     it('should track evaluator usage on failure', async () => {
-      customEvaluatorsRepository.findById.mockResolvedValue(mockEvaluator as any);
+      customEvaluatorsRepository.findById.mockResolvedValue(
+        mockEvaluator as unknown as CustomEvaluator
+      );
       httpClient.get.mockResolvedValue({ content: TEST_CODE });
       httpClient.post
         .mockResolvedValueOnce({ sandboxId: TEST_SANDBOX_ID })
         .mockRejectedValueOnce(new Error('Execution failed'));
       httpClient.delete.mockResolvedValue(undefined);
-      customEvaluatorsRepository.createUsage.mockResolvedValue({} as any);
+      customEvaluatorsRepository.createUsage.mockResolvedValue(
+        {} as unknown as EvaluatorUsage
+      );
 
       await expect(
         service.executeCustomEvaluator(TEST_EVALUATOR_ID, TEST_INPUT)
@@ -549,7 +567,9 @@ describe('SandboxExecutionService', () => {
     });
 
     it('should throw NotFoundException for missing file', async () => {
-      const error: any = new Error('Not found');
+      const error = new Error('Not found') as Error & {
+        response: { status: number };
+      };
       error.response = { status: 404 };
       httpClient.get.mockRejectedValue(error);
 
@@ -578,31 +598,31 @@ describe('SandboxExecutionService', () => {
 
   describe('determineLanguage', () => {
     it('should detect Python from .py extension', () => {
-      const result = service['determineLanguage']('evaluator.py', undefined);
+      const result = service['determineLanguage']('evaluator.py');
 
       expect(result).toBe('python');
     });
 
     it('should detect JavaScript from .js extension', () => {
-      const result = service['determineLanguage']('evaluator.js', undefined);
+      const result = service['determineLanguage']('evaluator.js');
 
       expect(result).toBe('javascript');
     });
 
     it('should detect JavaScript from .ts extension', () => {
-      const result = service['determineLanguage']('evaluator.ts', undefined);
+      const result = service['determineLanguage']('evaluator.ts');
 
       expect(result).toBe('javascript');
     });
 
     it('should fallback to Python for unknown extensions', () => {
-      const result = service['determineLanguage']('evaluator.txt', undefined);
+      const result = service['determineLanguage']('evaluator.txt');
 
       expect(result).toBe('python');
     });
 
     it('should fallback to Python when no extension', () => {
-      const result = service['determineLanguage']('evaluator', undefined);
+      const result = service['determineLanguage']('evaluator');
 
       expect(result).toBe('python');
     });

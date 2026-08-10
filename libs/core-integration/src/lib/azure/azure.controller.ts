@@ -1,8 +1,24 @@
 import { Controller, Post, Body, UseGuards, Get } from '@nestjs/common';
-import { AzureDiscoveryService } from './azure-discovery.service';
+import {
+  AzureDiscoveryService,
+  DiscoveryOptions,
+} from './azure-discovery.service';
 import { AzureOpenAIService } from './azure-openai.service';
-import { AzureMLService } from './azure-ml.service';
-import { JwtAuthGuard, CurrentUser } from '@evalops/shared-auth';
+import { AzureMLService, AzureCredentials } from './azure-ml.service';
+import {
+  JwtAuthGuard,
+  CurrentUser,
+  AuthenticatedUser,
+} from '@evalops/shared-auth';
+
+interface DiscoverRequestBody {
+  credentials: AzureCredentials;
+  options?: DiscoveryOptions;
+}
+
+interface ValidateCredentialsRequestBody {
+  credentials: AzureCredentials;
+}
 
 @Controller('azure')
 export class AzureController {
@@ -14,7 +30,10 @@ export class AzureController {
 
   @UseGuards(JwtAuthGuard)
   @Post('discover')
-  async discover(@Body() body: any, @CurrentUser() user: any) {
+  async discover(
+    @Body() body: DiscoverRequestBody,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     const { credentials, options } = body;
     const result = await this.azureDiscoveryService.discoverUserResources(
       user.id,
@@ -26,7 +45,7 @@ export class AzureController {
 
   @UseGuards(JwtAuthGuard)
   @Post('validate-credentials')
-  async validateCredentials(@Body() body: any) {
+  async validateCredentials(@Body() body: ValidateCredentialsRequestBody) {
     const { credentials } = body;
     const isValid = await this.azureDiscoveryService.validateCredentials(
       credentials,
@@ -41,4 +60,3 @@ export class AzureController {
     return { connected: isConnected };
   }
 }
-

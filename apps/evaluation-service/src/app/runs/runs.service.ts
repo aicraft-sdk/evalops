@@ -10,6 +10,7 @@ import { Run, InsertRun } from '@evalops/shared-db';
 import { CoreClientService } from '../core-client/core-client.service';
 import { TraceCompatibilityService } from './trace-compatibility.service';
 import { TraceEvent } from '@evalops/sdk';
+import { getErrorMessage } from '@evalops/shared-common';
 
 @Injectable()
 export class RunsService {
@@ -41,13 +42,13 @@ export class RunsService {
           `Eval spec ${runData.evalSpecId} not found`,
         );
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof NotFoundException) {
         throw error;
       }
       this.logger.warn(
         `Could not verify eval spec ${runData.evalSpecId}:`,
-        error.message,
+        getErrorMessage(error),
       );
     }
 

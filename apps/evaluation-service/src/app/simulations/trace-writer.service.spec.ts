@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TraceWriterService } from './trace-writer.service';
 import { db } from '@evalops/shared-db';
 import { traceSpans } from '@evalops/shared-db';
-import { eq } from 'drizzle-orm';
 
 jest.mock('@evalops/shared-db', () => ({
   db: {
@@ -16,7 +15,7 @@ jest.mock('@evalops/shared-db', () => ({
 
 describe('TraceWriterService', () => {
   let service: TraceWriterService;
-  let mockDb: jest.Mocked<typeof db>;
+  let mockDb: { select: jest.Mock; insert: jest.Mock; update: jest.Mock };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -24,7 +23,7 @@ describe('TraceWriterService', () => {
     }).compile();
 
     service = module.get<TraceWriterService>(TraceWriterService);
-    mockDb = db as jest.Mocked<typeof db>;
+    mockDb = db as unknown as { select: jest.Mock; insert: jest.Mock; update: jest.Mock };
   });
 
   afterEach(() => {
@@ -82,7 +81,7 @@ describe('TraceWriterService', () => {
         returning: jest.fn().mockResolvedValue([mockSpan]),
       };
 
-      mockDb.insert.mockReturnValue(mockInsert as any);
+      mockDb.insert.mockReturnValue(mockInsert);
 
       const result = await service.createRootSpan('run-123', 'org-123');
 
@@ -120,7 +119,7 @@ describe('TraceWriterService', () => {
         returning: jest.fn().mockResolvedValue([mockSpan]),
       };
 
-      mockDb.insert.mockReturnValue(mockInsert as any);
+      mockDb.insert.mockReturnValue(mockInsert);
 
       const result = await service.createRootSpan(
         'run-123',
@@ -153,7 +152,7 @@ describe('TraceWriterService', () => {
         returning: jest.fn().mockResolvedValue([mockSpan]),
       };
 
-      mockDb.insert.mockReturnValue(mockInsert as any);
+      mockDb.insert.mockReturnValue(mockInsert);
 
       const result = await service.createSpan(
         'run-123',
@@ -203,7 +202,7 @@ describe('TraceWriterService', () => {
         returning: jest.fn().mockResolvedValue([mockSpan]),
       };
 
-      mockDb.insert.mockReturnValue(mockInsert as any);
+      mockDb.insert.mockReturnValue(mockInsert);
 
       const events = [
         {
@@ -261,8 +260,8 @@ describe('TraceWriterService', () => {
         where: jest.fn().mockResolvedValue(undefined),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
-      mockDb.update.mockReturnValue(mockUpdate as any);
+      mockDb.select.mockReturnValue(mockSelect);
+      mockDb.update.mockReturnValue(mockUpdate);
 
       await service.endSpan('span-123', {
         user_message: 'Hello',
@@ -308,8 +307,8 @@ describe('TraceWriterService', () => {
         where: jest.fn().mockResolvedValue(undefined),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
-      mockDb.update.mockReturnValue(mockUpdate as any);
+      mockDb.select.mockReturnValue(mockSelect);
+      mockDb.update.mockReturnValue(mockUpdate);
 
       await service.endSpan('span-123', {
         new_attr: 'new_value',
@@ -357,8 +356,8 @@ describe('TraceWriterService', () => {
         where: jest.fn().mockResolvedValue(undefined),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
-      mockDb.update.mockReturnValue(mockUpdate as any);
+      mockDb.select.mockReturnValue(mockSelect);
+      mockDb.update.mockReturnValue(mockUpdate);
 
       const newEvents = [
         {
@@ -395,8 +394,8 @@ describe('TraceWriterService', () => {
         where: jest.fn().mockResolvedValue(undefined),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
-      mockDb.update.mockReturnValue(mockUpdate as any);
+      mockDb.select.mockReturnValue(mockSelect);
+      mockDb.update.mockReturnValue(mockUpdate);
 
       await service.endSpan('span-123', { new_attr: 'value' });
 
@@ -432,7 +431,7 @@ describe('TraceWriterService', () => {
         orderBy: jest.fn().mockResolvedValue(mockSpans),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
+      mockDb.select.mockReturnValue(mockSelect);
 
       const result = await service.getSpansForRun('run-123');
 
@@ -463,7 +462,7 @@ describe('TraceWriterService', () => {
         orderBy: jest.fn().mockResolvedValue(mockSpans),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
+      mockDb.select.mockReturnValue(mockSelect);
 
       const result = await service.getSpansByTraceId('trace-123');
 
@@ -484,7 +483,7 @@ describe('TraceWriterService', () => {
         where: jest.fn().mockResolvedValue([mockSpan]),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
+      mockDb.select.mockReturnValue(mockSelect);
 
       const result = await service.getSpan('span-123');
 
@@ -497,7 +496,7 @@ describe('TraceWriterService', () => {
         where: jest.fn().mockResolvedValue([]),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
+      mockDb.select.mockReturnValue(mockSelect);
 
       const result = await service.getSpan('non-existent');
 

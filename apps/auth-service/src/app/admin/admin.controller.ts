@@ -7,7 +7,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
-import { JwtAuthGuard, RbacGuard, Roles, CurrentUser } from '@evalops/shared-auth';
+import { JwtAuthGuard, RbacGuard, Roles } from '@evalops/shared-auth';
 import { UserRole } from '@evalops/shared-auth';
 import { InsertOrganization } from '@evalops/shared-db';
 

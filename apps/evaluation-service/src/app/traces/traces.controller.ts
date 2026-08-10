@@ -1,14 +1,6 @@
-import {
-  Controller,
-  Get,
-  Param,
-  Query,
-  UseGuards,
-  ParseIntPipe,
-  DefaultValuePipe,
-} from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { TracesService } from './traces.service';
-import { JwtAuthGuard, CurrentUser } from '@evalops/shared-auth';
+import { JwtAuthGuard, CurrentUser, AuthenticatedUser } from '@evalops/shared-auth';
 import { GetSpansQueryDto, SearchSpansQueryDto } from './traces.dto';
 
 @Controller('traces')
@@ -23,7 +15,7 @@ export class TracesController {
   @Get('runs/:runId/spans')
   async getSpansForRun(
     @Param('runId') runId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Query() query: GetSpansQueryDto,
   ) {
     return this.tracesService.getSpansForRun(
@@ -40,7 +32,7 @@ export class TracesController {
   @Get('runs/:runId/spans/:spanId')
   async getSpanById(
     @Param('spanId') spanId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.tracesService.getSpanById(spanId, user.organizationId);
   }
@@ -52,7 +44,7 @@ export class TracesController {
   @Get('runs/:runId/tree')
   async getSpanTree(
     @Param('runId') runId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.tracesService.getSpanTree(runId, user.organizationId);
   }
@@ -63,7 +55,7 @@ export class TracesController {
    */
   @Get('search')
   async searchSpans(
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Query() query: SearchSpansQueryDto,
   ) {
     return this.tracesService.searchSpans(user.organizationId, query);

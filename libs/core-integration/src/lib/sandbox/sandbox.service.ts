@@ -10,13 +10,8 @@ import { ConfigService } from '@nestjs/config';
 import { HttpClientService } from '@evalops/shared-common';
 import {
   SandboxConfig,
-  ExecutionRequest,
   ExecutionResult,
-  SandboxStatus,
-  SandboxInfo,
-  CreateSandboxRequest,
   CreateSandboxResponse,
-  ExecuteCodeRequest,
   SandboxStatusResponse,
 } from './sandbox.dto';
 import { SandboxSecurityService } from './sandbox-security.service';
@@ -74,7 +69,6 @@ export class SandboxService {
     };
 
     // Validate network policy
-    const networkPolicy = this.policies.getNetworkPolicy();
     if (sandboxConfig.networkPolicy === 'restricted') {
       // Validate allowed domains against policy
       if (sandboxConfig.allowedDomains) {
@@ -159,7 +153,7 @@ export class SandboxService {
     sandboxId: string,
     code: string,
     language: 'python' | 'javascript',
-    input?: any,
+    input?: unknown,
     userId?: string,
     organizationId?: string,
     requestId?: string,
@@ -176,7 +170,7 @@ export class SandboxService {
       if (!astValidation.valid) {
         validation = astValidation;
       }
-    } catch (error: any) {
+    } catch {
       // AST validation failed, use pattern-based validation
       this.logger.debug('AST validation not available, using pattern matching');
     }
@@ -194,6 +188,11 @@ export class SandboxService {
       } else {
         validation.warnings.push(issue.message);
       }
+    }
+    // Security-scan errors must invalidate the request even when the
+    // upstream code/AST validators reported `valid: true` on their own.
+    if (securityViolations.length > 0) {
+      validation.valid = false;
     }
 
     if (!validation.valid) {
@@ -372,7 +371,7 @@ export class SandboxService {
 
         const result = await Promise.race([operation(), timeoutPromise]);
         return result;
-      } catch (error: any) {
+      } catch (error: unknown) {
         lastError = error instanceof Error ? error : new Error(String(error));
 
         // Don't retry on auth errors

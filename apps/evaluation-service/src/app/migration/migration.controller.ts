@@ -1,7 +1,7 @@
 import { Controller, Post, Get, Param, UseGuards } from '@nestjs/common';
 import { TraceMigrationService } from './trace-migration.service';
 import { JwtAuthGuard, CurrentUser, RbacGuard, Roles } from '@evalops/shared-auth';
-import { UserRole } from '@evalops/shared-auth';
+import { UserRole, AuthenticatedUser } from '@evalops/shared-auth';
 
 @Controller('migration')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -15,7 +15,7 @@ export class MigrationController {
    */
   @Roles(UserRole.ADMIN, UserRole.ORG_ADMIN)
   @Post('traces')
-  async migrateAllTraces(@CurrentUser() user: any) {
+  async migrateAllTraces(@CurrentUser() user: AuthenticatedUser) {
     return this.migrationService.migrateAllRuns(user.organizationId);
   }
 

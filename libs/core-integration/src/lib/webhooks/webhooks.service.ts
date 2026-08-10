@@ -5,8 +5,27 @@ import * as crypto from 'crypto';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { CicdRepository } from '@evalops/shared-db';
-import { InsertWebhookEvent, InsertCicdRun } from '@evalops/shared-db';
+import { InsertWebhookEvent, InsertCicdRun, CicdRun } from '@evalops/shared-db';
 import { EvaluationClientService } from '../evaluation-client/evaluation-client.service';
+
+/** Shape of a CI/CD integration's `config` jsonb column, as used by this service. */
+interface CicdIntegrationConfig {
+  autoTriggerEvaluations?: boolean;
+  defaultEvalSpecId?: string;
+  repository?: string;
+  githubToken?: string;
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** Narrow a jsonb `metadata` column value to a spreadable record. */
+function asMetadataRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
 
 export interface GitHubPushPayload {
   ref: string;
@@ -118,7 +137,7 @@ export class WebhooksService {
           {
             integrationId,
             eventType: 'push',
-            payload: payload as any,
+            payload,
             organizationId,
           },
           cicdRunData,
@@ -131,7 +150,7 @@ export class WebhooksService {
       const webhookEvent: InsertWebhookEvent = {
         integrationId,
         eventType: 'push',
-        payload: payload as any,
+        payload,
         organizationId,
       };
       await this.cicdRepository.createWebhookEvent(webhookEvent);
@@ -168,7 +187,7 @@ export class WebhooksService {
           {
             integrationId,
             eventType: 'pull_request',
-            payload: payload as any,
+            payload,
             organizationId,
           },
           cicdRunData,
@@ -181,7 +200,7 @@ export class WebhooksService {
       const webhookEvent: InsertWebhookEvent = {
         integrationId,
         eventType: 'pull_request',
-        payload: payload as any,
+        payload,
         organizationId,
       };
       await this.cicdRepository.createWebhookEvent(webhookEvent);
@@ -190,7 +209,7 @@ export class WebhooksService {
 
   private async triggerEvaluationRun(
     integrationId: string,
-    cicdRun: any,
+    cicdRun: CicdRun,
     organizationId: string
   ): Promise<void> {
     try {
@@ -202,7 +221,7 @@ export class WebhooksService {
         throw new Error('Integration configuration not found');
       }
 
-      const config = integration.config as any;
+      const config = integration.config as CicdIntegrationConfig;
 
       // Check if auto-trigger is enabled
       if (!config.autoTriggerEvaluations) {
@@ -219,6 +238,10 @@ export class WebhooksService {
           `No default eval spec configured for integration: ${integrationId}`
         );
         return;
+      }
+
+      if (!cicdRun.commit) {
+        throw new Error(`CI/CD run ${cicdRun.id} is missing a commit SHA`);
       }
 
       // Create evaluation run via Evaluation Service
@@ -249,11 +272,11 @@ export class WebhooksService {
         status: 'running',
         runId: evaluationRun.id,
         metadata: {
-          ...cicdRun.metadata,
+          ...asMetadataRecord(cicdRun.metadata),
           evaluationRunId: evaluationRun.id,
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Failed to trigger evaluation run:', error);
 
       // Update CI/CD run with failure
@@ -261,8 +284,8 @@ export class WebhooksService {
         status: 'failure',
         completedAt: new Date(),
         metadata: {
-          ...cicdRun.metadata,
-          error: error.message || 'Unknown error',
+          ...asMetadataRecord(cicdRun.metadata),
+          error: getErrorMessage(error) || 'Unknown error',
         },
       });
     }
@@ -270,7 +293,7 @@ export class WebhooksService {
 
   async deliverWebhook(
     url: string,
-    payload: any,
+    payload: unknown,
     secret?: string
   ): Promise<void> {
     try {
@@ -290,7 +313,7 @@ export class WebhooksService {
       await firstValueFrom(this.httpService.post(url, payload, { headers }));
 
       this.logger.log(`Successfully delivered webhook to ${url}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error(`Failed to deliver webhook to ${url}:`, error);
       throw error;
     }
@@ -343,7 +366,7 @@ export class WebhooksService {
         return;
       }
 
-      const config = integration.config as any;
+      const config = integration.config as CicdIntegrationConfig;
       const repository = config.repository; // e.g., "owner/repo"
 
       // Update CI/CD run status
@@ -372,7 +395,7 @@ export class WebhooksService {
           config.githubToken
         );
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Failed to report CI/CD status:', error);
     }
   }
@@ -442,7 +465,7 @@ export class WebhooksService {
       this.logger.log(
         `GitHub status updated for ${repository}@${sha}: ${githubState}`
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Failed to send GitHub status:', error);
       // Don't throw - status update failure shouldn't break the flow
     }

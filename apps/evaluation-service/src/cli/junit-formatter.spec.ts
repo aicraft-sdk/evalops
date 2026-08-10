@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals';
-import { formatJUnitXML, type SuiteRunResult, type ScenarioRun } from './junit-formatter';
+import { formatJUnitXML, type SuiteRunResult } from './junit-formatter';
 import type { Run } from '@evalops/shared-db';
 import type { PolicyViolation } from '../app/policies/policies.service';
 

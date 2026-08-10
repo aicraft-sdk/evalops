@@ -9,7 +9,6 @@ import {
   HttpCode,
   HttpStatus,
   Req,
-  Headers,
 } from '@nestjs/common';
 import { SandboxService } from './sandbox.service';
 import { ServiceAuthGuard } from '@evalops/shared-auth';
@@ -17,6 +16,7 @@ import {
   CreateSandboxRequest,
   CreateSandboxResponse,
   ExecuteCodeRequest,
+  SandboxStatus,
   SandboxStatusResponse,
 } from './sandbox.dto';
 
@@ -43,7 +43,7 @@ export class SandboxController {
     );
     return {
       sandboxId,
-      status: 'creating' as any,
+      status: SandboxStatus.CREATING,
     };
   }
 

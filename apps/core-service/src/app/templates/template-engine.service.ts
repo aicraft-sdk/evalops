@@ -1,22 +1,32 @@
 import { Injectable, Logger } from '@nestjs/common';
 
+/** Shape of a model/AI-provider response used to derive output text and metadata. */
+export interface ModelResponseObject {
+  choices?: Array<{ message?: { content?: string } }>;
+  output_text?: string;
+  text?: string;
+  content?: string;
+  metadata?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 export interface TemplateContext {
-  item?: Record<string, any>;
+  item?: Record<string, unknown>;
   sample?: {
     output_text?: string;
-    response?: any;
-    metadata?: Record<string, any>;
+    response?: unknown;
+    metadata?: Record<string, unknown>;
   };
   evaluation?: {
     scores?: Record<string, number>;
-    metrics?: Record<string, any>;
+    metrics?: Record<string, unknown>;
   };
   run?: {
     id?: string;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
   };
-  custom?: Record<string, any>;
-  expected?: any;
+  custom?: Record<string, unknown>;
+  expected?: unknown;
 }
 
 @Injectable()
@@ -81,7 +91,7 @@ export class TemplateEngine {
         if (value === null || value === undefined) {
           missing.push(variable);
         }
-      } catch (error) {
+      } catch {
         missing.push(variable);
       }
     }
@@ -90,11 +100,14 @@ export class TemplateEngine {
   }
 
   createContext(params: {
-    datasetSample?: any;
-    modelResponse?: any;
-    evaluationResults?: Record<string, any>;
-    runMetadata?: Record<string, any>;
-    customVars?: Record<string, any>;
+    datasetSample?: Record<string, unknown>;
+    modelResponse?: string | ModelResponseObject | null;
+    evaluationResults?: {
+      scores?: Record<string, number>;
+      metrics?: Record<string, unknown>;
+    };
+    runMetadata?: { id?: string; [key: string]: unknown };
+    customVars?: Record<string, unknown>;
   }): TemplateContext {
     const context: TemplateContext = {};
 
@@ -106,7 +119,10 @@ export class TemplateEngine {
       context.sample = {
         output_text: this.extractOutputText(params.modelResponse),
         response: params.modelResponse,
-        metadata: params.modelResponse.metadata || {},
+        metadata:
+          (typeof params.modelResponse === 'object' &&
+            params.modelResponse?.metadata) ||
+          {},
       };
     }
 
@@ -131,21 +147,23 @@ export class TemplateEngine {
     return context;
   }
 
-  private resolveProperty(context: TemplateContext, path: string): any {
+  private resolveProperty(context: TemplateContext, path: string): unknown {
     const parts = path.split('.');
-    let current: any = context;
+    let current: unknown = context;
 
     for (const part of parts) {
       if (current === null || current === undefined) {
         return undefined;
       }
-      current = current[part];
+      current = (current as Record<string, unknown>)[part];
     }
 
     return current;
   }
 
-  private extractOutputText(response: any): string {
+  private extractOutputText(
+    response: string | ModelResponseObject | null | undefined,
+  ): string {
     if (typeof response === 'string') {
       return response;
     }
@@ -173,4 +191,3 @@ export class TemplateEngine {
     return String(response || '');
   }
 }
-

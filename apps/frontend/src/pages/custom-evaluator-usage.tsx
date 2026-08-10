@@ -49,23 +49,23 @@ export default function CustomEvaluatorUsage() {
   const [timeRange, setTimeRange] = useState('30')
 
   // Fetch evaluator details
-  const { data: evaluator } = useQuery({
+  const { data: evaluator } = useQuery<CustomEvaluator>({
     queryKey: ['/api/custom-evaluators', evaluatorId],
     queryFn: async () => {
       const response = await fetch(`/api/custom-evaluators/${evaluatorId}`)
       if (!response.ok) throw new Error('Failed to fetch evaluator')
-      return response.json() as CustomEvaluator
+      return (await response.json()) as CustomEvaluator
     },
     enabled: !!evaluatorId
   })
 
   // Fetch usage statistics
-  const { data: usage, isLoading } = useQuery({
+  const { data: usage, isLoading } = useQuery<EvaluatorUsage>({
     queryKey: ['/api/custom-evaluators', evaluatorId, 'usage', timeRange],
     queryFn: async () => {
       const response = await fetch(`/api/custom-evaluators/${evaluatorId}/usage?days=${timeRange}`)
       if (!response.ok) throw new Error('Failed to fetch usage statistics')
-      return response.json() as EvaluatorUsage
+      return (await response.json()) as EvaluatorUsage
     },
     enabled: !!evaluatorId
   })

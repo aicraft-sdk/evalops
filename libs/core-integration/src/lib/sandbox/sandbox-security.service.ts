@@ -22,6 +22,30 @@ export interface ResourceUsage {
   executionTime: number; // milliseconds
 }
 
+/** Minimal shape of an ESTree-compatible AST node, as produced by @typescript-eslint/parser. */
+interface AstNode {
+  type: string;
+  callee?: AstNode;
+  name?: string;
+  value?: unknown;
+  arguments?: AstNode[];
+  [key: string]: unknown;
+}
+
+/**
+ * The specific reason a callee/reference expression was classified as
+ * dangerous, so callers can produce a precise error message.
+ */
+type DangerousReferenceKind =
+  | 'function-identifier'
+  | 'function-member'
+  | 'constructor-member'
+  | 'unresolved-global-computed';
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 @Injectable()
 export class SandboxSecurityService {
   private readonly logger = new Logger(SandboxSecurityService.name);
@@ -43,6 +67,22 @@ export class SandboxSecurityService {
   private readonly blockedJavaScriptPatterns = [
     /eval\s*\(/,
     /new\s+Function\s*\(/,
+    // Bare `Function(...)` call (no `new`) — per spec, calling the Function
+    // constructor without `new` still constructs a function, so this is
+    // behaviorally identical to `new Function(...)`.
+    /\bFunction\s*\(/,
+    // Member/computed access to the global Function constructor, e.g.
+    // globalThis.Function(...), window["Function"](...), this.Function(...).
+    /(?:globalThis|window|self|this)\s*(?:\.\s*Function\b|\[\s*['"]Function['"]\s*\])/,
+    // `.constructor` property access (dot or bracket notation) — the
+    // classic sandbox-escape idiom (`x.constructor("...")`,
+    // `x.constructor.constructor("...")`, `[].constructor.constructor(...)`,
+    // `"".constructor.constructor(...)`). Sandboxed AI-generated eval code
+    // has no legitimate need to introspect `.constructor`, so it is denied
+    // outright rather than trying to enumerate every escape shape built on
+    // top of it.
+    /\.\s*constructor\b/,
+    /\[\s*['"]constructor['"]\s*\]/,
     /require\s*\(\s*['"]child_process['"]/,
     /require\s*\(\s*['"]fs['"]/,
     /require\s*\(\s*['"]os['"]/,
@@ -80,9 +120,9 @@ export class SandboxSecurityService {
     }
 
     if (language === 'python') {
-      this.validatePythonCode(code, errors, warnings);
+      this.validatePythonCode(code, errors);
     } else if (language === 'javascript') {
-      this.validateJavaScriptCode(code, errors, warnings);
+      this.validateJavaScriptCode(code, errors);
     } else {
       errors.push(`Unsupported language: ${language}`);
     }
@@ -225,9 +265,9 @@ export class SandboxSecurityService {
       } else {
         errors.push(`AST validation not supported for language: ${language}`);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.warn(
-        `AST validation failed, falling back to pattern matching: ${error.message}`,
+        `AST validation failed, falling back to pattern matching: ${getErrorMessage(error)}`,
       );
       // Fall back to pattern-based validation
       return this.validateCode(code, language);
@@ -290,7 +330,7 @@ export class SandboxSecurityService {
     });
   }
 
-  sanitizeInput(input: any): any {
+  sanitizeInput(input: unknown): unknown {
     if (input === null || input === undefined) {
       return input;
     }
@@ -308,7 +348,7 @@ export class SandboxSecurityService {
     }
 
     if (typeof input === 'object') {
-      const sanitized: any = {};
+      const sanitized: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(input)) {
         sanitized[key] = this.sanitizeInput(value);
       }
@@ -321,7 +361,6 @@ export class SandboxSecurityService {
   private validatePythonCode(
     code: string,
     errors: string[],
-    warnings: string[],
   ): void {
     for (const blocked of this.blockedPythonImports) {
       if (code.includes(blocked)) {
@@ -342,7 +381,6 @@ export class SandboxSecurityService {
   private validateJavaScriptCode(
     code: string,
     errors: string[],
-    warnings: string[],
   ): void {
     for (const pattern of this.blockedJavaScriptPatterns) {
       if (pattern.test(code)) {
@@ -381,15 +419,26 @@ export class SandboxSecurityService {
     warnings: string[],
   ): Promise<void> {
     // Dynamic import to avoid requiring the package if not available
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const parserMod = require('@typescript-eslint/parser') as { parse: (code: string, opts: Record<string, unknown>) => unknown };
+    const parserMod = require('@typescript-eslint/parser') as {
+      parse: (code: string, opts: Record<string, unknown>) => AstNode;
+    };
     const ast = parserMod.parse(code, {
       ecmaVersion: 'latest',
       sourceType: 'module',
     });
 
+    // Build a best-effort name -> binding-expression alias map in a single
+    // pass over the whole program before the danger-detection traversal.
+    // This lets the traversal resolve simple local aliases (`const F =
+    // Function; F(...)`) and destructuring bindings (`const { constructor:
+    // C } = obj; C(...)`) back to the same dangerous expression shapes it
+    // already detects for direct syntax. This is intentionally a
+    // non-exhaustive, single-pass, non-SSA heuristic (see class docs on
+    // `resolveDangerousReferenceKind`), not full control-flow analysis.
+    const aliasMap = this.buildAliasMap(ast);
+
     // Traverse AST to find dangerous patterns
-    this.traverseJavaScriptAST(ast, errors, warnings);
+    this.traverseJavaScriptAST(ast, errors, warnings, 0, aliasMap);
   }
 
   /**
@@ -402,7 +451,7 @@ export class SandboxSecurityService {
   ): Promise<void> {
     // For now, use enhanced pattern matching
     // TODO: Integrate python-ast package for full AST parsing
-    this.validatePythonCode(code, errors, warnings);
+    this.validatePythonCode(code, errors);
 
     // Check for dangerous AST patterns using regex (simplified)
     const dangerousPatterns = [
@@ -440,37 +489,68 @@ export class SandboxSecurityService {
    * Traverse JavaScript AST to find dangerous patterns
    */
   private traverseJavaScriptAST(
-    node: any,
+    node: AstNode | null | undefined,
     errors: string[],
     warnings: string[],
     depth = 0,
+    aliasMap: Map<string, AstNode> = new Map(),
   ): void {
     if (!node || depth > 100) {
       return; // Prevent infinite recursion
     }
 
-    // Check for dangerous function calls
-    if (node.type === 'CallExpression') {
+    // Check for dangerous function calls (CallExpression) and constructions
+    // (NewExpression). This is a structural/semantic check rather than a
+    // literal-identifier check: it looks at what the callee *resolves
+    // through*, not just whether it is literally the Identifier `Function`.
+    // That covers the known Function-constructor sandbox-escape idioms:
+    //   - `Function(...)`            bare call, no `new` (same capability
+    //                                 as `new Function(...)` per spec)
+    //   - `new Function(...)`        direct construction
+    //   - `globalThis.Function(...)` / `window["Function"](...)` / etc.
+    //                                 member/computed access to the global
+    //   - `x.constructor(...)`       `.constructor` on any function-like
+    //                                 value resolves to the global Function
+    //                                 constructor
+    //   - `x.constructor.constructor(...)`, `[].constructor.constructor(...)`,
+    //     `"".constructor.constructor(...)`
+    //                                 chained `.constructor` (Array/String/
+    //                                 Object constructor -> Function
+    //                                 constructor)
+    if (node.type === 'CallExpression' || node.type === 'NewExpression') {
       const callee = node.callee;
-      if (callee.type === 'Identifier') {
-        const name = callee.name;
-        if (name === 'eval') {
-          errors.push('eval() calls are blocked');
+      const isNew = node.type === 'NewExpression';
+
+      if (callee?.type === 'Identifier' && !isNew && callee.name === 'eval') {
+        errors.push('eval() calls are blocked');
+      } else if (callee) {
+        // Structural + alias-aware check: resolves the callee through simple
+        // local `const`/`let` bindings and destructuring (see
+        // `resolveDangerousReferenceKind`), not just its literal syntax.
+        const kind = this.resolveDangerousReferenceKind(callee, aliasMap);
+        if (kind) {
+          errors.push(this.describeDangerousReferenceKind(kind, isNew));
         }
-        if (name === 'Function' && node.callee.type === 'NewExpression') {
-          errors.push('new Function() calls are blocked');
-        }
+      }
+
+      // Argument-scanning for known dangerous sinks: `Reflect.construct(X, ...)`,
+      // `Reflect.apply(X, ...)`, and `.call`/`.apply`/`.bind` invoked on a
+      // flagged reference. These pass the Function constructor / .constructor
+      // chain as a value rather than calling it directly as the callee, so
+      // the callee check above does not see them.
+      if (node.type === 'CallExpression') {
+        this.checkDangerousSinkArguments(node, errors, aliasMap);
       }
     }
 
     // Check for dangerous requires
     if (node.type === 'CallExpression' && node.callee?.name === 'require') {
-      const arg = node.arguments[0];
-      if (arg?.type === 'Literal') {
-        const module = arg.value;
+      const arg = node.arguments?.[0];
+      if (arg?.type === 'Literal' && typeof arg.value === 'string') {
+        const moduleName = arg.value;
         const blockedModules = ['child_process', 'fs', 'os', 'net', 'http'];
-        if (blockedModules.includes(module)) {
-          errors.push(`Requiring '${module}' is blocked`);
+        if (blockedModules.includes(moduleName)) {
+          errors.push(`Requiring '${moduleName}' is blocked`);
         }
       }
     }
@@ -483,12 +563,319 @@ export class SandboxSecurityService {
       const child = node[key];
       if (Array.isArray(child)) {
         for (const item of child) {
-          this.traverseJavaScriptAST(item, errors, warnings, depth + 1);
+          this.traverseJavaScriptAST(
+            item as AstNode,
+            errors,
+            warnings,
+            depth + 1,
+            aliasMap,
+          );
         }
       } else if (child && typeof child === 'object') {
-        this.traverseJavaScriptAST(child, errors, warnings, depth + 1);
+        this.traverseJavaScriptAST(
+          child as AstNode,
+          errors,
+          warnings,
+          depth + 1,
+          aliasMap,
+        );
       }
     }
+  }
+
+  /**
+   * Build a best-effort name -> binding-expression alias map for the whole
+   * program in a single pass, so the danger-detection traversal can resolve
+   * simple local aliases back to the expression they were bound from.
+   *
+   * This is intentionally NOT full control-flow/SSA analysis: it is a
+   * single-pass, non-exhaustive heuristic that finds `VariableDeclarator`
+   * nodes anywhere in the program and records `id.name -> init` (for a bare
+   * `const`/`let` identifier) or, for destructuring (`const { constructor:
+   * C } = obj`), records a synthetic "member access on <key> of <init>"
+   * marker node so that later resolution treats `C` the same as a direct
+   * `.constructor` access. Reassignment, shadowing across scopes, and
+   * control-flow-dependent bindings are out of scope for this pass.
+   */
+  private buildAliasMap(root: AstNode): Map<string, AstNode> {
+    const aliasMap = new Map<string, AstNode>();
+
+    const visit = (node: AstNode | null | undefined, depth: number): void => {
+      if (!node || depth > 200) {
+        return;
+      }
+
+      if (node.type === 'VariableDeclarator') {
+        const id = node['id'] as AstNode | undefined;
+        const init = node['init'] as AstNode | undefined;
+
+        if (id && init) {
+          if (id.type === 'Identifier' && typeof id.name === 'string') {
+            aliasMap.set(id.name, init);
+          } else if (id.type === 'ObjectPattern') {
+            const properties =
+              (id['properties'] as AstNode[] | undefined) ?? [];
+            for (const prop of properties) {
+              if (prop.type !== 'Property') {
+                continue;
+              }
+              const key = prop['key'] as AstNode | undefined;
+              const value = prop['value'] as AstNode | undefined;
+              if (!key || !value || value.type !== 'Identifier') {
+                continue;
+              }
+              const keyName =
+                !prop['computed'] && key.type === 'Identifier'
+                  ? key.name
+                  : key.type === 'Literal' && typeof key.value === 'string'
+                    ? key.value
+                    : null;
+              if (
+                !keyName ||
+                typeof keyName !== 'string' ||
+                typeof value.name !== 'string'
+              ) {
+                continue;
+              }
+              // Synthetic marker: `value.name` is bound to a member access
+              // on `keyName` of `init` (e.g. `const { constructor: C } =
+              // obj` binds `C` to `obj.constructor`).
+              const synthetic: AstNode = {
+                type: 'MemberExpression',
+                object: init,
+                property: { type: 'Identifier', name: keyName },
+                computed: false,
+              };
+              aliasMap.set(value.name, synthetic);
+            }
+          }
+        }
+      }
+
+      for (const key in node) {
+        if (key === 'parent' || key === 'range') {
+          continue;
+        }
+        const child = node[key];
+        if (Array.isArray(child)) {
+          for (const item of child) {
+            visit(item as AstNode, depth + 1);
+          }
+        } else if (child && typeof child === 'object') {
+          visit(child as AstNode, depth + 1);
+        }
+      }
+    };
+
+    visit(root, 0);
+    return aliasMap;
+  }
+
+  /**
+   * Resolve whether an expression node is a dangerous reference to the
+   * global Function constructor / `.constructor` escape idiom, recursively
+   * following simple local aliases (see `buildAliasMap`) up to a small
+   * depth cap. Returns the specific reason, or null when not dangerous by
+   * these rules.
+   *
+   * NOTE on scope: this is a best-effort, single-pass heuristic, not full
+   * SSA/control-flow analysis. It resolves the most recent matching
+   * `VariableDeclarator` found anywhere in the program for a given name; it
+   * does not track reassignment, block scoping, or cross-function bindings.
+   */
+  private resolveDangerousReferenceKind(
+    node: AstNode | null | undefined,
+    aliasMap: Map<string, AstNode>,
+    depth = 0,
+  ): DangerousReferenceKind | null {
+    if (!node || depth > 5) {
+      return null;
+    }
+
+    if (node.type === 'Identifier') {
+      if (node.name === 'Function') {
+        return 'function-identifier';
+      }
+      const aliasNode =
+        typeof node.name === 'string' ? aliasMap.get(node.name) : undefined;
+      if (aliasNode) {
+        return this.resolveDangerousReferenceKind(
+          aliasNode,
+          aliasMap,
+          depth + 1,
+        );
+      }
+      return null;
+    }
+
+    if (node.type === 'MemberExpression') {
+      const propertyName = this.getMemberExpressionPropertyName(node);
+      if (propertyName === 'Function') {
+        return 'function-member';
+      }
+      if (propertyName === 'constructor') {
+        return 'constructor-member';
+      }
+      if (propertyName === null) {
+        // Deny-by-default: a computed property key that cannot be
+        // statically resolved to a literal string, accessed on
+        // globalThis/window/this/Reflect-like objects, is suspicious —
+        // sandboxed AI-generated eval code has no legitimate need for this
+        // pattern (e.g. `globalThis["Func" + "tion"]`,
+        // `globalThis[String.fromCharCode(...)]`). Ordinary computed access
+        // on arrays/plain objects (`arr[i]`, `config[key]`) is unaffected
+        // because the object side is not globalThis-like.
+        const objectNode = node['object'] as AstNode | undefined;
+        if (this.isGlobalThisLikeReference(objectNode, aliasMap, depth)) {
+          return 'unresolved-global-computed';
+        }
+      }
+      return null;
+    }
+
+    return null;
+  }
+
+  /**
+   * Whether an expression node statically resolves to globalThis, window,
+   * self, this, or Reflect (directly or through a simple local alias).
+   * Scoped narrowly so ordinary values (arrays, plain objects, loop
+   * variables) are never treated as global-like.
+   */
+  private isGlobalThisLikeReference(
+    node: AstNode | null | undefined,
+    aliasMap: Map<string, AstNode>,
+    depth = 0,
+  ): boolean {
+    if (!node || depth > 5) {
+      return false;
+    }
+
+    if (node.type === 'ThisExpression') {
+      return true;
+    }
+
+    if (node.type === 'Identifier') {
+      if (
+        node.name === 'globalThis' ||
+        node.name === 'window' ||
+        node.name === 'self' ||
+        node.name === 'Reflect'
+      ) {
+        return true;
+      }
+      const aliasNode =
+        typeof node.name === 'string' ? aliasMap.get(node.name) : undefined;
+      if (aliasNode) {
+        return this.isGlobalThisLikeReference(aliasNode, aliasMap, depth + 1);
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Produce the error message for a resolved dangerous callee reference.
+   */
+  private describeDangerousReferenceKind(
+    kind: DangerousReferenceKind,
+    isNew: boolean,
+  ): string {
+    switch (kind) {
+      case 'function-identifier':
+        return isNew
+          ? 'new Function() calls are blocked'
+          : 'Function() calls without new are blocked (a bare call to the Function constructor has the same code-execution capability as new Function()), including through a local alias (e.g. const F = Function; F(...))';
+      case 'function-member':
+        return 'Accessing the global Function constructor via a member expression (e.g. globalThis.Function, window["Function"]) is blocked';
+      case 'constructor-member':
+        return 'Accessing .constructor is blocked — it is a common sandbox-escape idiom that resolves to the global Function constructor (e.g. x.constructor(...), [].constructor.constructor(...)), including through a local alias or destructuring binding (e.g. const { constructor: C } = obj)';
+      case 'unresolved-global-computed':
+        return 'Computed member access with a non-statically-resolvable property key on globalThis/window/this/Reflect is blocked (e.g. globalThis["Func" + "tion"], globalThis[String.fromCharCode(...)]) — sandboxed code has no legitimate need for this pattern';
+      default:
+        return 'Blocked dangerous reference';
+    }
+  }
+
+  /**
+   * Scan call arguments for known dangerous sinks that accept the Function
+   * constructor / `.constructor` chain as a value rather than calling it
+   * directly: `Reflect.construct(X, ...)`, `Reflect.apply(X, ...)`, and
+   * `.call`/`.apply`/`.bind` invoked on a flagged reference.
+   */
+  private checkDangerousSinkArguments(
+    node: AstNode,
+    errors: string[],
+    aliasMap: Map<string, AstNode>,
+  ): void {
+    const callee = node.callee;
+    if (!callee || callee.type !== 'MemberExpression') {
+      return;
+    }
+
+    const propertyName = this.getMemberExpressionPropertyName(callee);
+    const objectNode = callee['object'] as AstNode | undefined;
+
+    const isReflectObject =
+      objectNode?.type === 'Identifier' && objectNode.name === 'Reflect';
+
+    if (
+      isReflectObject &&
+      (propertyName === 'construct' || propertyName === 'apply')
+    ) {
+      const firstArg = node.arguments?.[0];
+      const kind = this.resolveDangerousReferenceKind(firstArg, aliasMap);
+      if (kind) {
+        errors.push(
+          `Reflect.${propertyName}() invoked with a reference to the Function constructor/.constructor chain as its target is blocked`,
+        );
+      }
+    }
+
+    if (
+      propertyName === 'call' ||
+      propertyName === 'apply' ||
+      propertyName === 'bind'
+    ) {
+      const kind = this.resolveDangerousReferenceKind(objectNode, aliasMap);
+      if (kind) {
+        errors.push(
+          `Invoking .${propertyName}() on a reference to the Function constructor/.constructor chain is blocked`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Resolve the statically-known property name of a MemberExpression,
+   * regardless of whether it uses dot notation (`x.constructor`) or
+   * computed/bracket notation with a string literal (`x["constructor"]`).
+   * Returns null when the property name cannot be determined statically
+   * (e.g. a computed access with a non-literal expression).
+   */
+  private getMemberExpressionPropertyName(node: AstNode): string | null {
+    if (node.type !== 'MemberExpression') {
+      return null;
+    }
+
+    const property = node['property'] as AstNode | undefined;
+    if (!property) {
+      return null;
+    }
+
+    if (!node['computed'] && property.type === 'Identifier') {
+      return typeof property.name === 'string' ? property.name : null;
+    }
+
+    if (
+      node['computed'] &&
+      property.type === 'Literal' &&
+      typeof property.value === 'string'
+    ) {
+      return property.value;
+    }
+
+    return null;
   }
 
   /**
@@ -567,6 +954,25 @@ export class SandboxSecurityService {
         pattern: /new\s+Function\s*\(/,
         type: 'code_injection',
         message: 'new Function() can execute arbitrary code',
+      },
+      {
+        pattern: /\bFunction\s*\(/,
+        type: 'code_injection',
+        message:
+          'Function() (with or without new) can execute arbitrary code',
+      },
+      {
+        pattern:
+          /(?:globalThis|window|self|this)\s*(?:\.\s*Function\b|\[\s*['"]Function['"]\s*\])/,
+        type: 'code_injection',
+        message:
+          'Accessing the global Function constructor via member/computed access can execute arbitrary code',
+      },
+      {
+        pattern: /\.\s*constructor\b|\[\s*['"]constructor['"]\s*\]/,
+        type: 'code_injection',
+        message:
+          '.constructor access is a common sandbox-escape idiom that can reach the Function constructor',
       },
       {
         pattern: /innerHTML\s*=/,

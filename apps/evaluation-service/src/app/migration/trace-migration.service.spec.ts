@@ -2,10 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TraceMigrationService } from './trace-migration.service';
 import { TraceEventAdapterService } from '../ingestion/trace-event-adapter.service';
 import { db } from '@evalops/shared-db';
-import { runs, traceSpans } from '@evalops/shared-db';
-import { eq, isNotNull, and, sql } from 'drizzle-orm';
+import { runs } from '@evalops/shared-db';
 import type { Run } from '@evalops/shared-db';
-import type { TraceEvent } from '@evalops/sdk';
 
 jest.mock('@evalops/shared-db', () => ({
   db: {
@@ -23,7 +21,7 @@ jest.mock('@evalops/shared-db', () => ({
 describe('TraceMigrationService', () => {
   let service: TraceMigrationService;
   let traceEventAdapter: jest.Mocked<TraceEventAdapterService>;
-  let mockDb: jest.Mocked<typeof db>;
+  let mockDb: { select: jest.Mock; update: jest.Mock };
 
   const createMockRun = (overrides: Partial<Run> = {}): Run => ({
     id: 'run-123',
@@ -68,7 +66,7 @@ describe('TraceMigrationService', () => {
 
     service = module.get<TraceMigrationService>(TraceMigrationService);
     traceEventAdapter = module.get(TraceEventAdapterService);
-    mockDb = db as jest.Mocked<typeof db>;
+    mockDb = db as unknown as { select: jest.Mock; update: jest.Mock };
   });
 
   afterEach(() => {
@@ -85,7 +83,7 @@ describe('TraceMigrationService', () => {
             timestamp: new Date().toISOString(),
             data: {},
           },
-        ] as any,
+        ],
       });
 
       const result = await service.migrateRun(run);
@@ -111,7 +109,7 @@ describe('TraceMigrationService', () => {
             timestamp: new Date().toISOString(),
             data: {},
           },
-        ] as any,
+        ],
       });
 
       const mockSelect = {
@@ -125,8 +123,8 @@ describe('TraceMigrationService', () => {
         where: jest.fn().mockResolvedValue(undefined),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
-      mockDb.update.mockReturnValue(mockUpdate as any);
+      mockDb.select.mockReturnValue(mockSelect);
+      mockDb.update.mockReturnValue(mockUpdate);
 
       const result = await service.migrateRun(run);
 
@@ -148,7 +146,7 @@ describe('TraceMigrationService', () => {
             timestamp: new Date().toISOString(),
             data: { content: 'Hi' },
           },
-        ] as any,
+        ],
       });
 
       const mockSelect = {
@@ -162,8 +160,8 @@ describe('TraceMigrationService', () => {
         where: jest.fn().mockResolvedValue(undefined),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
-      mockDb.update.mockReturnValue(mockUpdate as any);
+      mockDb.select.mockReturnValue(mockSelect);
+      mockDb.update.mockReturnValue(mockUpdate);
 
       traceEventAdapter.convertAndStore
         .mockResolvedValueOnce({
@@ -200,7 +198,7 @@ describe('TraceMigrationService', () => {
             timestamp: new Date().toISOString(),
             data: {},
           },
-        ] as any,
+        ],
       });
 
       const mockSelect = {
@@ -214,8 +212,8 @@ describe('TraceMigrationService', () => {
         where: jest.fn().mockResolvedValue(undefined),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
-      mockDb.update.mockReturnValue(mockUpdate as any);
+      mockDb.select.mockReturnValue(mockSelect);
+      mockDb.update.mockReturnValue(mockUpdate);
 
       traceEventAdapter.convertAndStore
         .mockRejectedValueOnce(new Error('Conversion failed'))
@@ -244,7 +242,7 @@ describe('TraceMigrationService', () => {
               timestamp: new Date().toISOString(),
               data: {},
             },
-          ] as any,
+          ],
         }),
         createMockRun({
           id: 'run-2',
@@ -256,7 +254,7 @@ describe('TraceMigrationService', () => {
               timestamp: new Date().toISOString(),
               data: {},
             },
-          ] as any,
+          ],
         }),
       ];
 
@@ -284,11 +282,11 @@ describe('TraceMigrationService', () => {
       };
 
       mockDb.select
-        .mockReturnValueOnce(mockCountSelect as any)
-        .mockReturnValueOnce(mockRunsSelect as any)
-        .mockReturnValue(mockSpansSelect as any);
+        .mockReturnValueOnce(mockCountSelect)
+        .mockReturnValueOnce(mockRunsSelect)
+        .mockReturnValue(mockSpansSelect);
 
-      mockDb.update.mockReturnValue(mockUpdate as any);
+      mockDb.update.mockReturnValue(mockUpdate);
 
       traceEventAdapter.convertAndStore.mockResolvedValue({
         spansCreated: 1,
@@ -310,7 +308,7 @@ describe('TraceMigrationService', () => {
         where: jest.fn().mockResolvedValue([{ count: 0 }]),
       };
 
-      mockDb.select.mockReturnValue(mockCountSelect as any);
+      mockDb.select.mockReturnValue(mockCountSelect);
 
       const result = await service.migrateAllRuns('org-123');
 
@@ -330,7 +328,7 @@ describe('TraceMigrationService', () => {
               timestamp: new Date().toISOString(),
               data: {},
             },
-          ] as any,
+          ],
         })
       );
 
@@ -358,11 +356,11 @@ describe('TraceMigrationService', () => {
       };
 
       mockDb.select
-        .mockReturnValueOnce(mockCountSelect as any)
-        .mockReturnValueOnce(mockRunsSelect as any)
-        .mockReturnValue(mockSpansSelect as any);
+        .mockReturnValueOnce(mockCountSelect)
+        .mockReturnValueOnce(mockRunsSelect)
+        .mockReturnValue(mockSpansSelect);
 
-      mockDb.update.mockReturnValue(mockUpdate as any);
+      mockDb.update.mockReturnValue(mockUpdate);
 
       traceEventAdapter.convertAndStore.mockResolvedValue({
         spansCreated: 1,
@@ -387,7 +385,7 @@ describe('TraceMigrationService', () => {
             timestamp: new Date().toISOString(),
             data: {},
           },
-        ] as any,
+        ],
       });
 
       const mockRunSelect = {
@@ -402,8 +400,8 @@ describe('TraceMigrationService', () => {
       };
 
       mockDb.select
-        .mockReturnValueOnce(mockRunSelect as any)
-        .mockReturnValueOnce(mockSpansSelect as any);
+        .mockReturnValueOnce(mockRunSelect)
+        .mockReturnValueOnce(mockSpansSelect);
 
       const result = await service.getRunMigrationStatus('run-123');
 
@@ -423,7 +421,7 @@ describe('TraceMigrationService', () => {
             timestamp: new Date().toISOString(),
             data: {},
           },
-        ] as any,
+        ],
       });
 
       const mockRunSelect = {
@@ -438,8 +436,8 @@ describe('TraceMigrationService', () => {
       };
 
       mockDb.select
-        .mockReturnValueOnce(mockRunSelect as any)
-        .mockReturnValueOnce(mockSpansSelect as any);
+        .mockReturnValueOnce(mockRunSelect)
+        .mockReturnValueOnce(mockSpansSelect);
 
       const result = await service.getRunMigrationStatus('run-123');
 

@@ -64,24 +64,29 @@ interface ModelBenchmark {
   testConditions: Record<string, any>;
 }
 
+interface Provider {
+  id: string;
+  name: string;
+}
+
 export function ModelRegistry() {
   const [selectedProvider, setSelectedProvider] = useState<string>("all");
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
 
-  const { data: models = [], isLoading } = useQuery({
+  const { data: models = [], isLoading } = useQuery<Model[]>({
     queryKey: ["/api/models"],
   });
 
-  const { data: providers = [] } = useQuery({
+  const { data: providers = [] } = useQuery<Provider[]>({
     queryKey: ["/api/providers"],
   });
 
-  const { data: modelVersions = [] } = useQuery({
+  const { data: modelVersions = [] } = useQuery<ModelVersion[]>({
     queryKey: [`/api/models/${selectedModel}/versions`],
     enabled: !!selectedModel,
   });
 
-  const { data: modelBenchmarks = [] } = useQuery({
+  const { data: modelBenchmarks = [] } = useQuery<ModelBenchmark[]>({
     queryKey: [`/api/models/${selectedModel}/benchmarks`],
     enabled: !!selectedModel,
   });

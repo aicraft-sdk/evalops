@@ -7,8 +7,6 @@ import {
   simulationScenarios,
   simulationRuns,
 } from '@evalops/shared-db';
-import { eq, and, desc } from 'drizzle-orm';
-
 jest.mock('@evalops/shared-db', () => ({
   db: {
     insert: jest.fn(),
@@ -26,7 +24,7 @@ jest.mock('@evalops/shared-db', () => ({
 
 describe('SimulationsService', () => {
   let service: SimulationsService;
-  let mockDb: jest.Mocked<typeof db>;
+  let mockDb: { select: jest.Mock; insert: jest.Mock; update: jest.Mock; delete: jest.Mock };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -34,7 +32,7 @@ describe('SimulationsService', () => {
     }).compile();
 
     service = module.get<SimulationsService>(SimulationsService);
-    mockDb = db as jest.Mocked<typeof db>;
+    mockDb = db as unknown as { select: jest.Mock; insert: jest.Mock; update: jest.Mock; delete: jest.Mock };
   });
 
   afterEach(() => {
@@ -63,7 +61,7 @@ describe('SimulationsService', () => {
         returning: jest.fn().mockResolvedValue([createdSuite]),
       };
 
-      mockDb.insert.mockReturnValue(mockInsert as any);
+      mockDb.insert.mockReturnValue(mockInsert);
 
       const result = await service.createSuite(
         suiteData,
@@ -102,7 +100,7 @@ describe('SimulationsService', () => {
         returning: jest.fn().mockResolvedValue([createdSuite]),
       };
 
-      mockDb.insert.mockReturnValue(mockInsert as any);
+      mockDb.insert.mockReturnValue(mockInsert);
 
       await service.createSuite(suiteData, 'org-123', 'user-123');
 
@@ -135,7 +133,7 @@ describe('SimulationsService', () => {
         orderBy: jest.fn().mockResolvedValue(mockSuites),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
+      mockDb.select.mockReturnValue(mockSelect);
 
       const result = await service.getSuites('org-123');
 
@@ -158,7 +156,7 @@ describe('SimulationsService', () => {
         where: jest.fn().mockResolvedValue([mockSuite]),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
+      mockDb.select.mockReturnValue(mockSelect);
 
       const result = await service.getSuite('suite-123', 'org-123');
 
@@ -171,7 +169,7 @@ describe('SimulationsService', () => {
         where: jest.fn().mockResolvedValue([]),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
+      mockDb.select.mockReturnValue(mockSelect);
 
       await expect(service.getSuite('non-existent', 'org-123')).rejects.toThrow(
         NotFoundException
@@ -203,8 +201,8 @@ describe('SimulationsService', () => {
         returning: jest.fn().mockResolvedValue([updatedSuite]),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
-      mockDb.update.mockReturnValue(mockUpdate as any);
+      mockDb.select.mockReturnValue(mockSelect);
+      mockDb.update.mockReturnValue(mockUpdate);
 
       const result = await service.updateSuite(
         'suite-123',
@@ -222,7 +220,7 @@ describe('SimulationsService', () => {
         where: jest.fn().mockResolvedValue([]),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
+      mockDb.select.mockReturnValue(mockSelect);
 
       await expect(
         service.updateSuite('non-existent', { name: 'New Name' }, 'org-123')
@@ -254,9 +252,9 @@ describe('SimulationsService', () => {
       };
 
       mockDb.select
-        .mockReturnValueOnce(mockGetSuiteSelect as any)
-        .mockReturnValueOnce(mockScenariosSelect as any);
-      mockDb.delete.mockReturnValue(mockDelete as any);
+        .mockReturnValueOnce(mockGetSuiteSelect)
+        .mockReturnValueOnce(mockScenariosSelect);
+      mockDb.delete.mockReturnValue(mockDelete);
 
       await service.deleteSuite('suite-123', 'org-123');
 
@@ -282,8 +280,8 @@ describe('SimulationsService', () => {
       };
 
       mockDb.select
-        .mockReturnValueOnce(mockGetSuiteSelect as any)
-        .mockReturnValueOnce(mockScenariosSelect as any);
+        .mockReturnValueOnce(mockGetSuiteSelect)
+        .mockReturnValueOnce(mockScenariosSelect);
 
       await expect(service.deleteSuite('suite-123', 'org-123')).rejects.toThrow(
         BadRequestException
@@ -325,8 +323,8 @@ describe('SimulationsService', () => {
         returning: jest.fn().mockResolvedValue([createdScenario]),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
-      mockDb.insert.mockReturnValue(mockInsert as any);
+      mockDb.select.mockReturnValue(mockSelect);
+      mockDb.insert.mockReturnValue(mockInsert);
 
       const result = await service.createScenario(
         'suite-123',
@@ -349,7 +347,7 @@ describe('SimulationsService', () => {
         order: 1,
         definition: {
           agentId: 'agent-123',
-        } as any,
+        },
       };
 
       const mockSelect = {
@@ -357,7 +355,7 @@ describe('SimulationsService', () => {
         where: jest.fn().mockResolvedValue([suite]),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
+      mockDb.select.mockReturnValue(mockSelect);
 
       await expect(
         service.createScenario('suite-123', scenarioData, 'org-123')
@@ -397,8 +395,8 @@ describe('SimulationsService', () => {
       };
 
       mockDb.select
-        .mockReturnValueOnce(mockSuiteSelect as any)
-        .mockReturnValueOnce(mockScenariosSelect as any);
+        .mockReturnValueOnce(mockSuiteSelect)
+        .mockReturnValueOnce(mockScenariosSelect);
 
       const result = await service.getScenariosForSuite('suite-123', 'org-123');
 
@@ -419,7 +417,7 @@ describe('SimulationsService', () => {
         where: jest.fn().mockResolvedValue([mockScenario]),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
+      mockDb.select.mockReturnValue(mockSelect);
 
       const result = await service.getScenario('scenario-123', 'org-123');
 
@@ -432,7 +430,7 @@ describe('SimulationsService', () => {
         where: jest.fn().mockResolvedValue([]),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
+      mockDb.select.mockReturnValue(mockSelect);
 
       await expect(
         service.getScenario('non-existent', 'org-123')
@@ -477,9 +475,9 @@ describe('SimulationsService', () => {
       };
 
       mockDb.select
-        .mockReturnValueOnce(mockSuiteSelect as any)
-        .mockReturnValueOnce(mockScenarioSelect as any);
-      mockDb.insert.mockReturnValue(mockInsert as any);
+        .mockReturnValueOnce(mockSuiteSelect)
+        .mockReturnValueOnce(mockScenarioSelect);
+      mockDb.insert.mockReturnValue(mockInsert);
 
       const result = await service.createSimulationRun(
         'run-123',
@@ -508,7 +506,7 @@ describe('SimulationsService', () => {
         where: jest.fn().mockResolvedValue([mockSimRun]),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
+      mockDb.select.mockReturnValue(mockSelect);
 
       const result = await service.getSimulationRunByRunId(
         'run-123',
@@ -524,7 +522,7 @@ describe('SimulationsService', () => {
         where: jest.fn().mockResolvedValue([]),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
+      mockDb.select.mockReturnValue(mockSelect);
 
       const result = await service.getSimulationRunByRunId(
         'non-existent',

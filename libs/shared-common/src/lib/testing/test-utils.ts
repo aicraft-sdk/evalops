@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ModuleMetadata } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { jest } from '@jest/globals';
 
@@ -8,9 +8,9 @@ import { jest } from '@jest/globals';
  */
 
 export interface TestModuleOptions {
-  imports?: any[];
-  providers?: any[];
-  controllers?: any[];
+  imports?: ModuleMetadata['imports'];
+  providers?: ModuleMetadata['providers'];
+  controllers?: ModuleMetadata['controllers'];
 }
 
 /**
@@ -88,11 +88,73 @@ export function createMockStorageService() {
   };
 }
 
+interface TestUserFixture {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  organizationId: string;
+  role: string;
+  profileImageUrl: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface TestOrganizationFixture {
+  id: string;
+  name: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface TestPromptFixture {
+  id: string;
+  name: string;
+  content: string;
+  organizationId: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface TestDatasetFixture {
+  id: string;
+  name: string;
+  organizationId: string;
+  samples: unknown[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface TestEvalSpecFixture {
+  id: string;
+  name: string;
+  datasetId: string;
+  promptId: string;
+  organizationId: string;
+  repetitions: number;
+  seeds: number[];
+  evaluators: Array<{ type: string; config: Record<string, unknown> }>;
+  modelConfig: { temperature: number; maxTokens: number };
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface TestRunFixture {
+  id: string;
+  name: string;
+  evalSpecId: string;
+  organizationId: string;
+  status: string;
+  triggeredBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 /**
  * Test data factories
  */
 export const TestDataFactory = {
-  createUser: (overrides?: any) => ({
+  createUser: (overrides?: Partial<TestUserFixture>): TestUserFixture => ({
     id: 'test-user-1',
     email: 'test@example.com',
     firstName: 'Test',
@@ -105,7 +167,9 @@ export const TestDataFactory = {
     ...overrides,
   }),
 
-  createOrganization: (overrides?: any) => ({
+  createOrganization: (
+    overrides?: Partial<TestOrganizationFixture>,
+  ): TestOrganizationFixture => ({
     id: 'test-org-1',
     name: 'Test Organization',
     createdAt: new Date(),
@@ -113,7 +177,9 @@ export const TestDataFactory = {
     ...overrides,
   }),
 
-  createPrompt: (overrides?: any) => ({
+  createPrompt: (
+    overrides?: Partial<TestPromptFixture>,
+  ): TestPromptFixture => ({
     id: 'test-prompt-1',
     name: 'Test Prompt',
     content: 'This is a test prompt',
@@ -123,7 +189,9 @@ export const TestDataFactory = {
     ...overrides,
   }),
 
-  createDataset: (overrides?: any) => ({
+  createDataset: (
+    overrides?: Partial<TestDatasetFixture>,
+  ): TestDatasetFixture => ({
     id: 'test-dataset-1',
     name: 'Test Dataset',
     organizationId: 'test-org-1',
@@ -133,7 +201,9 @@ export const TestDataFactory = {
     ...overrides,
   }),
 
-  createEvalSpec: (overrides?: any) => ({
+  createEvalSpec: (
+    overrides?: Partial<TestEvalSpecFixture>,
+  ): TestEvalSpecFixture => ({
     id: 'test-eval-spec-1',
     name: 'Test Eval Spec',
     datasetId: 'test-dataset-1',
@@ -148,7 +218,7 @@ export const TestDataFactory = {
     ...overrides,
   }),
 
-  createRun: (overrides?: any) => ({
+  createRun: (overrides?: Partial<TestRunFixture>): TestRunFixture => ({
     id: 'test-run-1',
     name: 'Test Run',
     evalSpecId: 'test-eval-spec-1',

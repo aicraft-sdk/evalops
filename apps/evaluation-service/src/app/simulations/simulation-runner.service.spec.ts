@@ -202,7 +202,7 @@ describe('SimulationRunnerService', () => {
           'system: You are a helpful assistant\nmodel:\n  provider: openai\n  model: gpt-4',
       };
 
-      coreClient.getAgent.mockResolvedValue(mockAgent as any);
+      coreClient.getAgent.mockResolvedValue(mockAgent);
 
       const mockTurnSpan = {
         ...mockRootSpan,
@@ -217,8 +217,8 @@ describe('SimulationRunnerService', () => {
       };
 
       traceWriterService.createSpan
-        .mockResolvedValueOnce(mockTurnSpan as any)
-        .mockResolvedValueOnce(mockLLMSpan as any);
+        .mockResolvedValueOnce(mockTurnSpan)
+        .mockResolvedValueOnce(mockLLMSpan);
 
       aiProvider.generateResponse.mockResolvedValue({
         response: 'Hello! How can I help you?',
@@ -323,7 +323,7 @@ describe('SimulationRunnerService', () => {
           'system: You are a helpful assistant\nmodel:\n  provider: openai\n  model: gpt-4',
       };
 
-      coreClient.getAgent.mockResolvedValue(mockAgent as any);
+      coreClient.getAgent.mockResolvedValue(mockAgent);
 
       const mockTurnSpan = {
         ...mockRootSpan,
@@ -338,8 +338,8 @@ describe('SimulationRunnerService', () => {
       };
 
       traceWriterService.createSpan
-        .mockResolvedValueOnce(mockTurnSpan as any)
-        .mockResolvedValueOnce(mockLLMSpan as any);
+        .mockResolvedValueOnce(mockTurnSpan)
+        .mockResolvedValueOnce(mockLLMSpan);
 
       aiProvider.generateResponse.mockResolvedValue({
         response: 'Hello!',
@@ -403,7 +403,7 @@ describe('SimulationRunnerService', () => {
           'system: You are a helpful assistant\nmodel:\n  provider: openai\n  model: gpt-4',
       };
 
-      coreClient.getAgent.mockResolvedValue(mockAgent as any);
+      coreClient.getAgent.mockResolvedValue(mockAgent);
 
       const mockTurnSpan = {
         ...mockRootSpan,
@@ -418,8 +418,8 @@ describe('SimulationRunnerService', () => {
       };
 
       traceWriterService.createSpan
-        .mockResolvedValueOnce(mockTurnSpan as any)
-        .mockResolvedValueOnce(mockLLMSpan as any);
+        .mockResolvedValueOnce(mockTurnSpan)
+        .mockResolvedValueOnce(mockLLMSpan);
 
       aiProvider.generateResponse.mockResolvedValue({
         response: 'Thank you, goodbye!',
@@ -467,7 +467,7 @@ describe('SimulationRunnerService', () => {
           'system: You are a helpful assistant\nmodel:\n  provider: openai\n  model: gpt-4',
       };
 
-      coreClient.getAgent.mockResolvedValue(mockAgent as any);
+      coreClient.getAgent.mockResolvedValue(mockAgent);
 
       const mockTurnSpan = {
         ...mockRootSpan,
@@ -475,7 +475,7 @@ describe('SimulationRunnerService', () => {
         name: 'simulation.turn',
       };
 
-      traceWriterService.createSpan.mockResolvedValueOnce(mockTurnSpan as any);
+      traceWriterService.createSpan.mockResolvedValueOnce(mockTurnSpan);
 
       aiProvider.generateResponse.mockRejectedValue(new Error('LLM API error'));
 
@@ -504,7 +504,7 @@ describe('SimulationRunnerService', () => {
           'system: You are a helpful assistant\nmodel:\n  provider: openai\n  model: gpt-4',
       };
 
-      coreClient.getAgent.mockResolvedValue(mockAgent as any);
+      coreClient.getAgent.mockResolvedValue(mockAgent);
 
       const mockTurnSpan = {
         ...mockRootSpan,
@@ -519,8 +519,8 @@ describe('SimulationRunnerService', () => {
       };
 
       traceWriterService.createSpan
-        .mockResolvedValueOnce(mockTurnSpan as any)
-        .mockResolvedValueOnce(mockLLMSpan as any);
+        .mockResolvedValueOnce(mockTurnSpan)
+        .mockResolvedValueOnce(mockLLMSpan);
 
       aiProvider.generateResponse.mockResolvedValue({
         response: 'Hello, world!',
@@ -581,7 +581,7 @@ describe('SimulationRunnerService', () => {
           'system: You are a helpful assistant\nmodel:\n  provider: openai\n  model: gpt-4',
       };
 
-      coreClient.getAgent.mockResolvedValue(mockAgent as any);
+      coreClient.getAgent.mockResolvedValue(mockAgent);
 
       const mockTurnSpan = {
         ...mockRootSpan,
@@ -596,8 +596,8 @@ describe('SimulationRunnerService', () => {
       };
 
       traceWriterService.createSpan
-        .mockResolvedValueOnce(mockTurnSpan as any)
-        .mockResolvedValueOnce(mockLLMSpan as any);
+        .mockResolvedValueOnce(mockTurnSpan)
+        .mockResolvedValueOnce(mockLLMSpan);
 
       aiProvider.generateResponse.mockResolvedValue({
         response: 'Hello! How can I help you?',
@@ -667,7 +667,7 @@ describe('SimulationRunnerService', () => {
           'system: You are a helpful assistant\nmodel:\n  provider: openai\n  model: gpt-4',
       };
 
-      coreClient.getAgent.mockResolvedValue(mockAgent as any);
+      coreClient.getAgent.mockResolvedValue(mockAgent);
       coreClient.renderTemplate.mockResolvedValue('Hello, Alice!');
 
       const mockTurnSpan = {
@@ -683,8 +683,8 @@ describe('SimulationRunnerService', () => {
       };
 
       traceWriterService.createSpan
-        .mockResolvedValueOnce(mockTurnSpan as any)
-        .mockResolvedValueOnce(mockLLMSpan as any);
+        .mockResolvedValueOnce(mockTurnSpan)
+        .mockResolvedValueOnce(mockLLMSpan);
 
       aiProvider.generateResponse.mockResolvedValue({
         response: 'Hello, Alice! How can I help?',

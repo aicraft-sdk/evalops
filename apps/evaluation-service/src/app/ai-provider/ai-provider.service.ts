@@ -124,7 +124,7 @@ export class AIProviderService {
       }, 'Connection test');
 
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('AI Provider connection test failed:', error);
       return false;
     }
@@ -182,7 +182,7 @@ export class AIProviderService {
 
         const result = await Promise.race([operation(), timeoutPromise]);
         return result;
-      } catch (error: any) {
+      } catch (error: unknown) {
         lastError = error instanceof Error ? error : new Error(String(error));
 
         if (

@@ -1,10 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException } from '@nestjs/common';
 import { OtlpService } from './otlp.service';
 import { db } from '@evalops/shared-db';
-import { traceSpans } from '@evalops/shared-db';
-import { eq } from 'drizzle-orm';
-import type { OtlpExportTraceServiceRequest } from './otlp.dto';
+import type { OtlpExportTraceServiceRequest, OtlpSpan } from './otlp.dto';
 
 jest.mock('@evalops/shared-db', () => ({
   db: {
@@ -17,7 +14,7 @@ jest.mock('@evalops/shared-db', () => ({
 
 describe('OtlpService', () => {
   let service: OtlpService;
-  let mockDb: jest.Mocked<typeof db>;
+  let mockDb: { select: jest.Mock; insert: jest.Mock };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -25,7 +22,7 @@ describe('OtlpService', () => {
     }).compile();
 
     service = module.get<OtlpService>(OtlpService);
-    mockDb = db as jest.Mocked<typeof db>;
+    mockDb = db as unknown as { select: jest.Mock; insert: jest.Mock };
   });
 
   afterEach(() => {
@@ -75,8 +72,8 @@ describe('OtlpService', () => {
         values: jest.fn().mockResolvedValue(undefined),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
-      mockDb.insert.mockReturnValue(mockInsert as any);
+      mockDb.select.mockReturnValue(mockSelect);
+      mockDb.insert.mockReturnValue(mockInsert);
 
       const result = await service.processTraceExport(request, 'org-123');
 
@@ -180,8 +177,8 @@ describe('OtlpService', () => {
         values: jest.fn().mockResolvedValue(undefined),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
-      mockDb.insert.mockReturnValue(mockInsert as any);
+      mockDb.select.mockReturnValue(mockSelect);
+      mockDb.insert.mockReturnValue(mockInsert);
 
       const result = await service.processTraceExport(request, 'org-123');
 
@@ -228,7 +225,7 @@ describe('OtlpService', () => {
         ]),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
+      mockDb.select.mockReturnValue(mockSelect);
 
       const result = await service.processTraceExport(request, 'org-123');
 
@@ -276,8 +273,8 @@ describe('OtlpService', () => {
         values: jest.fn().mockResolvedValue(undefined),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
-      mockDb.insert.mockReturnValue(mockInsert as any);
+      mockDb.select.mockReturnValue(mockSelect);
+      mockDb.insert.mockReturnValue(mockInsert);
 
       await service.processTraceExport(request, 'org-123');
 
@@ -340,8 +337,8 @@ describe('OtlpService', () => {
         values: jest.fn().mockResolvedValue(undefined),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
-      mockDb.insert.mockReturnValue(mockInsert as any);
+      mockDb.select.mockReturnValue(mockSelect);
+      mockDb.insert.mockReturnValue(mockInsert);
 
       await service.processTraceExport(request, 'org-123');
 
@@ -406,8 +403,8 @@ describe('OtlpService', () => {
         values: jest.fn().mockResolvedValue(undefined),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
-      mockDb.insert.mockReturnValue(mockInsert as any);
+      mockDb.select.mockReturnValue(mockSelect);
+      mockDb.insert.mockReturnValue(mockInsert);
 
       await service.processTraceExport(request, 'org-123');
 
@@ -446,7 +443,7 @@ describe('OtlpService', () => {
                     startTimeUnixNano: '1000000000',
                     attributes: [],
                     events: [],
-                  } as any,
+                  } as unknown as OtlpSpan,
                 ],
               },
             ],
@@ -459,7 +456,7 @@ describe('OtlpService', () => {
         where: jest.fn().mockResolvedValue([]),
       };
 
-      mockDb.select.mockReturnValue(mockSelect as any);
+      mockDb.select.mockReturnValue(mockSelect);
 
       const result = await service.processTraceExport(request, 'org-123');
 

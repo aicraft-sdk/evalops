@@ -77,6 +77,14 @@ export class AzureBlobService {
     }
   }
 
+  /** Returns the configured client, throwing the same 503 as {@link assertAvailable} otherwise. */
+  private getClient(): BlobServiceClient {
+    if (!this.client) {
+      throw new ServiceUnavailableException('Azure Blob Storage is not configured');
+    }
+    return this.client;
+  }
+
   /**
    * Uploads artifact content to Azure Blob Storage.
    * @returns The blob URL (without SAS token — use generatePresignedUrl for downloads)
@@ -86,9 +94,8 @@ export class AzureBlobService {
     fileName: string,
     content: Buffer | string,
   ): Promise<string> {
-    this.assertAvailable();
     const blobPath = `${runId}/${fileName}`;
-    const containerClient = this.client!.getContainerClient(this.containerName);
+    const containerClient = this.getClient().getContainerClient(this.containerName);
     const blockBlobClient = containerClient.getBlockBlobClient(blobPath);
 
     const buffer = Buffer.isBuffer(content) ? content : Buffer.from(content, 'utf-8');
@@ -141,8 +148,7 @@ export class AzureBlobService {
    * Downloads blob content as a string.
    */
   async downloadBlobContent(blobPath: string): Promise<string> {
-    this.assertAvailable();
-    const containerClient = this.client!.getContainerClient(this.containerName);
+    const containerClient = this.getClient().getContainerClient(this.containerName);
     const blockBlobClient = containerClient.getBlockBlobClient(blobPath);
 
     const exists = await blockBlobClient.exists();
@@ -185,8 +191,7 @@ export class AzureBlobService {
    * Deletes a blob from Azure Blob Storage.
    */
   async deleteArtifact(blobPath: string): Promise<void> {
-    this.assertAvailable();
-    const containerClient = this.client!.getContainerClient(this.containerName);
+    const containerClient = this.getClient().getContainerClient(this.containerName);
     const blockBlobClient = containerClient.getBlockBlobClient(blobPath);
 
     const exists = await blockBlobClient.exists();

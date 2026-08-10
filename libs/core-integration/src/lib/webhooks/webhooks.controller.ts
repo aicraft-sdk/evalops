@@ -4,14 +4,16 @@ import {
   Body,
   Headers,
   Param,
-  UseGuards,
   BadRequestException,
   NotFoundException,
   Logger,
 } from '@nestjs/common';
-import { WebhooksService } from './webhooks.service';
+import {
+  WebhooksService,
+  GitHubPushPayload,
+  GitHubPullRequestPayload,
+} from './webhooks.service';
 import { Public } from '@evalops/shared-auth';
-import { CurrentUser } from '@evalops/shared-auth';
 import { CicdRepository } from '@evalops/shared-db';
 
 @Controller('webhooks')
@@ -27,7 +29,7 @@ export class WebhooksController {
   @Post('github/:integrationId')
   async receiveGitHubWebhook(
     @Param('integrationId') integrationId: string,
-    @Body() body: any,
+    @Body() body: unknown,
     @Headers() headers: Record<string, string>,
   ) {
     const signature = headers['x-hub-signature-256'] || headers['x-hub-signature'];
@@ -78,7 +80,7 @@ export class WebhooksController {
       case 'push':
         await this.webhooksService.processPushWebhook(
           integrationId,
-          body,
+          body as GitHubPushPayload,
           organizationId,
         );
         break;
@@ -86,7 +88,7 @@ export class WebhooksController {
       case 'pull_request':
         await this.webhooksService.processPullRequestWebhook(
           integrationId,
-          body,
+          body as GitHubPullRequestPayload,
           organizationId,
         );
         break;
@@ -99,10 +101,7 @@ export class WebhooksController {
   }
 
   @Post('deliver')
-  async deliverWebhook(
-    @Body() body: { url: string; payload: any },
-    @CurrentUser() user: any,
-  ) {
+  async deliverWebhook(@Body() body: { url: string; payload: unknown }) {
     await this.webhooksService.deliverWebhook(body.url, body.payload);
     return { delivered: true };
   }

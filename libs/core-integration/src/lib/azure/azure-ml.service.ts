@@ -9,6 +9,43 @@ export interface AzureCredentials {
   tenantId: string;
 }
 
+export interface AzureSubscription {
+  subscriptionId: string;
+  displayName?: string;
+  state?: string;
+}
+
+export interface AzureMLWorkspace {
+  id: string;
+  name: string;
+  properties?: {
+    provisioningState?: string;
+    [key: string]: unknown;
+  };
+}
+
+export interface AzureMLFlow {
+  id?: string;
+  name?: string;
+  [key: string]: unknown;
+}
+
+export interface AzureOpenAIAccount {
+  id: string;
+  name: string;
+  [key: string]: unknown;
+}
+
+export interface AzureOpenAIDeployment {
+  id?: string;
+  name?: string;
+  [key: string]: unknown;
+}
+
+interface AzureListResponse<T> {
+  value?: T[];
+}
+
 @Injectable()
 export class AzureMLService {
   private readonly logger = new Logger(AzureMLService.name);
@@ -37,18 +74,22 @@ export class AzureMLService {
     };
   }
 
-  async listSubscriptions(): Promise<any[]> {
+  async listSubscriptions(): Promise<AzureSubscription[]> {
     const url = `${this.armBaseUrl}/subscriptions?api-version=2020-01-01`;
     const response = await firstValueFrom(
-      this.httpService.get(url, { headers: this.getAuthHeaders() }),
+      this.httpService.get<AzureListResponse<AzureSubscription>>(url, {
+        headers: this.getAuthHeaders(),
+      }),
     );
     return response.data.value || [];
   }
 
-  async listMLWorkspaces(subscriptionId: string): Promise<any[]> {
+  async listMLWorkspaces(subscriptionId: string): Promise<AzureMLWorkspace[]> {
     const url = `${this.armBaseUrl}/subscriptions/${subscriptionId}/providers/Microsoft.MachineLearningServices/workspaces?api-version=${this.apiVersion}`;
     const response = await firstValueFrom(
-      this.httpService.get(url, { headers: this.getAuthHeaders() }),
+      this.httpService.get<AzureListResponse<AzureMLWorkspace>>(url, {
+        headers: this.getAuthHeaders(),
+      }),
     );
     return response.data.value || [];
   }
@@ -57,10 +98,12 @@ export class AzureMLService {
     subscriptionId: string,
     resourceGroup: string,
     workspaceName: string,
-  ): Promise<any> {
+  ): Promise<AzureMLWorkspace> {
     const url = `${this.armBaseUrl}/subscriptions/${subscriptionId}/resourceGroups/${resourceGroup}/providers/Microsoft.MachineLearningServices/workspaces/${workspaceName}?api-version=${this.apiVersion}`;
     const response = await firstValueFrom(
-      this.httpService.get(url, { headers: this.getAuthHeaders() }),
+      this.httpService.get<AzureMLWorkspace>(url, {
+        headers: this.getAuthHeaders(),
+      }),
     );
     return response.data;
   }
@@ -69,23 +112,29 @@ export class AzureMLService {
     subscriptionId: string,
     resourceGroup: string,
     workspaceName: string,
-  ): Promise<any[]> {
+  ): Promise<AzureMLFlow[]> {
     try {
       const url = `${this.armBaseUrl}/subscriptions/${subscriptionId}/resourceGroups/${resourceGroup}/providers/Microsoft.MachineLearningServices/workspaces/${workspaceName}/flows?api-version=${this.apiVersion}`;
       const response = await firstValueFrom(
-        this.httpService.get(url, { headers: this.getAuthHeaders() }),
+        this.httpService.get<AzureListResponse<AzureMLFlow>>(url, {
+          headers: this.getAuthHeaders(),
+        }),
       );
       return response.data.value || [];
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.warn('Flow listing not available via ARM API:', error);
       return [];
     }
   }
 
-  async listOpenAIAccounts(subscriptionId: string): Promise<any[]> {
+  async listOpenAIAccounts(
+    subscriptionId: string,
+  ): Promise<AzureOpenAIAccount[]> {
     const url = `${this.armBaseUrl}/subscriptions/${subscriptionId}/providers/Microsoft.CognitiveServices/accounts?api-version=2024-10-01&$filter=kind eq 'OpenAI'`;
     const response = await firstValueFrom(
-      this.httpService.get(url, { headers: this.getAuthHeaders() }),
+      this.httpService.get<AzureListResponse<AzureOpenAIAccount>>(url, {
+        headers: this.getAuthHeaders(),
+      }),
     );
     return response.data.value || [];
   }
@@ -94,10 +143,12 @@ export class AzureMLService {
     subscriptionId: string,
     resourceGroup: string,
     accountName: string,
-  ): Promise<any[]> {
+  ): Promise<AzureOpenAIDeployment[]> {
     const url = `${this.armBaseUrl}/subscriptions/${subscriptionId}/resourceGroups/${resourceGroup}/providers/Microsoft.CognitiveServices/accounts/${accountName}/deployments?api-version=2024-10-01`;
     const response = await firstValueFrom(
-      this.httpService.get(url, { headers: this.getAuthHeaders() }),
+      this.httpService.get<AzureListResponse<AzureOpenAIDeployment>>(url, {
+        headers: this.getAuthHeaders(),
+      }),
     );
     return response.data.value || [];
   }
@@ -114,10 +165,9 @@ export class AzureMLService {
         workspaceName,
       );
       return workspace?.properties?.provisioningState === 'Succeeded';
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Workspace health check failed:', error);
       return false;
     }
   }
 }
-

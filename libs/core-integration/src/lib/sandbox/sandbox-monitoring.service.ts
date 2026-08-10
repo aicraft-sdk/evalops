@@ -249,7 +249,7 @@ export class SandboxMonitoringService {
         }
       }
 
-      for (const [hash, count] of codeHashes.entries()) {
+      for (const count of codeHashes.values()) {
         if (count > 20) {
           anomalies.push({
             type: 'repeated_code_execution',

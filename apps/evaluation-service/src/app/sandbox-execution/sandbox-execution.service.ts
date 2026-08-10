@@ -10,13 +10,23 @@ import { HttpClientService, getErrorMessage } from '@evalops/shared-common';
 import { CustomEvaluatorsRepository } from '@evalops/shared-db';
 import { CoreClientService } from '../core-client/core-client.service';
 import {
-  CustomEvaluatorExecutionRequest,
-  CodeExecutionRequest,
   EvaluationResult,
   ValidationResult,
   SandboxConfig,
   ExecutionResult,
 } from './sandbox-execution.dto';
+
+/**
+ * Structural shape of an HTTP client error (axios or otherwise) that carries
+ * a response status. Used instead of `any` to keep the pre-existing
+ * duck-typed status check (not tied to a specific HTTP client implementation).
+ */
+interface HttpErrorLike {
+  response?: {
+    status?: number;
+    data?: unknown;
+  };
+}
 
 @Injectable()
 export class SandboxExecutionService {
@@ -83,19 +93,21 @@ export class SandboxExecutionService {
     const code = await this.retrieveEvaluatorCode(evaluator.filePath);
 
     // Determine language from file extension or metadata
-    const language = this.determineLanguage(
-      evaluator.fileName,
-      evaluator.evaluatorType,
-    );
+    const language = this.determineLanguage(evaluator.fileName);
 
     // Build sandbox config from evaluator settings
     const sandboxConfig: SandboxConfig = evaluator.sandboxConfig
       ? (evaluator.sandboxConfig as SandboxConfig)
       : {};
-    const executionTimeout =
+    // Resolve effective timeout (evaluator-level setting takes priority over
+    // sandboxConfig, falling back to 300s) and thread it through to the
+    // sandbox config that is actually sent when creating the sandbox.
+    // NOTE: previously computed but never applied — sandboxConfig.timeout
+    // could end up unset even when evaluator.executionTimeout was configured.
+    sandboxConfig.timeout =
       evaluator.executionTimeout || sandboxConfig.timeout || 300;
 
-    // Execute code in sandbox via integration service
+    // Execute code in sandbox via core-service
     const sandboxId = await this.createSandbox(sandboxConfig);
     try {
       const executionResult = await this.executeCodeInSandbox(
@@ -291,7 +303,7 @@ export class SandboxExecutionService {
         return { valid: false, errors, warnings };
       }
 
-      const obj = value as Record<string, any>;
+      const obj = value as Record<string, unknown>;
 
       // Check required fields
       if (schema.required && Array.isArray(schema.required)) {
@@ -404,7 +416,7 @@ export class SandboxExecutionService {
     this.logger.debug(`Retrieving evaluator code from: ${filePath}`);
 
     try {
-      // Call integration-service to download blob content
+      // Call core-service to download blob content
       const response = await this.httpClient.get<{ content: string }>(
         `${this.coreServiceUrl}/api/artifacts/blob/${encodeURIComponent(filePath)}`,
         {
@@ -431,8 +443,7 @@ export class SandboxExecutionService {
         `Failed to retrieve evaluator code from ${filePath}: ${message}`,
         error instanceof Error ? error.stack : undefined,
       );
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if ((error as any)?.response?.status === 404) {
+      if ((error as HttpErrorLike)?.response?.status === 404) {
         throw new NotFoundException(
           `Evaluator file not found: ${filePath}`,
         );
@@ -443,10 +454,7 @@ export class SandboxExecutionService {
     }
   }
 
-  private determineLanguage(
-    fileName: string,
-    evaluatorType?: string,
-  ): 'python' | 'javascript' {
+  private determineLanguage(fileName: string): 'python' | 'javascript' {
     const ext = fileName.split('.').pop()?.toLowerCase();
     if (ext === 'py' || ext === 'python') {
       return 'python';

@@ -13,14 +13,19 @@ import { EvaluatorsService } from '../evaluation/evaluators/evaluators.service';
 import { PoliciesService } from '../policies/policies.service';
 import { Run, InsertRun } from '@evalops/shared-db';
 import { SimulationScenarioDefinition, SimulationTurn } from './types';
-import { AgentMDParser } from '@evalops/agent-md';
+import { AgentMDParser, AgentMD } from '@evalops/agent-md';
 import { getGitCommitShaSync } from './git-utils';
+import { getErrorMessage } from '@evalops/shared-common';
 
 interface TurnResult {
   turnIndex: number;
   userMessage: string;
   agentResponse: string;
-  toolCalls?: Array<{ name: string; arguments: any; result?: any }>;
+  toolCalls?: Array<{
+    name: string;
+    arguments: Record<string, unknown>;
+    result?: unknown;
+  }>;
   validationResults?: {
     schema?: boolean;
     regex?: boolean;
@@ -132,7 +137,7 @@ export class SimulationRunnerService {
     const traceId = rootSpan.traceId;
 
     let totalCost = 0;
-    let totalTokens = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+    const totalTokens = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
     const turnResults: TurnResult[] = [];
 
     try {
@@ -205,15 +210,16 @@ export class SimulationRunnerService {
       }
 
       return updatedRun || createdRun;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
       this.logger.error(
-        `Simulation execution failed: ${error.message}`,
-        error.stack
+        `Simulation execution failed: ${message}`,
+        error instanceof Error ? error.stack : undefined
       );
 
       // End root span with error
       await this.traceWriterService.endSpan(rootSpan.spanId, {
-        error: error.message,
+        error: message,
         failed_at_turn: turnResults.length,
       });
 
@@ -221,7 +227,7 @@ export class SimulationRunnerService {
       await this.runsRepository.update(createdRun.id, {
         status: 'failed',
         completedAt: new Date(),
-        errorMessage: error.message,
+        errorMessage: message,
         duration: Math.floor((Date.now() - startTime) / 1000),
       });
 
@@ -235,7 +241,7 @@ export class SimulationRunnerService {
   private async executeTurn(
     turn: SimulationTurn,
     turnIndex: number,
-    agentMD: any,
+    agentMD: AgentMD,
     runId: string,
     organizationId: string,
     traceId: string,
@@ -376,10 +382,10 @@ export class SimulationRunnerService {
         tokenUsage: generationResponse.tokenUsage,
         duration,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       // End turn span with error
       await this.traceWriterService.endSpan(turnSpan.spanId, {
-        error: error.message,
+        error: getErrorMessage(error),
       });
       throw error;
     }

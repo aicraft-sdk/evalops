@@ -19,6 +19,10 @@ export interface DiscoveryOptions {
   maxConcurrency?: number;
 }
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 @Injectable()
 export class AzureDiscoveryService {
   private readonly logger = new Logger(AzureDiscoveryService.name);
@@ -30,7 +34,7 @@ export class AzureDiscoveryService {
       this.azureMLService.setCredentials(credentials);
       const subscriptions = await this.azureMLService.listSubscriptions();
       return subscriptions.length > 0;
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Azure credentials validation failed:', error);
       return false;
     }
@@ -43,7 +47,6 @@ export class AzureDiscoveryService {
   ): Promise<DiscoveryResult> {
     const {
       syncWorkspaces = true,
-      syncDeployments = true,
       syncPromptFlows = true,
       syncOpenAI = true,
     } = options;
@@ -85,9 +88,9 @@ export class AzureDiscoveryService {
                     workspace.name,
                   );
                   result.flows += flows.length;
-                } catch (error: any) {
+                } catch (error: unknown) {
                   result.errors.push(
-                    `Error discovering flows for workspace ${workspace.name}: ${error.message}`,
+                    `Error discovering flows for workspace ${workspace.name}: ${getErrorMessage(error)}`,
                   );
                 }
               }
@@ -111,29 +114,28 @@ export class AzureDiscoveryService {
                     account.name,
                   );
                 result.openAIDeployments += deployments.length;
-              } catch (error: any) {
+              } catch (error: unknown) {
                 result.errors.push(
-                  `Error discovering deployments for OpenAI account ${account.name}: ${error.message}`,
+                  `Error discovering deployments for OpenAI account ${account.name}: ${getErrorMessage(error)}`,
                 );
               }
             }
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           result.errors.push(
-            `Error discovering resources for subscription ${subscription.subscriptionId}: ${error.message}`,
+            `Error discovering resources for subscription ${subscription.subscriptionId}: ${getErrorMessage(error)}`,
           );
         }
       }
-    } catch (error: any) {
-      result.errors.push(`Top-level discovery error: ${error.message}`);
+    } catch (error: unknown) {
+      result.errors.push(`Top-level discovery error: ${getErrorMessage(error)}`);
     }
 
     return result;
   }
 
   private extractResourceGroup(resourceId: string): string {
-    const match = resourceId.match(/\/resourceGroups\/([^\/]+)\//);
+    const match = resourceId.match(/\/resourceGroups\/([^/]+)\//);
     return match ? match[1] : 'unknown';
   }
 }
-

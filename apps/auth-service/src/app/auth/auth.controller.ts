@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { JwtAuthGuard, CurrentUser } from '@evalops/shared-auth';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { Public } from '@evalops/shared-auth';
+import { AuthenticatedRequestUser } from './interfaces/authenticated-request-user.interface';
 
 @Controller('auth')
 export class AuthController {
@@ -36,7 +37,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('user')
-  async getCurrentUser(@CurrentUser() user: any) {
+  async getCurrentUser(@CurrentUser() user: AuthenticatedRequestUser) {
     return user;
   }
 

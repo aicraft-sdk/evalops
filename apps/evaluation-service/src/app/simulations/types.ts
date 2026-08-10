@@ -14,7 +14,7 @@ export interface SimulationTurn {
    * The user message for this turn.
    * Can be a plain string or a template with variables.
    */
-  userMessage: string | { template: string; variables?: Record<string, any> };
+  userMessage: string | { template: string; variables?: Record<string, unknown> };
 
   /**
    * Tools allowed in this turn.
@@ -31,7 +31,7 @@ export interface SimulationTurn {
     /**
      * JSON schema validation for the response structure
      */
-    schema?: Record<string, any>;
+    schema?: Record<string, unknown>;
 
     /**
      * Regex pattern to match against the response content
@@ -84,7 +84,7 @@ export interface SimulationScenarioDefinition {
   /**
    * Optional metadata for the scenario (tags, categories, etc.)
    */
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -135,7 +135,7 @@ export interface SimulationSuiteConfig {
   /**
    * Optional metadata for the suite
    */
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 /**

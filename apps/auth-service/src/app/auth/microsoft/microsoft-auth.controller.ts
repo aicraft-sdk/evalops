@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { MicrosoftAuthService } from './microsoft-auth.service';
 import { Public } from '@evalops/shared-auth';
@@ -24,8 +24,9 @@ export class MicrosoftAuthController {
     try {
       const loginUrl = await this.microsoftAuthService.getLoginUrl();
       return res.redirect(loginUrl);
-    } catch (error: any) {
-      return res.status(500).json({ message: error.message });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return res.status(500).json({ message });
     }
   }
 
@@ -77,12 +78,11 @@ export class MicrosoftAuthController {
 
       // Redirect to frontend with success
       return res.redirect(`${frontendUrl}/auth/callback?success=true`);
-    } catch (error: any) {
+    } catch (error) {
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4200';
+      const message = error instanceof Error ? error.message : 'Unknown error';
       return res.redirect(
-        `${frontendUrl}/auth/callback?error=${encodeURIComponent(
-          error.message
-        )}`
+        `${frontendUrl}/auth/callback?error=${encodeURIComponent(message)}`
       );
     }
   }

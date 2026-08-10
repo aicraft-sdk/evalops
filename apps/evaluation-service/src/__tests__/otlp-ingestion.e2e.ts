@@ -8,15 +8,12 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, HttpStatus, UnauthorizedException } from '@nestjs/common';
+import { INestApplication, HttpStatus } from '@nestjs/common';
 import request from 'supertest';
 import { OtlpController } from '../app/otlp/otlp.controller';
 import { OtlpService } from '../app/otlp/otlp.service';
 import { OtlpAuthGuard } from '../app/otlp/otlp-auth.guard';
 import { ConfigService } from '@nestjs/config';
-import { db } from '@evalops/shared-db';
-import { traceSpans } from '@evalops/shared-db';
-import { eq } from 'drizzle-orm';
 
 jest.mock('@evalops/shared-db', () => ({
   db: {

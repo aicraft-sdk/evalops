@@ -101,8 +101,6 @@ describe('EvaluatorsLLMService — error catch blocks return { score: 0 }', () =
 // ---------------------------------------------------------------------------
 // MEDIUM-1: EvaluationRunnerService must NOT appear in EvaluationModule exports
 // ---------------------------------------------------------------------------
-import { EvaluationRunnerService } from '../evaluation-runner.service';
-
 describe('EvaluationModule — EvaluationRunnerService must not be in exports', () => {
   it('EvaluationModule metadata exports does not include EvaluationRunnerService', () => {
     const metadata = Reflect.getMetadata('exports', EvaluationModule);

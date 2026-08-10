@@ -45,8 +45,12 @@ export class IngestionService {
     // Group events by runId for ordered processing
     const byRun = new Map<string, TraceEvent[]>();
     for (const ev of events) {
-      if (!byRun.has(ev.runId)) byRun.set(ev.runId, []);
-      byRun.get(ev.runId)!.push(ev);
+      const runEvents = byRun.get(ev.runId);
+      if (runEvents) {
+        runEvents.push(ev);
+      } else {
+        byRun.set(ev.runId, [ev]);
+      }
     }
 
     this.logger.log(
@@ -113,21 +117,21 @@ export class IngestionService {
 
     await this.runsRepository.completeRun(runId, artifactHashes);
 
-    // Fire-and-forget: notify integration-service to process artifact metadata
-    this.notifyIntegrationService(runId, artifactHashes).catch((err) => {
+    // Fire-and-forget: notify core-service to process artifact metadata
+    this.notifyCoreService(runId, artifactHashes).catch((err) => {
       this.logger.warn(
-        `Failed to notify integration-service for run ${runId}: ${err?.message}`
+        `Failed to notify core-service for run ${runId}: ${err?.message}`
       );
     });
 
     return { success: true };
   }
 
-  private async notifyIntegrationService(
+  private async notifyCoreService(
     runId: string,
     artifactHashes: Record<string, string>
   ): Promise<void> {
-    const integrationUrl = this.configService.get<string>(
+    const coreServiceUrl = this.configService.get<string>(
       'CORE_SERVICE_URL',
       'http://core-service:3002'
     );
@@ -135,7 +139,7 @@ export class IngestionService {
 
     await this.httpService
       .post(
-        `${integrationUrl}/api/artifacts/${runId}/notify`,
+        `${coreServiceUrl}/api/artifacts/${runId}/notify`,
         { artifactHashes },
         {
           headers: {
