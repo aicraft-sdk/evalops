@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EvalOps Docs — SonarQube for AI</title>
+<meta name="description" content="EvalOps documentation and showcase: a multi-tenant eval platform for LLM features — architecture, CLI, SDKs, and getting-started guide.">
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-alt: #f5f6f8;
+    --text: #1a1d23;
+    --text-muted: #565c66;
+    --border: #e2e4e8;
+    --accent: #4f46e5;
+    --accent-text: #ffffff;
+    --card-bg: #ffffff;
+    --code-bg: #14161a;
+    --code-text: #e8eaed;
+    --table-stripe: #f9fafb;
+    --nav-bg: rgba(255, 255, 255, 0.88);
+    --diagram-bg: #ffffff;
+    --ok: #15803d;
+    --warn: #b45309;
+    --fail: #b91c1c;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a;
+      --bg-alt: #1c1f26;
+      --text: #f0f1f3;
+      --text-muted: #a2a8b4;
+      --border: #2c2f38;
+      --accent: #818cf8;
+      --accent-text: #14161a;
+      --card-bg: #1c1f26;
+      --code-bg: #0d0e11;
+      --code-text: #e8eaed;
+      --table-stripe: #1a1d24;
+      --nav-bg: rgba(20, 22, 26, 0.88);
+      --diagram-bg: #1c1f26;
+      --ok: #4ade80;
+      --warn: #fbbf24;
+      --fail: #f87171;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+  }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  code, pre, .mono {
+    font-family: "SF Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  a { color: var(--accent); }
+
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    background: var(--accent);
+    color: var(--accent-text);
+    padding: 0.6rem 1rem;
+    z-index: 100;
+    border-radius: 0 0 8px 0;
+  }
+
+  .skip-link:focus {
+    left: 0;
+  }
+
+  /* Nav */
+  .topnav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--nav-bg);
+    backdrop-filter: saturate(180%) blur(8px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .topnav-inner {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0.85rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .brand {
+    font-weight: 700;
+    font-size: 1.05rem;
+    text-decoration: none;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+
+  .brand span {
+    color: var(--accent);
+  }
+
+  .topnav-links {
+    list-style: none;
+    display: flex;
+    gap: 1.1rem;
+    margin: 0;
+    padding: 0;
+    flex-wrap: wrap;
+    font-size: 0.88rem;
+  }
+
+  .topnav-links a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .topnav-links a:hover,
+  .topnav-links a:focus-visible {
+    color: var(--accent);
+  }
+
+  .topnav-cta {
+    margin-left: auto;
+    font-size: 0.85rem;
+    text-decoration: none;
+    font-weight: 600;
+    color: var(--accent);
+    border: 1px solid var(--border);
+    padding: 0.4rem 0.8rem;
+    border-radius: 8px;
+  }
+
+  .topnav-cta:hover { border-color: var(--accent); }
+
+  /* Layout */
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+  }
+
+  section {
+    padding: 3.25rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  section:last-of-type { border-bottom: none; }
+
+  .eyebrow {
+    display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.6rem;
+  }
+
+  h1 {
+    font-size: clamp(2rem, 4.5vw, 2.9rem);
+    margin: 0 0 0.7rem;
+    letter-spacing: -0.02em;
+  }
+
+  h2 {
+    font-size: clamp(1.4rem, 3vw, 1.85rem);
+    letter-spacing: -0.01em;
+    margin: 0 0 0.5rem;
+    scroll-margin-top: 5rem;
+  }
+
+  h3 {
+    font-size: 1.1rem;
+    margin: 1.6rem 0 0.5rem;
+  }
+
+  .section-lede {
+    color: var(--text-muted);
+    max-width: 680px;
+    margin: 0 0 1.75rem;
+  }
+
+  /* Hero */
+  .hero {
+    text-align: center;
+    padding: 3.5rem 0 3rem;
+  }
+
+  .hero .lede {
+    color: var(--text-muted);
+    font-size: 1.08rem;
+    max-width: 640px;
+    margin: 0 auto 1.75rem;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    display: inline-block;
+    padding: 0.7rem 1.3rem;
+    border-radius: 9px;
+    font-weight: 600;
+    font-size: 0.94rem;
+    text-decoration: none;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--accent-text);
+  }
+
+  .btn-primary:hover { opacity: 0.92; }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--text);
+    border-color: var(--border);
+  }
+
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+  .service-strip {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 2rem;
+    font-size: 0.8rem;
+  }
+
+  .service-pill {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.35rem 0.85rem;
+    color: var(--text-muted);
+  }
+
+  .service-pill b { color: var(--text); }
+
+  /* Feature grid */
+  .features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 0.9rem;
+  }
+
+  .feature {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.1rem 1.2rem;
+  }
+
+  .feature strong {
+    display: block;
+    margin-bottom: 0.3rem;
+    font-size: 0.98rem;
+  }
+
+  .feature span {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .feature { transition: transform 180ms ease-out, border-color 180ms ease-out; }
+    .feature:hover { transform: translateY(-2px); border-color: var(--accent); }
+  }
+
+  /* Diagrams */
+  figure.diagram {
+    margin: 1.5rem 0;
+    background: var(--diagram-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.25rem;
+    overflow-x: auto;
+  }
+
+  figure.diagram .mermaid {
+    display: flex;
+    justify-content: center;
+    min-width: 560px;
+  }
+
+  figcaption {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 0.75rem;
+    text-align: center;
+  }
+
+  details.diagram-fallback {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  details.diagram-fallback summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* Tables */
+  .table-wrap { overflow-x: auto; margin: 1.25rem 0; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 0.55rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  td:last-child, th:last-child { white-space: normal; }
+
+  th {
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  tbody tr:nth-child(even) { background: var(--table-stripe); }
+
+  /* Code blocks */
+  pre {
+    background: var(--code-bg);
+    color: var(--code-text);
+    border-radius: 10px;
+    padding: 1rem 1.15rem;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    margin: 1rem 0;
+  }
+
+  code.inline {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 0.1rem 0.35rem;
+    font-size: 0.88em;
+  }
+
+  /* Cards / two-col */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.25rem;
+    margin: 1.5rem 0;
+  }
+
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.3rem;
+  }
+
+  .card h3 { margin-top: 0; }
+
+  .card p { color: var(--text-muted); font-size: 0.92rem; }
+
+  /* Command reference */
+  .cmd-block {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.1rem 1.3rem;
+    margin: 1.1rem 0;
+    background: var(--bg-alt);
+  }
+
+  .cmd-block h4 {
+    margin: 0 0 0.4rem;
+    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    font-size: 1rem;
+  }
+
+  .cmd-block p { margin: 0.3rem 0; color: var(--text-muted); font-size: 0.9rem; }
+
+  .badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.15rem 0.5rem;
+    border-radius: 5px;
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    margin-left: 0.4rem;
+    vertical-align: middle;
+  }
+
+  .badge.pass { color: var(--ok); border-color: var(--ok); }
+  .badge.fail { color: var(--fail); border-color: var(--fail); }
+
+  .note {
+    border-left: 3px solid var(--accent);
+    background: var(--bg-alt);
+    padding: 0.85rem 1.1rem;
+    border-radius: 0 8px 8px 0;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin: 1.25rem 0;
+  }
+
+  .note strong { color: var(--text); }
+
+  footer {
+    text-align: center;
+    padding: 2.5rem 0 3.5rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  footer a { text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  footer .foot-links {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+  }
+
+  ul.tight { padding-left: 1.2rem; }
+  ul.tight li { margin-bottom: 0.35rem; color: var(--text-muted); font-size: 0.92rem; }
+</style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <nav class="topnav" aria-label="Section navigation">
+    <div class="topnav-inner">
+      <a class="brand" href="#top">Eval<span>Ops</span></a>
+      <ul class="topnav-links">
+        <li><a href="#architecture">Architecture</a></li>
+        <li><a href="#how-evals-run">How Evals Run</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#getting-started">Getting Started</a></li>
+        <li><a href="#cli">CLI</a></li>
+        <li><a href="#sdks">SDKs</a></li>
+        <li><a href="#github-action">GitHub Action</a></li>
+        <li><a href="#security">Security</a></li>
+      </ul>
+      <!-- Fill in the real repo URL once/if this repository goes public (see landing/index.html precedent). -->
+      <a class="topnav-cta" href="#" rel="noopener">GitHub repo →</a>
+    </div>
+  </nav>
+
+  <main id="main">
+    <div class="wrap">
+      <header class="hero" id="top">
+        <span class="eyebrow">Documentation &amp; Showcase</span>
+        <h1>EvalOps — "SonarQube for AI"</h1>
+        <p class="lede">
+          A production-ready platform for evaluating, monitoring, and enforcing quality gates on
+          LLM-based features. Run structured evaluations against prompts, datasets, and agents,
+          enforce pass/fail policies, track cost and drift, and ship LLM changes with CI/CD-grade
+          confidence.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#getting-started">Get started</a>
+          <a class="btn btn-secondary" href="#architecture">See the architecture</a>
+        </div>
+        <div class="service-strip" aria-label="Live services in this build">
+          <span class="service-pill"><b>api-gateway</b> :3000</span>
+          <span class="service-pill"><b>auth-service</b> :3001</span>
+          <span class="service-pill"><b>core-service</b> :3002</span>
+          <span class="service-pill"><b>evaluation-service</b> :3003</span>
+          <span class="service-pill"><b>frontend</b> :4200</span>
+        </div>
+      </header>
+    </div>
+
+    <!-- Architecture -->
+    <section id="architecture">
+      <div class="wrap">
+        <span class="eyebrow">System design</span>
+        <h2>Four services, one gateway</h2>
+        <p class="section-lede">
+          EvalOps is an Nx monorepo built as four NestJS microservices plus a React frontend and a
+          Python worker, all communicating through a single API Gateway. There is no
+          <code class="inline">integration-service</code> or <code class="inline">analytics-service</code>
+          anymore &mdash; both were fully decommissioned and their real functionality now lives
+          inside <code class="inline">core-service</code>, mounted as
+          <code class="inline">libs/core-integration</code> and
+          <code class="inline">libs/core-analytics</code>.
+        </p>
+
+        <figure class="diagram">
+          <div class="mermaid">
+flowchart TB
+  Browser["Browser"] --> FE["Frontend<br/>React 18 / Vite / Shadcn UI<br/>:4200"]
+  CLI["@evalops/cli"] --> GW
+  SDK["JS &amp; Python SDKs"] --> GW
+  ACTION["GitHub Action<br/>(evaluate-pr)"] --> GW
+  FE --> GW["API Gateway — NestJS :3000<br/>JwtAuthGuard + RbacGuard, single /api prefix"]
+  GW -->|"/api/auth/*"| AUTH["Auth Service :3001<br/>users, orgs, JWT, RBAC"]
+  GW -->|"/api/core/*"| CORE["Core Service :3002<br/>prompts, datasets, agents, eval specs"]
+  GW -->|"/api/evaluation/*"| EVAL["Evaluation Service :3003<br/>runs, evaluators, policy engine"]
+  GW -->|"/api/integration/*"| CORE
+  GW -->|"/api/analytics/*"| CORE
+  CORE --- CI["libs/core-integration<br/>artifacts, webhooks, alerts, sandbox"]
+  CORE --- CA["libs/core-analytics<br/>dashboard, cost, audit trail"]
+  EVAL -.HTTP.-> SBX["OpenSandbox Server<br/>(external, BYO backend)"]
+  AUTH --> DB[("PostgreSQL + Redis")]
+  CORE --> DB
+  EVAL --> DB
+          </div>
+          <figcaption>
+            Real service topology as of the architecture simplification: 4 NestJS services + frontend,
+            with integration and analytics logic folded into <code class="inline">core-service</code>.
+          </figcaption>
+          <details class="diagram-fallback">
+            <summary>Text description of this diagram</summary>
+            <p>
+              The browser talks to the React frontend, which calls the API Gateway (port 3000).
+              The gateway enforces JWT auth and RBAC, then routes requests by path prefix:
+              <code class="inline">/api/auth/*</code> to auth-service (3001),
+              <code class="inline">/api/core/*</code> to core-service (3002),
+              <code class="inline">/api/evaluation/*</code> to evaluation-service (3003), and both
+              <code class="inline">/api/integration/*</code> and <code class="inline">/api/analytics/*</code>
+              also to core-service, since that's where those libraries now live. The CLI, JS/Python SDKs,
+              and the GitHub Action all call the gateway the same way the frontend does. Evaluation-service
+              calls out to an external OpenSandbox server for isolated code execution. All three data-owning
+              services share one PostgreSQL database (with Redis for rate limiting/idempotency).
+            </p>
+          </details>
+        </figure>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Service</th><th>Port</th><th>Responsibility</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code class="inline">api-gateway</code></td><td>3000</td><td>Request routing, CORS, JWT auth + RBAC enforcement, forwarding to downstream services</td></tr>
+              <tr><td><code class="inline">auth-service</code></td><td>3001</td><td>Users, organizations, JWT auth, RBAC</td></tr>
+              <tr><td><code class="inline">core-service</code></td><td>3002</td><td>Prompts, datasets, agents, eval specs, templates, artifacts, webhooks, alerts, dashboard metrics, cost analytics, audit trail (via <code class="inline">libs/core-integration</code> + <code class="inline">libs/core-analytics</code>)</td></tr>
+              <tr><td><code class="inline">evaluation-service</code></td><td>3003</td><td>Runs, evaluation engine, policy engine, trace ingestion</td></tr>
+              <tr><td><code class="inline">python-worker</code></td><td>5055</td><td>FastAPI service for advanced LLM evaluations</td></tr>
+              <tr><td><code class="inline">frontend</code></td><td>4200</td><td>React 18 + Vite + Shadcn UI</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Shared libraries</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Library</th><th>Purpose</th></tr></thead>
+            <tbody>
+              <tr><td><code class="inline">libs/shared-db</code></td><td>Drizzle ORM schema, migrations, the <code class="inline">db</code> singleton</td></tr>
+              <tr><td><code class="inline">libs/shared-auth</code></td><td><code class="inline">JwtAuthGuard</code>, <code class="inline">RbacGuard</code>, <code class="inline">ServiceAuthGuard</code>, <code class="inline">@Roles</code>, <code class="inline">@Public</code></td></tr>
+              <tr><td><code class="inline">libs/shared-common</code></td><td><code class="inline">LoggingInterceptor</code>, <code class="inline">TenantInterceptor</code>, <code class="inline">RedisModule</code>, <code class="inline">HttpClientService</code>, <code class="inline">initTelemetry()</code></td></tr>
+              <tr><td><code class="inline">libs/sdk</code></td><td>Client SDK for trace event ingestion and the full <code class="inline">EvalOpsClient</code></td></tr>
+              <tr><td><code class="inline">libs/evaluators</code></td><td><code class="inline">ExactEvaluator</code>, <code class="inline">RuleEvaluator</code>, <code class="inline">Aggregator</code> — pure TypeScript evaluator logic</td></tr>
+              <tr><td><code class="inline">libs/agent-md</code></td><td>Parser for the AgentMD YAML format</td></tr>
+              <tr><td><code class="inline">libs/core-integration</code></td><td>Artifacts (Azure Blob), webhooks, alerts, sandbox execution — mounted on core-service</td></tr>
+              <tr><td><code class="inline">libs/core-analytics</code></td><td>Dashboard metrics, cost analytics, audit trail — mounted on core-service</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- How evals run -->
+    <section id="how-evals-run">
+      <div class="wrap">
+        <span class="eyebrow">Workflow</span>
+        <h2>An eval run, from trigger to policy gate</h2>
+        <p class="section-lede">
+          The same flow runs whether it's kicked off by a developer via the CLI, a script using the
+          SDK, or the GitHub Action on a pull request.
+        </p>
+
+        <figure class="diagram">
+          <div class="mermaid">
+sequenceDiagram
+  participant Dev as Developer / CI
+  participant CLI as evalops CLI / SDK / Action
+  participant GW as API Gateway
+  participant EV as Evaluation Service
+  participant POL as Policy Engine
+  Dev->>CLI: evalops eval run "spec-name" --watch
+  CLI->>GW: POST /api/evaluation/runs (Bearer JWT)
+  GW->>EV: forward request (JwtAuthGuard passed)
+  EV->>EV: run evaluators (exact, rule-based, LLM-judge, RAG, safety)
+  EV->>POL: compare scores against policy thresholds
+  POL-->>EV: verdict: pass / warn / fail
+  EV-->>GW: run result (status, scores, cost)
+  GW-->>CLI: run result
+  CLI-->>Dev: prints verdict, exits 0 (pass) or 1 (fail)
+          </div>
+          <figcaption>
+            Eval run → policy gate sequence. The same verdict logic backs <code class="inline">evalops eval run --watch</code>,
+            <code class="inline">evalops policy check</code>, and the <code class="inline">evaluate-pr</code> GitHub Action.
+          </figcaption>
+          <details class="diagram-fallback">
+            <summary>Text description of this diagram</summary>
+            <p>
+              A developer or CI job triggers a run through the CLI, SDK, or GitHub Action. That
+              client sends a JWT-authenticated request to the API Gateway, which forwards it to
+              evaluation-service. Evaluation-service executes the configured evaluators (exact
+              match, rule-based, LLM-as-judge, RAG metrics, safety checks — some may run inside an
+              external OpenSandbox for isolation), then hands the resulting scores to the policy
+              engine, which compares them against configured pass/warn/fail thresholds. The verdict
+              flows back through the gateway to the caller, which exits with code 0 on pass/warn or
+              1 on fail — enabling it to gate a CI pipeline.
+            </p>
+          </details>
+        </figure>
+
+        <div class="note">
+          <strong>Policy engine.</strong> Policies define pass/warn/fail thresholds (e.g. minimum
+          pass rate, cost budget). A failing policy returns a non-zero exit code from the CLI and the
+          <code class="inline">evaluate-pr</code> action, so a bad LLM change blocks the merge the
+          same way a failing unit test would.
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features">
+      <div class="wrap">
+        <span class="eyebrow">Capabilities</span>
+        <h2>What's actually implemented</h2>
+        <p class="section-lede">
+          Every item below maps to real code in this repository — nothing here is aspirational.
+        </p>
+        <div class="features">
+          <div class="feature">
+            <strong>Multi-tenant isolation</strong>
+            <span>PostgreSQL Row Level Security keyed on <code class="inline">app.org_id</code>, set per-request by <code class="inline">TenantInterceptor</code>.</span>
+          </div>
+          <div class="feature">
+            <strong>Policy engine + CI/CD gates</strong>
+            <span>Pass/warn/fail thresholds evaluated per run; non-zero exit codes block CI merges.</span>
+          </div>
+          <div class="feature">
+            <strong>Sandboxed code execution</strong>
+            <span>An HTTP client (<code class="inline">SandboxService</code>) against an external OpenSandbox server — bring your own sandbox backend, not a bundled Docker runner.</span>
+          </div>
+          <div class="feature">
+            <strong>Webhook &amp; CI/CD integrations</strong>
+            <span>Outbound webhook delivery on run completion, plus a composite GitHub Action for PR gating.</span>
+          </div>
+          <div class="feature">
+            <strong>JWT auth at the gateway</strong>
+            <span><code class="inline">JwtAuthGuard</code> + <code class="inline">RbacGuard</code> enforced as a global <code class="inline">APP_GUARD</code> on every service, gateway included. SSO is not built yet.</span>
+          </div>
+          <div class="feature">
+            <strong>Audit trail &amp; structured logging</strong>
+            <span>Every mutation logged with user/org/timestamp; every request emits pino-backed JSON with request/trace correlation.</span>
+          </div>
+          <div class="feature">
+            <strong>Multi-provider evaluation engine</strong>
+            <span>Exact match, rule-based, LLM-as-judge, RAG metrics, and safety evaluators across OpenAI, Azure OpenAI, Anthropic, Gemini, and xAI.</span>
+          </div>
+          <div class="feature">
+            <strong>CLI</strong>
+            <span><code class="inline">@evalops/cli</code> — login, eval run, dataset push, agent publish, policy check, doctor.</span>
+          </div>
+          <div class="feature">
+            <strong>JS &amp; Python SDKs</strong>
+            <span><code class="inline">EvalOpsClient</code> in TypeScript and Python, plus a pytest plugin.</span>
+          </div>
+          <div class="feature">
+            <strong>Cost analytics</strong>
+            <span>Per-run, per-provider, per-model token cost tracking.</span>
+          </div>
+          <div class="feature">
+            <strong>OpenTelemetry</strong>
+            <span>HTTP/Postgres/Redis auto-instrumented, OTLP gRPC export to any OTel collector.</span>
+          </div>
+          <div class="feature">
+            <strong>Trace event ingestion</strong>
+            <span>Agents stream events in-flight to <code class="inline">runs.trace_events</code> (10&nbsp;MB cap, rate-limited).</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Getting Started -->
+    <section id="getting-started">
+      <div class="wrap">
+        <span class="eyebrow">How to use</span>
+        <h2>Getting started</h2>
+        <p class="section-lede">
+          Local setup requires Node.js 20+, PostgreSQL, and (optionally, for webhooks/rate limiting) Redis.
+        </p>
+
+        <h3>1. Install and configure</h3>
+        <pre><code>npm install
+cp .env.example .env
+# Edit .env — set JWT_SECRET, SERVICE_SECRET, and at least one AI provider key
+#   (OPENAI_API_KEY or AZURE_OPENAI_API_KEY)</code></pre>
+
+        <h3>2. Provision Postgres + Redis (Docker)</h3>
+        <pre><code>docker run -d --name evalops-postgres -p 5432:5432 \
+  -e POSTGRES_DB=evalops -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
+  postgres:15-alpine
+
+docker run -d --name evalops-redis -p 6379:6379 redis:7-alpine</code></pre>
+
+        <h3>3. Run migrations and start everything</h3>
+        <pre><code>npm run db:push
+
+tilt up          # Recommended: Tilt dev dashboard at http://localhost:10350
+# OR
+npm run dev       # All services in parallel, no Tilt</code></pre>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Access point</th><th>URL</th></tr></thead>
+            <tbody>
+              <tr><td>Frontend</td><td><code class="inline">http://localhost:4200</code></td></tr>
+              <tr><td>API Gateway</td><td><code class="inline">http://localhost:3000</code></td></tr>
+              <tr><td>Swagger docs</td><td><code class="inline">http://localhost:3000/api/docs</code> (and each service on its own port)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>4. Authenticate against the API</h3>
+        <p class="section-lede">
+          All routes go through the gateway on a single <code class="inline">/api</code> prefix.
+          Every endpoint except login/register/logout/health requires a Bearer JWT.
+        </p>
+        <pre><code># Register
+curl -X POST http://localhost:3000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com","password":"Password123!"}'
+
+# Login → get a JWT
+curl -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com","password":"Password123!"}'
+
+# Use the token
+curl http://localhost:3000/api/core/prompts \
+  -H "Authorization: Bearer &lt;token&gt;"</code></pre>
+
+        <div class="note">
+          <strong>First real workflow.</strong> Once services are up: register/login, create a
+          dataset, create a prompt, create an eval spec linking the two plus an evaluator list, then
+          run the evaluation and watch the verdict in the UI or via <code class="inline">evalops eval run --watch</code>.
+        </div>
+      </div>
+    </section>
+
+    <!-- CLI -->
+    <section id="cli">
+      <div class="wrap">
+        <span class="eyebrow">Command line</span>
+        <h2>@evalops/cli</h2>
+        <p class="section-lede">
+          Wraps the REST API so you don't have to hand-craft curl commands, either from a terminal
+          or from a CI pipeline. Works from inside the monorepo (<code class="inline">npm run evalops --</code>)
+          or as the standalone <code class="inline">@evalops/cli</code> package once installed.
+        </p>
+
+        <pre><code># From inside the monorepo
+npm run evalops -- &lt;command&gt;
+
+# Credentials, checked in this order:
+#   1. EVALOPS_API_KEY (JWT token)
+#   2. EVALOPS_SERVICE_TOKEN (service-to-service token)
+#   3. ~/.evalops/credentials.json (saved by `evalops login`)
+# API URL defaults to http://localhost:3000, override with EVALOPS_API_URL</code></pre>
+
+        <div class="cmd-block">
+          <h4>login</h4>
+          <p>Authenticate and save the JWT to <code class="inline">~/.evalops/credentials.json</code>.</p>
+          <pre><code>npm run evalops -- login --url=https://evalops.internal</code></pre>
+        </div>
+
+        <div class="cmd-block">
+          <h4>eval run &lt;spec-name&gt; [--watch]</h4>
+          <p>Trigger a run for a named eval spec, optionally poll until it completes.</p>
+          <pre><code>npm run evalops -- eval run "Production Quality Gates" --watch
+# Waiting for completion...........
+# ✅ PASS — pass rate: 94.3% — cost: $0.0124</code></pre>
+          <p>Exit code <code class="inline">0</code> = pass, <code class="inline">1</code> = failed policy check.</p>
+        </div>
+
+        <div class="cmd-block">
+          <h4>dataset push &lt;file.json&gt;</h4>
+          <p>Upload a dataset from a local JSON file (<code class="inline">{ name, description, samples[] }</code>).</p>
+          <pre><code>npm run evalops -- dataset push ./datasets/fraud-golden-set.json</code></pre>
+        </div>
+
+        <div class="cmd-block">
+          <h4>agent publish &lt;agent.md&gt;</h4>
+          <p>Publish an AgentMD file as a new versioned entry in the agents registry.</p>
+          <pre><code>npm run evalops -- agent publish ./agents/fraud-detection.md</code></pre>
+        </div>
+
+        <div class="cmd-block">
+          <h4>policy check &lt;run-id&gt;</h4>
+          <p>Print the policy verdict for a completed run. Exits <code class="inline">1</code> on fail — useful for scripting.</p>
+          <pre><code>npm run evalops -- policy check $RUN_ID || echo "Quality gate failed!"</code></pre>
+        </div>
+
+        <div class="cmd-block">
+          <h4>doctor</h4>
+          <p>Checks Node version, Docker, auth, gateway/service health, and required env vars.</p>
+          <pre><code>npm run evalops -- doctor
+#   ✅  Node.js v20.19.0
+#   ✅  Auth  (EVALOPS_API_KEY set via env)
+#   ✅  API Gateway  (http://localhost:3000)
+#   ✅  auth-service  (:3001)
+#   ✅  core-service  (:3002)
+#   ✅  evaluation-service  (:3003)</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- SDKs -->
+    <section id="sdks">
+      <div class="wrap">
+        <span class="eyebrow">Client libraries</span>
+        <h2>JS &amp; Python SDKs</h2>
+        <p class="section-lede">
+          Both SDKs wrap the same REST API as the CLI, so a script can push datasets, create runs,
+          and wait for a verdict without shelling out.
+        </p>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>JavaScript / TypeScript — <code class="inline">libs/sdk</code></h3>
+            <p><code class="inline">EvalOpsClient</code> exposes <code class="inline">datasets</code>, <code class="inline">specs</code>, <code class="inline">runs</code>, <code class="inline">agents</code>, <code class="inline">policies</code>, <code class="inline">tokens</code>, and <code class="inline">ingest</code> resources.</p>
+            <pre><code>import { EvalOpsClient } from '@evalops/sdk';
+
+const client = new EvalOpsClient({
+  baseUrl: 'http://localhost:3000',
+  token: process.env.EVALOPS_TOKEN!,
+});
+
+const spec = await client.specs.upsertFromYaml('./evals/my.eval.yaml');
+const run  = await client.runs.create({ evalSpecId: spec.id });
+const done = await client.runs.waitFor(run.id, { timeoutMs: 60_000 });
+
+if (done.decision === 'fail') process.exit(1);</code></pre>
+          </div>
+          <div class="card">
+            <h3>Python — <code class="inline">evalops-sdk</code></h3>
+            <p>Ships with an optional pytest plugin for gating tests directly on an eval spec.</p>
+            <pre><code>pip install evalops-sdk
+# With pytest plugin:
+pip install "evalops-sdk[pytest-evalops]"</code></pre>
+            <pre><code>from evalops import EvalOpsClient
+
+client = EvalOpsClient(base_url="http://localhost:3000", token="evops_pat_...")
+spec = client.specs.upsert_from_file("my-eval.yaml")
+run = client.runs.create(spec.id)
+done = client.runs.wait_for(run.id, timeout_ms=120_000)
+print(done.decision)  # pass | warn | fail</code></pre>
+            <pre><code># pytest plugin — set EVALOPS_URL and EVALOPS_TOKEN
+@pytest.mark.evalops("my-eval.yaml")
+def test_pipeline():
+    pass</code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- GitHub Action -->
+    <section id="github-action">
+      <div class="wrap">
+        <span class="eyebrow">CI/CD</span>
+        <h2>GitHub Action</h2>
+        <p class="section-lede">
+          The bundled <code class="inline">evaluate-pr</code> composite action runs a suite, posts
+          the verdict as a PR comment, and uploads JUnit results as a workflow artifact.
+        </p>
+        <pre><code>- uses: ./.github/actions/evaluate-pr
+  with:
+    suite-name: "Production Quality Gates"
+    org-id: ${{ secrets.EVALOPS_ORG_ID }}
+    api-key: ${{ secrets.EVALOPS_API_KEY }}
+    api-url: ${{ secrets.EVALOPS_API_URL }}
+    fail-on-warn: "true"</code></pre>
+        <p class="section-lede">
+          Prefer plain CLI invocation instead? That works from any CI provider:
+        </p>
+        <pre><code>- name: Run eval gate
+  run: npm run evalops -- eval run "Production Quality Gates" --watch
+  env:
+    EVALOPS_API_KEY: ${{ secrets.EVALOPS_API_KEY }}
+    EVALOPS_API_URL: ${{ secrets.EVALOPS_API_URL }}</code></pre>
+      </div>
+    </section>
+
+    <!-- Security -->
+    <section id="security">
+      <div class="wrap">
+        <span class="eyebrow">Security model</span>
+        <h2>Auth, isolation, and observability</h2>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>Authentication <span class="badge">JWT</span></h3>
+            <p>
+              Every service registers <code class="inline">JwtAuthGuard</code> as a global
+              <code class="inline">APP_GUARD</code>. Routes that must stay public (login, register,
+              health checks, the GitHub webhook path) opt out with <code class="inline">@Public()</code>.
+              The gateway enforces this itself now (not just downstream), and also rejects
+              path-traversal sequences in proxied paths before forwarding.
+            </p>
+            <p><strong>SSO is not implemented yet</strong> — do not assume it exists.</p>
+          </div>
+          <div class="card">
+            <h3>Authorization <span class="badge">RBAC</span></h3>
+            <p>
+              <code class="inline">RbacGuard</code> + <code class="inline">@Roles()</code> enforce role
+              checks. Role hierarchy: <code class="inline">admin &gt; org_admin &gt; member &gt; viewer</code>.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Multi-tenant isolation <span class="badge">RLS</span></h3>
+            <p>
+              <code class="inline">TenantInterceptor</code> sets the Postgres session variable
+              <code class="inline">app.org_id</code> on every request; Row Level Security policies
+              enforce org-scoped access at the database layer, e.g.:
+            </p>
+            <pre><code>CREATE POLICY tenant_isolation ON prompts
+  USING (organization_id = current_setting('app.org_id', true)::uuid);</code></pre>
+          </div>
+          <div class="card">
+            <h3>Service-to-service auth</h3>
+            <p>
+              Internal routes (like the artifact-notify endpoint) are protected by
+              <code class="inline">ServiceAuthGuard</code>, checking an
+              <code class="inline">X-Service-Token</code> header against <code class="inline">SERVICE_SECRET</code>.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Rate limiting</h3>
+            <p>
+              The trace ingestion endpoint is limited to 100 requests/user/minute via a Redis-backed
+              sliding window; it degrades gracefully if Redis is unavailable.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Audit trail &amp; structured logging</h3>
+            <p>
+              Every mutation is logged with user, org, and timestamp. Every request emits pino-backed
+              JSON with request/trace correlation, including requests rejected by a guard.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="foot-links">
+      <!-- Placeholder, see topnav comment above. -->
+      <a href="#" rel="noopener">GitHub repo</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#getting-started">Getting started</a>
+      <a href="#cli">CLI</a>
+    </div>
+    <p>EvalOps is MIT licensed. This page is generated from the actual codebase — no invented features.</p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    (function () {
+      var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (window.mermaid) {
+        mermaid.initialize({
+          startOnLoad: true,
+          theme: prefersDark ? 'dark' : 'default',
+          securityLevel: 'strict',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
