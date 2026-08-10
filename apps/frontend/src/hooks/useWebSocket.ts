@@ -7,8 +7,15 @@ export interface WebSocketMessage {
   timestamp?: string;
 }
 
+interface AuthenticatedUser {
+  organizationId?: string;
+}
+
 export function useWebSocket() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth() as {
+    user: AuthenticatedUser | undefined;
+    isAuthenticated: boolean;
+  };
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null);
   const wsRef = useRef<WebSocket | null>(null);

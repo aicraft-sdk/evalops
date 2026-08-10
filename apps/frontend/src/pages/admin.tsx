@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Sidebar } from "@/components/Sidebar";
+import { Sidebar } from "@/components/layout/sidebar";
 import { 
   Users, 
   Shield, 
@@ -56,25 +56,21 @@ export default function Admin() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { data: users = [], isLoading: usersLoading } = useQuery({
+  const { data: users = [], isLoading: usersLoading } = useQuery<User[]>({
     queryKey: ["/api/admin/users"],
   });
 
-  const { data: roles = [], isLoading: rolesLoading } = useQuery({
+  const { data: roles = [], isLoading: rolesLoading } = useQuery<Role[]>({
     queryKey: ["/api/admin/roles"],
   });
 
-  const { data: auditLogs = [], isLoading: auditLoading } = useQuery({
+  const { data: auditLogs = [], isLoading: auditLoading } = useQuery<unknown[]>({
     queryKey: ["/api/admin/audit-logs"],
   });
 
   const createRoleMutation = useMutation({
     mutationFn: async (roleData: any) => {
-      const response = await apiRequest("/api/admin/roles", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(roleData),
-      });
+      const response = await apiRequest("POST", "/api/admin/roles", roleData);
       return response.json();
     },
     onSuccess: () => {
@@ -96,9 +92,7 @@ export default function Admin() {
 
   const assignRoleMutation = useMutation({
     mutationFn: async ({ userId, roleId }: { userId: string; roleId: string }) => {
-      const response = await apiRequest(`/api/admin/users/${userId}/roles/${roleId}`, {
-        method: "POST",
-      });
+      const response = await apiRequest("POST", `/api/admin/users/${userId}/roles/${roleId}`);
       return response.json();
     },
     onSuccess: () => {
@@ -121,14 +115,10 @@ export default function Admin() {
 
   const toggleUserStatusMutation = useMutation({
     mutationFn: async ({ userId, isActive }: { userId: string; isActive: boolean }) => {
-      const response = await apiRequest(`/api/admin/users/${userId}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive }),
-      });
+      const response = await apiRequest("PATCH", `/api/admin/users/${userId}/status`, { isActive });
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, { isActive }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       toast({
         title: isActive ? "User Activated" : "User Deactivated",
