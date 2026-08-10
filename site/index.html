@@ -589,7 +589,7 @@ flowchart TB
             <tbody>
               <tr><td><code class="inline">libs/shared-db</code></td><td>Drizzle ORM schema, migrations, the <code class="inline">db</code> singleton</td></tr>
               <tr><td><code class="inline">libs/shared-auth</code></td><td><code class="inline">JwtAuthGuard</code>, <code class="inline">RbacGuard</code>, <code class="inline">ServiceAuthGuard</code>, <code class="inline">@Roles</code>, <code class="inline">@Public</code></td></tr>
-              <tr><td><code class="inline">libs/shared-common</code></td><td><code class="inline">LoggingInterceptor</code>, <code class="inline">TenantInterceptor</code>, <code class="inline">RedisModule</code>, <code class="inline">HttpClientService</code>, <code class="inline">initTelemetry()</code></td></tr>
+              <tr><td><code class="inline">libs/shared-common</code></td><td><code class="inline">LoggingInterceptor</code>, <code class="inline">OrgContextInterceptor</code>, <code class="inline">RedisModule</code>, <code class="inline">HttpClientService</code>, <code class="inline">initTelemetry()</code></td></tr>
               <tr><td><code class="inline">libs/sdk</code></td><td>Client SDK for trace event ingestion and the full <code class="inline">EvalOpsClient</code></td></tr>
               <tr><td><code class="inline">libs/evaluators</code></td><td><code class="inline">ExactEvaluator</code>, <code class="inline">RuleEvaluator</code>, <code class="inline">Aggregator</code> — pure TypeScript evaluator logic</td></tr>
               <tr><td><code class="inline">libs/agent-md</code></td><td>Parser for the AgentMD YAML format</td></tr>
@@ -669,7 +669,7 @@ sequenceDiagram
         <div class="features">
           <div class="feature">
             <strong>Multi-tenant isolation</strong>
-            <span>PostgreSQL Row Level Security keyed on <code class="inline">app.org_id</code>, set per-request by <code class="inline">TenantInterceptor</code>.</span>
+            <span>PostgreSQL Row Level Security keyed on <code class="inline">app.org_id</code>, set per-request by <code class="inline">OrgContextInterceptor</code>.</span>
           </div>
           <div class="feature">
             <strong>Policy engine + CI/CD gates</strong>
@@ -967,7 +967,7 @@ def test_pipeline():
           <div class="card">
             <h3>Multi-tenant isolation <span class="badge">RLS</span></h3>
             <p>
-              <code class="inline">TenantInterceptor</code> sets the Postgres session variable
+              <code class="inline">OrgContextInterceptor</code> sets the Postgres session variable
               <code class="inline">app.org_id</code> on every request; Row Level Security policies
               enforce org-scoped access at the database layer, e.g.:
             </p>
