@@ -43,14 +43,21 @@ export class RunsRepository {
     return run;
   }
 
+  // NOTE: uses $inferSelect (not $inferInsert, unlike create() above) because
+  // drizzle's $inferInsert conditional types (NotNull/HasDefault branding)
+  // silently collapse to only the required columns when compiled under
+  // strictNullChecks: false — which every backend app's tsconfig uses today
+  // (only shared-db's own tsconfig sets strict: true). $inferSelect does not
+  // depend on that branding and stays fully typed either way, so it is the
+  // correct choice for a partial-update payload. See runs.repository.ts git
+  // history / workflow notes for the reproduction.
   async update(
     id: string,
-    data: Record<string, unknown>,
+    data: Partial<typeof runs.$inferSelect>,
   ): Promise<typeof runs.$inferSelect | undefined> {
     const [run] = await db
       .update(runs)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .set(data as any)
+      .set(data)
       .where(eq(runs.id, id))
       .returning();
     return run;
@@ -80,13 +87,13 @@ export class RunsRepository {
   }
 
   async updateStatus(runId: string, status: string): Promise<void> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: Record<string, unknown> = { status };
+    // Partial<$inferSelect> — see the note on update() above for why
+    // $inferInsert is not used here.
+    const updateData: Partial<typeof runs.$inferSelect> = { status };
     if (status === 'completed') {
-      updateData['completedAt'] = new Date();
+      updateData.completedAt = new Date();
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await db.update(runs).set(updateData as any).where(eq(runs.id, runId));
+    await db.update(runs).set(updateData).where(eq(runs.id, runId));
   }
 
   async updateArtifacts(
