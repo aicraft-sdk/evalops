@@ -2,7 +2,12 @@ import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
-import { AxiosRequestConfig, AxiosResponse } from 'axios';
+import {
+  AxiosRequestConfig,
+  AxiosResponse,
+  Method,
+  isAxiosError,
+} from 'axios';
 
 export interface ServiceConfig {
   baseUrl: string;
@@ -71,9 +76,9 @@ export class GatewayService {
     serviceName: string,
     path: string,
     method: string,
-    body?: any,
+    body?: unknown,
     headers?: Record<string, string>,
-  ): Promise<any> {
+  ): Promise<unknown> {
     const service = this.services.get(serviceName);
     if (!service) {
       throw new HttpException(
@@ -85,7 +90,9 @@ export class GatewayService {
     // Services have /api global prefix, so we need to include it
     const url = `${service.baseUrl}/api${path}`;
     const config: AxiosRequestConfig = {
-      method: method as any,
+      // `method` originates from req.method (Express), which is always one
+      // of the standard HTTP method strings axios's Method type covers.
+      method: method as Method,
       url,
       timeout: service.timeout,
       headers: {
@@ -101,16 +108,15 @@ export class GatewayService {
         this.httpService.request(config),
       );
       return response.data;
-    } catch (error: any) {
-      this.logger.error(
-        `Error proxying to ${serviceName}: ${error.message}`,
-        error.stack,
-      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`Error proxying to ${serviceName}: ${message}`, stack);
 
-      if (error.response) {
+      if (isAxiosError(error) && error.response) {
         // Forward the error response from the service
         throw new HttpException(
-          error.response.data || error.message,
+          error.response.data || message,
           error.response.status || HttpStatus.INTERNAL_SERVER_ERROR,
         );
       }
@@ -130,13 +136,17 @@ export class GatewayService {
 
     try {
       const response = await firstValueFrom(
-        this.httpService.get(`${service.baseUrl}/health`, {
+        // Downstream services register their health endpoint behind the
+        // same global `/api` prefix as every other route (see proxyRequest
+        // above), so the health check must include it too.
+        this.httpService.get(`${service.baseUrl}/api/health`, {
           timeout: 5000,
         }),
       );
       return response.status === 200;
     } catch (error) {
-      this.logger.warn(`Service ${serviceName} health check failed`);
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Service ${serviceName} health check failed: ${message}`);
       return false;
     }
   }

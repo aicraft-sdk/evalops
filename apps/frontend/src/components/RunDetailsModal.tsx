@@ -37,20 +37,107 @@ interface RunDetailsModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
+interface MetricStat {
+  mean: number;
+  std?: number;
+}
+
+interface RunMetrics {
+  cost?: MetricStat;
+  latencyP50?: number;
+  exactMatch?: MetricStat;
+  [key: string]: MetricStat | number | undefined;
+}
+
+interface SampleEvaluationResults {
+  cost?: number;
+  latency?: number;
+  [evaluator: string]: number | undefined;
+}
+
+interface SampleResult {
+  sampleIndex: number;
+  repetition: number;
+  input: unknown;
+  actualOutput: unknown;
+  expectedOutput?: unknown;
+  evaluationResults?: SampleEvaluationResults;
+}
+
+interface RunDetails {
+  status?: string;
+  decision?: string;
+  isBaseline?: boolean;
+  cost?: number;
+  duration?: number;
+  metrics?: RunMetrics;
+  evalSpecId?: string;
+  policyId?: string;
+  startedAt?: string;
+  triggeredBy?: string;
+  sampleResults?: SampleResult[];
+}
+
+interface PolicyViolation {
+  message: string;
+  policyName: string;
+  severity: string;
+}
+
+interface PolicyRuleWarning {
+  message?: string;
+}
+
+interface PolicyResultsSummary {
+  violations?: PolicyViolation[];
+  warnings?: PolicyRuleWarning[];
+  passedRules?: string[];
+  score?: number;
+}
+
+interface PolicyCheckResult {
+  passed?: boolean;
+  warnings?: PolicyRuleWarning[];
+}
+
+type PolicyResults = PolicyResultsSummary | PolicyCheckResult[];
+
+interface BaselineRunSummary {
+  createdAt: string;
+  description?: string;
+  decision?: string;
+  cost?: number;
+  duration?: number;
+  metrics?: RunMetrics;
+}
+
+interface BaselineComparison {
+  hasBaseline?: boolean;
+  baseline: BaselineRunSummary;
+  current: BaselineRunSummary;
+  comparison?: {
+    overallChange?: 'improved' | 'degraded' | 'stable' | string;
+  };
+  improvements: {
+    costChange: number | null;
+    durationChange: number | null;
+  };
+}
+
 export function RunDetailsModal({ runId, open, onOpenChange }: RunDetailsModalProps) {
   const [activeTab, setActiveTab] = useState("overview");
   
-  const { data: runDetails, isLoading } = useQuery({
+  const { data: runDetails, isLoading } = useQuery<RunDetails>({
     queryKey: ["/api/runs", runId, "details"],
     enabled: !!runId && open,
   });
 
-  const { data: policyResults } = useQuery({
+  const { data: policyResults } = useQuery<PolicyResults>({
     queryKey: ["/api/runs", runId, "policy-results"],
     enabled: !!runId && open,
   });
 
-  const { data: baselineComparison } = useQuery({
+  const { data: baselineComparison } = useQuery<BaselineComparison>({
     queryKey: ["/api/runs", runId, "baseline-comparison"],
     enabled: !!runId && open,
   });
@@ -352,7 +439,7 @@ export function RunDetailsModal({ runId, open, onOpenChange }: RunDetailsModalPr
                                 <span className="text-red-700 dark:text-red-300">
                                   Some policy checks failed - review the Policy Results tab for specific violations.
                                 </span>
-                              ) : policyResults.some(p => p.warnings?.length > 0) ? (
+                              ) : policyResults.some(p => (p.warnings?.length ?? 0) > 0) ? (
                                 <span className="text-yellow-700 dark:text-yellow-300">
                                   Policy checks passed with warnings - see Policy Results tab for details.
                                 </span>
@@ -513,7 +600,7 @@ export function RunDetailsModal({ runId, open, onOpenChange }: RunDetailsModalPr
                     </p>
                   </CardHeader>
                   <CardContent>
-                    {policyResults ? (
+                    {policyResults && !Array.isArray(policyResults) ? (
                       <div className="space-y-4">
                         <div className="grid grid-cols-3 gap-4">
                           <div className="text-center">
@@ -529,11 +616,11 @@ export function RunDetailsModal({ runId, open, onOpenChange }: RunDetailsModalPr
                             <p className="text-sm text-muted-foreground">Quality Score</p>
                           </div>
                         </div>
-                        
-                        {policyResults.violations?.length > 0 && (
+
+                        {policyResults.violations && policyResults.violations.length > 0 && (
                           <div className="space-y-2">
                             <h4 className="font-medium">Policy Violations:</h4>
-                            {policyResults.violations.map((violation: any, index: number) => (
+                            {policyResults.violations.map((violation: PolicyViolation, index: number) => (
                               <Card key={index} className="border-l-4 border-l-red-500">
                                 <CardContent className="pt-4">
                                   <div className="flex justify-between items-start">
@@ -675,7 +762,7 @@ export function RunDetailsModal({ runId, open, onOpenChange }: RunDetailsModalPr
                       <CardContent>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {Object.entries(baselineComparison.baseline.metrics).map(([key, baselineValue]) => {
-                            const currentValue = baselineComparison.current.metrics[key];
+                            const currentValue = baselineComparison.current.metrics?.[key];
                             if (typeof baselineValue !== 'object' || typeof currentValue !== 'object') return null;
                             
                             const baselineMean = baselineValue.mean || 0;
