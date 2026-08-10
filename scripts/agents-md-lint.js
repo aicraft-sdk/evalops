@@ -50,26 +50,45 @@ export const REQUIRED_SECTIONS = [
  * is just fence content (still stripped, doesn't toggle state). This mirrors
  * CommonMark semantics without a single shared boolean that either
  * delimiter could incorrectly toggle.
+ *
+ * Also tracks fence LENGTH per CommonMark's actual closing rule: the closing
+ * fence must be at least as long as the opening fence. The currently-open
+ * fence remembers both which character (openFenceChar) and how many
+ * repeated characters (openFenceLength) opened it; a marker line only closes
+ * it when its character matches AND its length is >= openFenceLength. A
+ * same-character marker line that is too short (e.g. a 3-backtick line
+ * nested inside a 4-backtick outer fence, used to literally display a
+ * shorter fenced example) is just fence content, not a closer.
  */
 export function stripFencedCodeBlocks(content) {
   const lines = content.split('\n');
   const result = [];
   let openFenceChar = null; // '`' or '~' while inside a fence, null otherwise
+  let openFenceLength = 0; // length of the marker that opened the current fence
 
   for (const line of lines) {
     const fenceMatch = /^\s*(`{3,}|~{3,})/.exec(line);
     const markerChar = fenceMatch ? fenceMatch[1][0] : null;
+    const markerLength = fenceMatch ? fenceMatch[1].length : 0;
 
     if (openFenceChar === null && markerChar !== null) {
-      // Opens a new fence; remember which delimiter character must close it.
+      // Opens a new fence; remember which delimiter character and how long
+      // the marker must be to close it.
       openFenceChar = markerChar;
+      openFenceLength = markerLength;
       result.push('');
       continue;
     }
 
-    if (openFenceChar !== null && markerChar === openFenceChar) {
-      // Only the same delimiter character closes the currently-open fence.
+    if (
+      openFenceChar !== null &&
+      markerChar === openFenceChar &&
+      markerLength >= openFenceLength
+    ) {
+      // Only a marker using the same delimiter character AND at least as
+      // many repeated characters closes the currently-open fence.
       openFenceChar = null;
+      openFenceLength = 0;
       result.push('');
       continue;
     }

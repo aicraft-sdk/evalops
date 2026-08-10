@@ -200,6 +200,84 @@ test('accepts a legitimate AGENTS.md with both a ``` block and a ~~~ block, neit
   assert.deepEqual(errors, []);
 });
 
+test('rejects headings that only appear inside a nested 3-backtick example shown inside a 4-backtick outer fence (fence-length bypass)', () => {
+  // Adversarial case: a common, non-adversarial authoring pattern for
+  // documenting Markdown fencing itself — a 4-backtick outer fence used to
+  // literally display a 3-backtick example. Per CommonMark, only a closing
+  // marker with length >= the opening marker's length (4) closes the fence;
+  // a 3-backtick line inside is just fence content, not a closer. A linter
+  // that checks delimiter CHARACTER only (not length) would wrongly treat
+  // the inner 3-backtick line as closing the fence, exposing the heading
+  // lookalikes inside as if they were real, unfenced document content.
+  const content = [
+    '# AGENTS.md',
+    '',
+    '## Project / Scope',
+    'This is the project.',
+    '',
+    '## Non-Negotiable Constraints',
+    'Follow the rules.',
+    '',
+    "Below is an example of this doc's required section format, shown as literal",
+    'markdown text (4-backtick fence so the inner backticks render literally):',
+    '',
+    '````markdown',
+    '```',
+    '## Build, Run & Test',
+    '## Security & Safety',
+    '## Agent Operating Rules',
+    '```',
+    '````',
+    '',
+    "That's just the reference template - none of the above are real sections here.",
+    '',
+  ].join('\n');
+
+  const errors = lintAgentsMd(content);
+
+  assert.equal(errors.length, 3);
+  for (const name of ['Build, Run & Test', 'Security & Safety', 'Agent Operating Rules']) {
+    assert.ok(
+      errors.some((e) => e.includes(name)),
+      `expected missing "${name}" to be reported despite the nested-fence look-alike heading`
+    );
+  }
+});
+
+test('closes a fence whose closing marker is longer than its opening marker (3-backtick open, 5-backtick close)', () => {
+  // Per CommonMark, the closing fence must be AT LEAST as long as the opening
+  // fence — a longer closer is valid and must still close the fence. This
+  // must not regress into requiring an EXACT length match.
+  const content = [
+    '# AGENTS.md',
+    '',
+    '## Project / Scope',
+    'Describes the project. Example:',
+    '',
+    '```',
+    '## Build, Run & Test',
+    '## Security & Safety',
+    '## Agent Operating Rules',
+    '`````',
+    '',
+    '## Non-Negotiable Constraints',
+    'Rules that must not be broken.',
+    '',
+    '## Build, Run & Test',
+    'npm test',
+    '',
+    '## Security & Safety',
+    'Do not commit secrets.',
+    '',
+    '## Agent Operating Rules',
+    'Read the README first.',
+    '',
+  ].join('\n');
+
+  const errors = lintAgentsMd(content);
+  assert.deepEqual(errors, []);
+});
+
 test('accepts a legitimate AGENTS.md that has an unrelated code fence elsewhere in the document', () => {
   // The fix must not be so aggressive that it breaks ordinary code examples
   // that don't contain heading-lookalike text.
