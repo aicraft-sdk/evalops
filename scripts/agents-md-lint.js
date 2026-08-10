@@ -35,30 +35,46 @@ export const REQUIRED_SECTIONS = [
 ];
 
 /**
- * Strip fenced code-block regions (``` ... ```) from markdown content before
- * heading detection. Without this, a heading-lookalike string inside an
- * "example format" code fence (e.g. documenting what a section header looks
- * like) would satisfy the heading-presence regex even though it isn't a real
+ * Strip fenced code-block regions from markdown content before heading
+ * detection. Without this, a heading-lookalike string inside an "example
+ * format" code fence (e.g. documenting what a section header looks like)
+ * would satisfy the heading-presence regex even though it isn't a real
  * heading. Each stripped fence line is replaced with a blank line so line
  * numbers/positions of surrounding content are otherwise unaffected.
  *
- * Only triple-backtick fences are handled (the reproduced bug case). Fences
- * are matched by fence-state tracking so unterminated/odd fence counts don't
- * silently swallow the rest of the document.
+ * Handles both CommonMark fence delimiters — ``` and ~~~ — as first-class,
+ * tracked independently: a ``` fence and a ~~~ fence do NOT close each
+ * other. The currently-open fence remembers which delimiter character
+ * opened it (openFenceChar); only a marker line using that same character
+ * closes it. A marker line using the other character while a fence is open
+ * is just fence content (still stripped, doesn't toggle state). This mirrors
+ * CommonMark semantics without a single shared boolean that either
+ * delimiter could incorrectly toggle.
  */
 export function stripFencedCodeBlocks(content) {
   const lines = content.split('\n');
   const result = [];
-  let inFence = false;
+  let openFenceChar = null; // '`' or '~' while inside a fence, null otherwise
 
   for (const line of lines) {
-    const isFenceMarker = /^\s*```/.test(line);
-    if (isFenceMarker) {
-      inFence = !inFence;
+    const fenceMatch = /^\s*(`{3,}|~{3,})/.exec(line);
+    const markerChar = fenceMatch ? fenceMatch[1][0] : null;
+
+    if (openFenceChar === null && markerChar !== null) {
+      // Opens a new fence; remember which delimiter character must close it.
+      openFenceChar = markerChar;
       result.push('');
       continue;
     }
-    result.push(inFence ? '' : line);
+
+    if (openFenceChar !== null && markerChar === openFenceChar) {
+      // Only the same delimiter character closes the currently-open fence.
+      openFenceChar = null;
+      result.push('');
+      continue;
+    }
+
+    result.push(openFenceChar !== null ? '' : line);
   }
 
   return result.join('\n');
