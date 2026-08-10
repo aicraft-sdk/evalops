@@ -606,4 +606,111 @@ describe('SandboxSecurityService', () => {
       ).toBe(true);
     });
   });
+
+  describe('Function constructor bypass prevention', () => {
+    const bypassVariants: { name: string; code: string }[] = [
+      {
+        name: 'bare Function() call without new',
+        code: 'Function("return process")()',
+      },
+      {
+        name: '.constructor escape on a function expression',
+        code: '(function(){}).constructor("return process")()',
+      },
+      {
+        name: '.constructor escape on an arrow function',
+        code: '(() => {}).constructor("return process")()',
+      },
+      {
+        name: 'globalThis bracket-notation Function access',
+        code: 'globalThis["Function"]("return process")()',
+      },
+      {
+        name: 'globalThis dot-notation Function access',
+        code: 'globalThis.Function("return process")()',
+      },
+      {
+        name: 'window dot-notation Function access',
+        code: 'window.Function("return process")()',
+      },
+      {
+        name: 'Array constructor chain ([].constructor.constructor)',
+        code: '[].constructor.constructor("return process")()',
+      },
+      {
+        name: 'String constructor chain ("".constructor.constructor)',
+        code: '"".constructor.constructor("return process")()',
+      },
+    ];
+
+    describe('validateCode (pattern-based path)', () => {
+      for (const { name, code } of bypassVariants) {
+        it(`blocks: ${name}`, () => {
+          const result = service.validateCode(code, 'javascript');
+
+          expect(result.valid).toBe(false);
+          expect(result.errors.length).toBeGreaterThan(0);
+        });
+      }
+
+      it('still blocks the already-fixed new Function(...) case (no regression)', () => {
+        const result = service.validateCode(
+          'new Function("return process")',
+          'javascript',
+        );
+
+        expect(result.valid).toBe(false);
+      });
+    });
+
+    describe('validateCodeWithAST (structural AST path)', () => {
+      for (const { name, code } of bypassVariants) {
+        it(`blocks: ${name}`, async () => {
+          const result = await service.validateCodeWithAST(code, 'javascript');
+
+          expect(result.valid).toBe(false);
+          expect(result.errors.length).toBeGreaterThan(0);
+        });
+      }
+
+      it('still blocks the already-fixed new Function(...) case (no regression)', async () => {
+        const result = await service.validateCodeWithAST(
+          'new Function("return process")',
+          'javascript',
+        );
+
+        expect(result.valid).toBe(false);
+        expect(result.errors.some((e) => e.includes('new Function'))).toBe(
+          true,
+        );
+      });
+    });
+
+    it('does not flag legitimate benign code that never touches Function or .constructor', () => {
+      const code = `
+        function add(a, b) { return a + b; }
+        const double = (x) => x * 2;
+        const total = add(1, double(2));
+      `;
+
+      const result = service.validateCode(code, 'javascript');
+
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('documents that .constructor access is now blocked outright as a conservative security posture', () => {
+      // Sandboxed AI-generated eval code has no legitimate need to introspect
+      // `.constructor` — it is the classic idiom for escaping to the global
+      // Function constructor (e.g. `x.constructor.constructor(...)`). We
+      // therefore deny `.constructor` access unconditionally rather than try
+      // to enumerate every escape shape built on top of it.
+      const result = service.validateCode(
+        'const ctor = someValue.constructor;',
+        'javascript',
+      );
+
+      expect(result.valid).toBe(false);
+    });
+  });
 });

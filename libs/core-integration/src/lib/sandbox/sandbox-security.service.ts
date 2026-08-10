@@ -57,6 +57,22 @@ export class SandboxSecurityService {
   private readonly blockedJavaScriptPatterns = [
     /eval\s*\(/,
     /new\s+Function\s*\(/,
+    // Bare `Function(...)` call (no `new`) — per spec, calling the Function
+    // constructor without `new` still constructs a function, so this is
+    // behaviorally identical to `new Function(...)`.
+    /\bFunction\s*\(/,
+    // Member/computed access to the global Function constructor, e.g.
+    // globalThis.Function(...), window["Function"](...), this.Function(...).
+    /(?:globalThis|window|self|this)\s*(?:\.\s*Function\b|\[\s*['"]Function['"]\s*\])/,
+    // `.constructor` property access (dot or bracket notation) — the
+    // classic sandbox-escape idiom (`x.constructor("...")`,
+    // `x.constructor.constructor("...")`, `[].constructor.constructor(...)`,
+    // `"".constructor.constructor(...)`). Sandboxed AI-generated eval code
+    // has no legitimate need to introspect `.constructor`, so it is denied
+    // outright rather than trying to enumerate every escape shape built on
+    // top of it.
+    /\.\s*constructor\b/,
+    /\[\s*['"]constructor['"]\s*\]/,
     /require\s*\(\s*['"]child_process['"]/,
     /require\s*\(\s*['"]fs['"]/,
     /require\s*\(\s*['"]os['"]/,
@@ -462,21 +478,53 @@ export class SandboxSecurityService {
       return; // Prevent infinite recursion
     }
 
-    // Check for dangerous function calls
-    if (node.type === 'CallExpression') {
+    // Check for dangerous function calls (CallExpression) and constructions
+    // (NewExpression). This is a structural/semantic check rather than a
+    // literal-identifier check: it looks at what the callee *resolves
+    // through*, not just whether it is literally the Identifier `Function`.
+    // That covers the known Function-constructor sandbox-escape idioms:
+    //   - `Function(...)`            bare call, no `new` (same capability
+    //                                 as `new Function(...)` per spec)
+    //   - `new Function(...)`        direct construction
+    //   - `globalThis.Function(...)` / `window["Function"](...)` / etc.
+    //                                 member/computed access to the global
+    //   - `x.constructor(...)`       `.constructor` on any function-like
+    //                                 value resolves to the global Function
+    //                                 constructor
+    //   - `x.constructor.constructor(...)`, `[].constructor.constructor(...)`,
+    //     `"".constructor.constructor(...)`
+    //                                 chained `.constructor` (Array/String/
+    //                                 Object constructor -> Function
+    //                                 constructor)
+    if (node.type === 'CallExpression' || node.type === 'NewExpression') {
       const callee = node.callee;
-      if (callee?.type === 'Identifier' && callee.name === 'eval') {
-        errors.push('eval() calls are blocked');
-      }
-    }
+      const isNew = node.type === 'NewExpression';
 
-    // Check for `new Function(...)` — a distinct AST node type from CallExpression.
-    if (
-      node.type === 'NewExpression' &&
-      node.callee?.type === 'Identifier' &&
-      node.callee.name === 'Function'
-    ) {
-      errors.push('new Function() calls are blocked');
+      if (callee?.type === 'Identifier') {
+        if (!isNew && callee.name === 'eval') {
+          errors.push('eval() calls are blocked');
+        }
+        if (callee.name === 'Function') {
+          errors.push(
+            isNew
+              ? 'new Function() calls are blocked'
+              : 'Function() calls without new are blocked (a bare call to the Function constructor has the same code-execution capability as new Function())',
+          );
+        }
+      }
+
+      if (callee?.type === 'MemberExpression') {
+        const propertyName = this.getMemberExpressionPropertyName(callee);
+        if (propertyName === 'Function') {
+          errors.push(
+            'Accessing the global Function constructor via a member expression (e.g. globalThis.Function, window["Function"]) is blocked',
+          );
+        } else if (propertyName === 'constructor') {
+          errors.push(
+            'Accessing .constructor is blocked — it is a common sandbox-escape idiom that resolves to the global Function constructor (e.g. x.constructor(...), [].constructor.constructor(...))',
+          );
+        }
+      }
     }
 
     // Check for dangerous requires
@@ -505,6 +553,38 @@ export class SandboxSecurityService {
         this.traverseJavaScriptAST(child as AstNode, errors, warnings, depth + 1);
       }
     }
+  }
+
+  /**
+   * Resolve the statically-known property name of a MemberExpression,
+   * regardless of whether it uses dot notation (`x.constructor`) or
+   * computed/bracket notation with a string literal (`x["constructor"]`).
+   * Returns null when the property name cannot be determined statically
+   * (e.g. a computed access with a non-literal expression).
+   */
+  private getMemberExpressionPropertyName(node: AstNode): string | null {
+    if (node.type !== 'MemberExpression') {
+      return null;
+    }
+
+    const property = node['property'] as AstNode | undefined;
+    if (!property) {
+      return null;
+    }
+
+    if (!node['computed'] && property.type === 'Identifier') {
+      return typeof property.name === 'string' ? property.name : null;
+    }
+
+    if (
+      node['computed'] &&
+      property.type === 'Literal' &&
+      typeof property.value === 'string'
+    ) {
+      return property.value;
+    }
+
+    return null;
   }
 
   /**
@@ -583,6 +663,25 @@ export class SandboxSecurityService {
         pattern: /new\s+Function\s*\(/,
         type: 'code_injection',
         message: 'new Function() can execute arbitrary code',
+      },
+      {
+        pattern: /\bFunction\s*\(/,
+        type: 'code_injection',
+        message:
+          'Function() (with or without new) can execute arbitrary code',
+      },
+      {
+        pattern:
+          /(?:globalThis|window|self|this)\s*(?:\.\s*Function\b|\[\s*['"]Function['"]\s*\])/,
+        type: 'code_injection',
+        message:
+          'Accessing the global Function constructor via member/computed access can execute arbitrary code',
+      },
+      {
+        pattern: /\.\s*constructor\b|\[\s*['"]constructor['"]\s*\]/,
+        type: 'code_injection',
+        message:
+          '.constructor access is a common sandbox-escape idiom that can reach the Function constructor',
       },
       {
         pattern: /innerHTML\s*=/,
