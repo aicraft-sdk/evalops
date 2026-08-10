@@ -4,6 +4,7 @@ import {
   Inject,
   forwardRef,
   Optional,
+  NotFoundException,
 } from '@nestjs/common';
 import { RunsRepository } from '@evalops/shared-db';
 import { Policy, Run } from '@evalops/shared-db';
@@ -383,4 +384,65 @@ export class PoliciesService {
   async getActivePolicies(organizationId: string): Promise<Policy[]> {
     return this.runsRepository.findActivePolicies(organizationId);
   }
+
+  async createPolicy(
+    input: CreatePolicyInput,
+    organizationId: string,
+    createdBy: string
+  ): Promise<Policy> {
+    return this.runsRepository.createPolicy({
+      name: input.name,
+      description: input.description ?? null,
+      rules: input.rules,
+      isActive: input.isActive ?? true,
+      organizationId,
+      createdBy,
+    });
+  }
+
+  async updatePolicy(
+    id: string,
+    input: UpdatePolicyInput,
+    organizationId: string
+  ): Promise<Policy> {
+    const updated = await this.runsRepository.updatePolicy(id, organizationId, {
+      ...(input.name !== undefined && { name: input.name }),
+      ...(input.description !== undefined && { description: input.description }),
+      ...(input.isActive !== undefined && { isActive: input.isActive }),
+      ...(input.rules !== undefined && { rules: input.rules }),
+    });
+
+    if (!updated) {
+      throw new NotFoundException(`Policy ${id} not found`);
+    }
+
+    return updated;
+  }
+
+  async deletePolicy(
+    id: string,
+    organizationId: string
+  ): Promise<{ success: true; id: string }> {
+    const deleted = await this.runsRepository.deletePolicy(id, organizationId);
+
+    if (!deleted) {
+      throw new NotFoundException(`Policy ${id} not found`);
+    }
+
+    return { success: true, id };
+  }
+}
+
+export interface CreatePolicyInput {
+  name: string;
+  description?: string;
+  isActive?: boolean;
+  rules: PolicyRule[];
+}
+
+export interface UpdatePolicyInput {
+  name?: string;
+  description?: string;
+  isActive?: boolean;
+  rules?: PolicyRule[];
 }

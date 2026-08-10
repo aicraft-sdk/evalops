@@ -214,6 +214,52 @@ export class RunsRepository {
       );
   }
 
+  // Omit<$inferSelect, 'id' | 'createdAt' | 'updatedAt'> instead of
+  // $inferInsert — see the note on RunsRepository.update() above: the
+  // $inferInsert conditional types collapse to only the NOT NULL/no-default
+  // columns under strictNullChecks: false, which silently drops optional
+  // insert fields like `description` from the callable type.
+  async createPolicy(
+    data: Omit<typeof policies.$inferSelect, 'id' | 'createdAt' | 'updatedAt'>,
+  ): Promise<typeof policies.$inferSelect> {
+    const [policy] = await db.insert(policies).values([data]).returning();
+    return policy;
+  }
+
+  // Partial<$inferSelect> — see the note on RunsRepository.update() above for
+  // why $inferInsert is not used here.
+  async updatePolicy(
+    id: string,
+    organizationId: string,
+    data: Partial<typeof policies.$inferSelect>,
+  ): Promise<typeof policies.$inferSelect | undefined> {
+    const [policy] = await db
+      .update(policies)
+      .set({ ...data, updatedAt: new Date() } as Partial<
+        typeof policies.$inferInsert
+      >)
+      .where(
+        and(eq(policies.id, id), eq(policies.organizationId, organizationId)),
+      )
+      .returning();
+    return policy;
+  }
+
+  /**
+   * Scoped by BOTH id AND organizationId — a policy id that exists but
+   * belongs to a different org is treated as not-found (returns false),
+   * never mutated. Mirrors the tenant_isolation RLS policy on `policies`.
+   */
+  async deletePolicy(id: string, organizationId: string): Promise<boolean> {
+    const result = await db
+      .delete(policies)
+      .where(
+        and(eq(policies.id, id), eq(policies.organizationId, organizationId)),
+      )
+      .returning({ id: policies.id });
+    return result.length > 0;
+  }
+
   // Policy Violations
   async createPolicyViolation(
     data: Record<string, unknown>,

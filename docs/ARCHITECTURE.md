@@ -81,7 +81,7 @@ The evaluation engine:
 - **Runs** — execution of an eval spec; tracks status, results, scores, cost
 - **Ingestion** — accepts streaming trace events from SDK-instrumented agents via `POST /api/evaluation/ingestion/events`; persists to `runs.trace_events` JSONB (10 MB cap per run)
 - **Evaluation engine** — orchestrates evaluators (exact match, LLM judge, rule-based, RAG metrics, safety)
-- **Policy engine** — compares run scores to policy thresholds; emits pass/warn/fail verdicts
+- **Policy engine** — compares run scores to policy thresholds; emits pass/warn/fail verdicts. Policies are self-service: `GET /api/evaluation/policies` (any authenticated user), `POST /api/evaluation/policies/evaluate/:runId`, and `POST`/`PUT /api/evaluation/policies/:id`/`DELETE /api/evaluation/policies/:id` to create, update, and delete org-scoped policies (org_admin / admin only, enforced by `RbacGuard`) — no direct SQL seeding required
 
 ### Integration and Analytics (within Core Service)
 
