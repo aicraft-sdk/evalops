@@ -163,7 +163,7 @@ All routes go through the API Gateway on port 3000.
 | -------------------- | ------------------- | ------------------------------------------------------------------------------- |
 | `/api/auth/*`        | auth-service        | `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/user`         |
 | `/api/core/*`        | core-service        | `GET /api/core/prompts`, `POST /api/core/agents`, `GET /api/core/eval-specs`    |
-| `/api/evaluation/*`  | evaluation-service  | `POST /api/evaluation/runs`, `POST /api/evaluation/ingestion/events`            |
+| `/api/evaluation/*`  | evaluation-service  | `POST /api/evaluation/runs`, `POST /api/evaluation/ingestion/events`, `POST/PUT/DELETE /api/evaluation/policies` (org_admin/admin) |
 | `/api/integration/*` | core-service        | `GET /api/integration/artifacts/:runId/:file`, `POST /api/integration/webhooks` |
 | `/api/analytics/*`   | core-service        | `GET /api/analytics/dashboard`, `GET /api/analytics/audit-trail`                |
 
