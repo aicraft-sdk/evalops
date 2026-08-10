@@ -172,4 +172,32 @@ describe('Self-service create-organization (real HTTP + real SQLite dev-mode DB)
       .send({ name: 'Hijacked Name' })
       .expect(403);
   });
+
+  it('ignores a client-supplied id/createdAt/updatedAt in the create-organization request body', async () => {
+    const jwtService = moduleRef.get(JwtService);
+    const token: string = jwtService.sign({
+      sub: seededUserId,
+      email: seededEmail,
+      organizationId: 'default-org',
+      roles: ['viewer'],
+    });
+
+    const attackerSuppliedId = 'attacker-controlled-id';
+    const attackerSuppliedTimestamp = '2000-01-01T00:00:00.000Z';
+
+    const createRes = await request(app.getHttpServer())
+      .post('/api/organizations')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'Spoofed Org',
+        id: attackerSuppliedId,
+        createdAt: attackerSuppliedTimestamp,
+        updatedAt: attackerSuppliedTimestamp,
+      })
+      .expect(201);
+
+    expect(createRes.body.id).not.toBe(attackerSuppliedId);
+    expect(createRes.body.createdAt).not.toBe(attackerSuppliedTimestamp);
+    expect(createRes.body.updatedAt).not.toBe(attackerSuppliedTimestamp);
+  });
 });

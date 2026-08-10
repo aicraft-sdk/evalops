@@ -47,11 +47,17 @@ export class OrganizationsRepository {
     userId: string,
   ): Promise<typeof organizations.$inferSelect> {
     const now = new Date();
+    // Defense-in-depth: `id`/`createdAt`/`updatedAt` are spread LAST so they
+    // always win over anything present in caller-supplied `data`, even if a
+    // future caller bypasses the controller's DTO validation and passes
+    // those fields through. The DTO/ValidationPipe layer is the primary
+    // defense (strips them from the HTTP request body); this ordering is the
+    // second layer at the data-access boundary.
     const orgData = {
+      ...data,
       id: randomUUID(),
       createdAt: now,
       updatedAt: now,
-      ...data,
     } as typeof organizations.$inferInsert;
     const memberData = (org: typeof organizations.$inferSelect) =>
       ({

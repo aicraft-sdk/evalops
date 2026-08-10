@@ -1,7 +1,12 @@
 import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
 import { OrganizationsService } from './organizations.service';
-import { JwtAuthGuard, CurrentUser } from '@evalops/shared-auth';
-import { InsertOrganization } from '@evalops/shared-db';
+import {
+  JwtAuthGuard,
+  CurrentUser,
+  RateLimitGuard,
+  RateLimit,
+} from '@evalops/shared-auth';
+import { CreateOrganizationDto } from './organizations.dto';
 
 @Controller('organizations')
 @UseGuards(JwtAuthGuard)
@@ -19,9 +24,16 @@ export class OrganizationsController {
   // here. The creator becomes the new org's ORG_ADMIN (see
   // OrganizationsService.createOrganizationForUser); their role in any org
   // they already belong to is unaffected.
+  //
+  // Rate-limited (5 creations/60s per user) to prevent a single authenticated
+  // user from spinning up unbounded organizations — mirrors the
+  // RateLimitGuard/@RateLimit convention used by evaluation-service's
+  // ingestion route.
   @Post()
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ limit: 5, ttl: 60 })
   async createOrganization(
-    @Body() organization: InsertOrganization,
+    @Body() organization: CreateOrganizationDto,
     @CurrentUser('id') userId: string,
   ) {
     return this.organizationsService.createOrganizationForUser(

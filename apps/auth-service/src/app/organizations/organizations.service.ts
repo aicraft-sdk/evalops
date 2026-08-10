@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { OrganizationsRepository, organizations } from '@evalops/shared-db';
-import { Organization, InsertOrganization } from '@evalops/shared-db';
+import { Organization } from '@evalops/shared-db';
+import { CreateOrganizationDto } from './organizations.dto';
 
 @Injectable()
 export class OrganizationsService {
@@ -17,7 +18,7 @@ export class OrganizationsService {
    * in default-org (or any other org) is untouched.
    */
   async createOrganizationForUser(
-    organization: InsertOrganization,
+    organization: CreateOrganizationDto,
     userId: string,
   ): Promise<Organization> {
     return this.organizationsRepository.createWithAdminMember(
