@@ -91,4 +91,4 @@ Tilt is recommended for local multi-service development: `npm run tilt:up`.
 - Test files are co-located with source: `*.spec.ts` or `*.test.ts`.
 - Before closing a task: `npm run check && npm test && npm run build` must all exit 0.
 - Use `initTelemetry(serviceName)` in `main.ts` before NestJS bootstrap for every service.
-- **Learnings**: Team knowledge in `docs/learnings/shared/`; run `recall compound` after sessions and `recall promote` to share findings team-wide.
+- **Learnings**: Team knowledge lives in `docs/learnings/shared/`; add a dated entry there after a session produces a reusable finding.

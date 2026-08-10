@@ -1,5 +1,4 @@
 {
-  "$schema": "../ai_resources/packages/ai-resources-cli/schemas/project-config.schema.json",
   "version": "1.0.0",
   "project": {
     "id": "evalops",
@@ -14,11 +13,6 @@
     "frameworks": ["NestJS", "evalite"],
     "runtime": "Node.js",
     "packageManager": "pnpm"
-  },
-  "resources": {
-    "sets": ["aidlc"],
-    "skills": [],
-    "rules": []
   },
   "lastUpdated": "2026-04-26T00:00:00.000Z"
 }

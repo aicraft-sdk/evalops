@@ -31,7 +31,7 @@
     "setup:secrets": "bash scripts/generate-secrets.sh",
     "quick-start": "bash scripts/quick-start.sh",
     "evalops": "node_modules/.bin/tsx apps/cli/src/main.ts",
-    "local-lint": "npx @bcai/ai-resources-cli tools linter/agents-md-lint",
+    "local-lint": "node scripts/agents-md-lint.js",
     "self-eval": "npm run evalops -- eval run \"EvalOps Self-Evals\" --watch"
   },
   "dependencies": {

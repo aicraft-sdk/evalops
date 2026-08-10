@@ -131,7 +131,7 @@ CI Runner
 | Local dev | **Tilt** | Manages all 8 processes + Docker infra + hot-reload in one dashboard |
 | CI | **GitHub Actions** | Lint (affected), type-check, test (Postgres + Redis services), Docker build |
 | Agent format | **AgentMD (YAML front-matter)** | Standardised contract for agent definitions; parsed by `libs/agent-md` |
-| AI governance | **@bcai/ai-resources-cli + recall** | AGENTS.md lint gate; nightly learning compounding |
+| AI governance | **Repo-local `scripts/agents-md-lint.js`** | AGENTS.md lint gate (self-contained, no external registry) |
 
 ---
 
@@ -312,8 +312,7 @@ Push to main / PR →
 ```
 
 Additionally:
-- `agents-md-validate.yml` — runs on every PR; checks AGENTS.md schema
-- `compound-nightly.yml` — runs at 22:30 daily; extracts learnings from git history via `recall compound`
+- `agents-md-validate.yml` — runs on every PR; checks AGENTS.md schema via the repo-local `scripts/agents-md-lint.js`
 
 ---
 
@@ -344,9 +343,7 @@ Additionally:
 - AgentMD format standardises agent definitions across the whole org.
 
 **Governance**
-- `agents-md-validate.yml` enforces the agent contract on every PR.
-- `compound-nightly.yml` extracts and promotes learnings from git history automatically.
-- `project-config.json` wires the project into the `ai_resources` IDP.
+- `agents-md-validate.yml` enforces the agent contract on every PR via a repo-local linter (`scripts/agents-md-lint.js`) — no external CLI or registry required.
 - AGENTS.md slimmed to the three-tier format (what it is / what it can do / what it must not do) — under the 8KB lint limit.
 
 **Evaluator design**
@@ -372,9 +369,7 @@ Additionally:
 **Developer experience**
 - **No umbrella CLI.** The only first-party CLI is the CI gate runner (`run-suite`). The everyday loop (create dataset → create prompt → run eval → read results) requires either UI clicks or manual curl commands.
 - **Heavy local footprint.** 9 processes (7 Node + 1 Python + 1 gateway) + Postgres + Redis stress a standard laptop.
-- **`tools/scripts/` empty.** Local AGENTS.md lint capability was removed with the `.cjs` file; not replaced with a `package.json` script.
 - **Quick-start uses two `docker run` commands** instead of a compose file — easy to mis-configure.
-- **`project-config.json` has an `../ai_resources/` `$schema` path** that breaks for standalone clones.
 - **No VS Code task definitions** — 14 `npm run dev:*` variants undiscoverable without reading the README.
 
 **Evaluator gaps**
@@ -480,4 +475,4 @@ evalops eval run my-spec --watch
 | F | Nightly schema-drift CI | ~2 hours | Closes biggest production risk (silent DB drift) |
 | B | `evaluate-pr` GitHub Action | ~4 hours | Zero-friction adoption: one copy-paste to wire a quality gate |
 
-**Result after those three moves:** A platform that any team in the org can wire up in a day, that blocks production regressions in CI, and that accumulates knowledge about evaluation quality over time via the recall/compound-nightly loop.
+**Result after those three moves:** A platform that any team in the org can wire up in a day, that blocks production regressions in CI, and that accumulates knowledge about evaluation quality over time via the `docs/learnings/shared/` convention.
