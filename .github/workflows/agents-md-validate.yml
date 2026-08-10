@@ -19,4 +19,7 @@ jobs:
           node-version: "20"
 
       - name: Run agents-md-lint
-        run: npx @bcai/ai-resources-cli tools linter/agents-md-lint
+        run: node scripts/agents-md-lint.js
+
+      - name: Run agents-md-lint unit tests
+        run: node --test scripts/agents-md-lint.test.mjs

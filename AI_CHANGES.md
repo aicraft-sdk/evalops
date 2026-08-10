@@ -4,6 +4,18 @@ Branch: `feat/agents-md-cli-migration`
 
 This document describes every AI-governance-related change made to this repository as part of the E-series portfolio initiatives run from `ai_resources`.
 
+> **Superseded (2026-08-10):** `@bcai/ai-resources-cli`, `.recall.json`,
+> `.github/workflows/compound-nightly.yml`, and `project-config.json`'s
+> `resources` block were removed from this repo in the
+> `remove-bcai-aidlc-dependencies` workflow (an external Biocatch-only
+> registry dependency). **This note covers the entire document below, not
+> just one section** — the CLI-based linter switch described in E1, the
+> recall extraction mandate in E3, and the IDP `resources` block in E8 all
+> describe pre-removal state and no longer reflect the current repo. The
+> local AGENTS.md lint is now `scripts/agents-md-lint.js`. This document
+> otherwise remains an honest historical record of what was true when
+> written.
+
 ---
 
 ## E1 — Agents-MD Linter: Switch to CLI (+ ESM Workaround Removed)

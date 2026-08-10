@@ -39,8 +39,7 @@ yarn-error.log*
 *.tsbuildinfo
 
 
-# @bcai/recall learning extraction
-.recall/
+# Personal learnings scratchpad (local notes, not shared with the team)
 docs/learnings/personal/
 
 # Claude Code local state

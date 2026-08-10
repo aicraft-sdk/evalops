@@ -4,6 +4,19 @@
 **Branch reviewed**: `feat/agents-md-cli-migration` (now merged to `main`)
 **Reviewer**: Platform Team / AI Governance
 
+> **Superseded (2026-08-10):** `@bcai/ai-resources-cli`, `@bcai/recall`,
+> `compound-nightly.yml`, and `project-config.json`'s `resources` block were
+> removed from this repo in the `remove-bcai-aidlc-dependencies` workflow (an
+> external Biocatch-only registry dependency). **This note covers the entire
+> document below, not just one section** — every mention of `@bcai/*`
+> packages, `recall`, `compound-nightly`, or a `project-config.json`
+> `$schema` under `../ai_resources/...` (including the value-add table, the
+> "where developers will struggle" list, Recommendation C, and the Verdict)
+> describes pre-removal state and no longer reflects the current repo.
+> Do not re-add the `@bcai/ai-resources-cli` local-lint script.
+> The local AGENTS.md lint is now `scripts/agents-md-lint.js`. This document
+> otherwise remains an honest historical record of what was true when written.
+
 ---
 
 ## What EvalOps Is
