@@ -32,6 +32,7 @@ describe('TraceMigrationService', () => {
     agentVersion: null,
     status: 'completed',
     decision: null,
+    policyScore: null,
     startedAt: new Date(),
     completedAt: new Date(),
     metrics: null,

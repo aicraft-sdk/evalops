@@ -114,6 +114,10 @@ export const runs = pgTable('runs', {
   agentVersion: varchar('agent_version', { length: 50 }), // Snapshot of version at run time
   status: varchar('status').notNull(), // pending, running, completed, failed
   decision: varchar('decision'), // pass, warn, fail
+  // Numeric policy-gate score (0-100, rounded percentage of passed rules).
+  // Nullable: pre-existing rows have no value, and not every run has an
+  // active policy evaluated against it.
+  policyScore: integer('policy_score'),
   startedAt: timestamp('started_at').defaultNow(),
   completedAt: timestamp('completed_at'),
   metrics: jsonb('metrics'),

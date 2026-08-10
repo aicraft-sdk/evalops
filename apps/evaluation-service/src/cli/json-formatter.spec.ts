@@ -16,6 +16,7 @@ describe('json-formatter', () => {
     agentVersion: null,
     status: 'completed',
     decision,
+    policyScore: null,
     startedAt: new Date(),
     completedAt: new Date(),
     metrics: null,
