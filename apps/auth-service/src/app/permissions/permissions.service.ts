@@ -13,12 +13,6 @@ import {
   type Role,
   type Permission,
   type ResourcePermission,
-  type InsertResourcePermission,
-  type InsertUserRole,
-  type InsertRole,
-  type InsertPermission,
-  type InsertRolePermission,
-  type InsertPermissionAuditLog,
 } from '@evalops/shared-db';
 
 export type ResourceType =
@@ -326,7 +320,6 @@ export class PermissionsService {
   /**
    * Get all users with access to a specific resource
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getResourceAccessList(
     resourceType: ResourceType,
     resourceId: string,

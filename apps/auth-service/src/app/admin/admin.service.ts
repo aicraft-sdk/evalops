@@ -5,7 +5,7 @@ import {
   UpsertUserInput,
   organizations,
 } from '@evalops/shared-db';
-import { UpsertUser, InsertOrganization } from '@evalops/shared-db';
+import { InsertOrganization } from '@evalops/shared-db';
 
 @Injectable()
 export class AdminService {

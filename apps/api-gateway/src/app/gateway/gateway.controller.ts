@@ -5,8 +5,8 @@ import {
   Res,
   Body,
   Headers,
-  Param,
   BadRequestException,
+  HttpException,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { GatewayService } from './gateway.service';
@@ -48,7 +48,7 @@ export class GatewayController {
   async proxyAuth(
     @Req() req: Request,
     @Res() res: Response,
-    @Body() body: any,
+    @Body() body: unknown,
     @Headers() headers: Record<string, string>,
   ) {
     return this.proxy('auth', req, res, body, headers);
@@ -58,7 +58,7 @@ export class GatewayController {
   async proxyCore(
     @Req() req: Request,
     @Res() res: Response,
-    @Body() body: any,
+    @Body() body: unknown,
     @Headers() headers: Record<string, string>,
   ) {
     return this.proxy('core', req, res, body, headers);
@@ -68,7 +68,7 @@ export class GatewayController {
   async proxyEvaluation(
     @Req() req: Request,
     @Res() res: Response,
-    @Body() body: any,
+    @Body() body: unknown,
     @Headers() headers: Record<string, string>,
   ) {
     return this.proxy('evaluation', req, res, body, headers);
@@ -90,7 +90,7 @@ export class GatewayController {
   async proxyIntegrationWebhookGithub(
     @Req() req: Request,
     @Res() res: Response,
-    @Body() body: any,
+    @Body() body: unknown,
     @Headers() headers: Record<string, string>,
   ) {
     return this.proxy('integration', req, res, body, headers);
@@ -100,7 +100,7 @@ export class GatewayController {
   async proxyIntegration(
     @Req() req: Request,
     @Res() res: Response,
-    @Body() body: any,
+    @Body() body: unknown,
     @Headers() headers: Record<string, string>,
   ) {
     return this.proxy('integration', req, res, body, headers);
@@ -110,7 +110,7 @@ export class GatewayController {
   async proxyAnalytics(
     @Req() req: Request,
     @Res() res: Response,
-    @Body() body: any,
+    @Body() body: unknown,
     @Headers() headers: Record<string, string>,
   ) {
     return this.proxy('analytics', req, res, body, headers);
@@ -120,7 +120,7 @@ export class GatewayController {
     serviceName: string,
     @Req() req: Request,
     @Res() res: Response,
-    @Body() body: any,
+    @Body() body: unknown,
     @Headers() headers: Record<string, string>,
   ) {
     try {
@@ -170,10 +170,15 @@ export class GatewayController {
       );
 
       return res.status(200).json(result);
-    } catch (error: any) {
-      const status = error.status || 500;
-      const message = error.message || 'Internal server error';
-      return res.status(status).json({ message });
+    } catch (error) {
+      if (error instanceof HttpException) {
+        const status = error.getStatus();
+        const message = error.message || 'Internal server error';
+        return res.status(status).json({ message });
+      }
+      const message =
+        error instanceof Error ? error.message : 'Internal server error';
+      return res.status(500).json({ message });
     }
   }
 

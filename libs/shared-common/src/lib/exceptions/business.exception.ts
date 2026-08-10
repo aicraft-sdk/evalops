@@ -40,8 +40,10 @@ export class ForbiddenException extends BusinessException {
 }
 
 export class ValidationException extends BusinessException {
-  constructor(message: string, public readonly errors?: any[]) {
+  constructor(
+    message: string,
+    public readonly errors?: Record<string, unknown>[],
+  ) {
     super(message, HttpStatus.BAD_REQUEST, 'VALIDATION_ERROR');
   }
 }
-

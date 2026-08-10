@@ -1,5 +1,5 @@
 import { Module, Global } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 
 /**
  * OpenTelemetry NestJS module.
@@ -15,11 +15,11 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 export function initTelemetry(serviceName?: string): void {
   try {
     // Dynamic require so tree-shaking doesn't strip in non-Node builds
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const { NodeSDK } = require('@opentelemetry/sdk-node');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-grpc');
 
     const name =

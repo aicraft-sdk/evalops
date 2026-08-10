@@ -31,9 +31,9 @@ export class HttpClientService {
     return response.data;
   }
 
-  async post<T>(
+  async post<T, TBody = unknown>(
     url: string,
-    data?: any,
+    data?: TBody,
     config?: AxiosRequestConfig,
   ): Promise<T> {
     const response = await firstValueFrom(
@@ -42,9 +42,9 @@ export class HttpClientService {
     return response.data;
   }
 
-  async put<T>(
+  async put<T, TBody = unknown>(
     url: string,
-    data?: any,
+    data?: TBody,
     config?: AxiosRequestConfig,
   ): Promise<T> {
     const response = await firstValueFrom(
