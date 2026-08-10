@@ -194,6 +194,58 @@ describe('Policies API (integration)', () => {
       expect(res.body.message.length).toBeGreaterThan(0);
     });
 
+    it('rejects an equals operator paired with a [min, max] tuple threshold with 400', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/policies')
+        .set('Authorization', `Bearer ${orgAAdminToken()}`)
+        .send({
+          name: 'Mismatched Equals Policy',
+          rules: [
+            {
+              id: 'rule-mismatch-1',
+              name: 'Bad Equals Rule',
+              type: 'threshold',
+              metric: 'latency_ms',
+              operator: 'equals',
+              threshold: [10, 20],
+              severity: 'fail',
+              description: 'equals must not accept a tuple threshold',
+              enabled: true,
+            },
+          ],
+        })
+        .expect(HttpStatus.BAD_REQUEST);
+
+      expect(Array.isArray(res.body.message)).toBe(true);
+      expect(res.body.message.length).toBeGreaterThan(0);
+    });
+
+    it('rejects a between operator paired with a scalar threshold with 400', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/policies')
+        .set('Authorization', `Bearer ${orgAAdminToken()}`)
+        .send({
+          name: 'Mismatched Between Policy',
+          rules: [
+            {
+              id: 'rule-mismatch-2',
+              name: 'Bad Between Rule',
+              type: 'threshold',
+              metric: 'latency_ms',
+              operator: 'between',
+              threshold: 100,
+              severity: 'fail',
+              description: 'between must not accept a scalar threshold',
+              enabled: true,
+            },
+          ],
+        })
+        .expect(HttpStatus.BAD_REQUEST);
+
+      expect(Array.isArray(res.body.message)).toBe(true);
+      expect(res.body.message.length).toBeGreaterThan(0);
+    });
+
     it('creates a policy as ORG_ADMIN with the exact rule shape evaluateRun() consumes', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/policies')
