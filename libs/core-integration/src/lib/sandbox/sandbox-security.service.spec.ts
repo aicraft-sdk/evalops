@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { SandboxSecurityService } from './sandbox-security.service';
-import { SandboxPolicies } from './sandbox-policies';
+import { SandboxPolicies, NetworkPolicy } from './sandbox-policies';
 
 describe('SandboxSecurityService', () => {
   let service: SandboxSecurityService;
@@ -34,7 +34,7 @@ describe('SandboxSecurityService', () => {
     policies = module.get(SandboxPolicies);
 
     configService.get.mockImplementation((key: string) => {
-      const defaults: Record<string, any> = {
+      const defaults: Record<string, boolean> = {
         OPENSANDBOX_REQUIRE_AST_VALIDATION: true,
       };
       return defaults[key];
@@ -166,7 +166,7 @@ describe('SandboxSecurityService', () => {
 
     it('should reject invalid egress policy', () => {
       const result = service.validateNetworkPolicy({
-        egressPolicy: 'invalid' as any,
+        egressPolicy: 'invalid' as unknown as NetworkPolicy['egressPolicy'],
         allowedDomains: [],
         blockedDomains: [],
         blockedIPRanges: [],
@@ -523,15 +523,18 @@ describe('SandboxSecurityService', () => {
         name: '<script>alert("xss")</script>',
         value: 42,
       };
-      const sanitized = service.sanitizeInput(input);
+      const sanitized = service.sanitizeInput(input) as Record<
+        string,
+        unknown
+      >;
 
-      expect(sanitized.name).not.toContain('<script>');
-      expect(sanitized.value).toBe(42);
+      expect(sanitized['name']).not.toContain('<script>');
+      expect(sanitized['value']).toBe(42);
     });
 
     it('should sanitize array input', () => {
       const input = ['<script>alert("xss")</script>', 'safe value'];
-      const sanitized = service.sanitizeInput(input);
+      const sanitized = service.sanitizeInput(input) as string[];
 
       expect(sanitized[0]).not.toContain('<script>');
       expect(sanitized[1]).toBe('safe value');
@@ -590,6 +593,17 @@ describe('SandboxSecurityService', () => {
       expect(result.errors).toContain(
         'AST validation not supported for language: rust'
       );
+    });
+
+    it('detects new Function() constructor calls via AST validation', async () => {
+      const code = 'const fn = new Function("return 1");';
+
+      const result = await service.validateCodeWithAST(code, 'javascript');
+
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some((e) => e.includes('new Function'))
+      ).toBe(true);
     });
   });
 });

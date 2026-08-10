@@ -13,12 +13,12 @@ export interface SandboxConfig {
 export interface ExecutionRequest {
   code: string;
   language: 'python' | 'javascript';
-  input?: any;
+  input?: unknown;
   timeout?: number; // Override default timeout
 }
 
 export interface ExecutionResult {
-  output: any;
+  output: unknown;
   error?: string;
   executionTime: number; // milliseconds
   resourceUsage: {
@@ -61,7 +61,7 @@ export interface ExecuteCodeRequest {
   sandboxId: string;
   code: string;
   language: 'python' | 'javascript';
-  input?: any;
+  input?: unknown;
 }
 
 export interface SandboxStatusResponse {

@@ -1,14 +1,10 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Param,
-  UseGuards,
-  Query,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
 import { AlertsService } from './alerts.service';
-import { JwtAuthGuard, CurrentUser } from '@evalops/shared-auth';
+import {
+  JwtAuthGuard,
+  CurrentUser,
+  AuthenticatedUser,
+} from '@evalops/shared-auth';
 import { AlertsRepository } from '@evalops/shared-db';
 import { InsertAlertConfig } from '@evalops/shared-db';
 
@@ -21,13 +17,13 @@ export class AlertsController {
 
   @UseGuards(JwtAuthGuard)
   @Get()
-  async getAlerts(@CurrentUser() user: any) {
+  async getAlerts(@CurrentUser() user: AuthenticatedUser) {
     return this.alertsRepository.findEventsByOrg(user.organizationId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('configs')
-  async getAlertConfigs(@CurrentUser() user: any) {
+  async getAlertConfigs(@CurrentUser() user: AuthenticatedUser) {
     return this.alertsRepository.findConfigsByOrg(user.organizationId);
   }
 
@@ -35,7 +31,7 @@ export class AlertsController {
   @Post('configs')
   async createAlertConfig(
     @Body() body: InsertAlertConfig,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.alertsRepository.createConfig({
       ...body,
@@ -46,12 +42,8 @@ export class AlertsController {
 
   @UseGuards(JwtAuthGuard)
   @Post('check/:runId')
-  async checkRunAlerts(
-    @Param('runId') runId: string,
-    @CurrentUser() user: any,
-  ) {
+  async checkRunAlerts(@Param('runId') runId: string) {
     await this.alertsService.checkRunAlerts(runId);
     return { checked: true, runId };
   }
 }
-

@@ -15,6 +15,7 @@ import { SandboxPolicies } from './sandbox-policies';
 import {
   SandboxConfig,
   ExecutionResult,
+  SandboxStatus,
   SandboxStatusResponse,
   CreateSandboxResponse,
 } from './sandbox.dto';
@@ -22,13 +23,23 @@ import {
 describe('SandboxService', () => {
   let service: SandboxService;
   let httpClient: jest.Mocked<HttpClientService>;
-  let configService: jest.Mocked<ConfigService>;
   let securityService: jest.Mocked<SandboxSecurityService>;
   let auditService: jest.Mocked<SandboxAuditService>;
   let monitoringService: jest.Mocked<SandboxMonitoringService>;
   let policies: jest.Mocked<SandboxPolicies>;
 
   beforeEach(async () => {
+    // Config values must be available on the mock before SandboxService is
+    // constructed (Nest instantiates providers during compile()), so this
+    // is passed into the initial `useValue` rather than set afterward.
+    const configDefaults: Record<string, string | number> = {
+      OPENSANDBOX_SERVER_URL: 'http://localhost:8080',
+      OPENSANDBOX_API_KEY: 'test-api-key',
+      OPENSANDBOX_DEFAULT_CPU: '1.0',
+      OPENSANDBOX_DEFAULT_MEMORY: '512Mi',
+      OPENSANDBOX_DEFAULT_TIMEOUT: 300,
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SandboxService,
@@ -43,7 +54,7 @@ describe('SandboxService', () => {
         {
           provide: ConfigService,
           useValue: {
-            get: jest.fn(),
+            get: jest.fn((key: string) => configDefaults[key]),
           },
         },
         {
@@ -87,23 +98,10 @@ describe('SandboxService', () => {
 
     service = module.get<SandboxService>(SandboxService);
     httpClient = module.get(HttpClientService);
-    configService = module.get(ConfigService);
     securityService = module.get(SandboxSecurityService);
     auditService = module.get(SandboxAuditService);
     monitoringService = module.get(SandboxMonitoringService);
     policies = module.get(SandboxPolicies);
-
-    // Setup default config values
-    configService.get.mockImplementation((key: string) => {
-      const defaults: Record<string, any> = {
-        OPENSANDBOX_SERVER_URL: 'http://localhost:8080',
-        OPENSANDBOX_API_KEY: 'test-api-key',
-        OPENSANDBOX_DEFAULT_CPU: '1.0',
-        OPENSANDBOX_DEFAULT_MEMORY: '512Mi',
-        OPENSANDBOX_DEFAULT_TIMEOUT: 300,
-      };
-      return defaults[key];
-    });
 
     // Setup default policy mocks
     policies.getNetworkPolicy.mockReturnValue({
@@ -129,7 +127,6 @@ describe('SandboxService', () => {
 
     securityService.scanForSecurityIssues.mockReturnValue([]);
     securityService.sanitizeInput.mockImplementation((input) => input);
-    securityService.updateResourceUsage.mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -145,12 +142,11 @@ describe('SandboxService', () => {
     it('should create sandbox with default config', async () => {
       const response: CreateSandboxResponse = {
         sandboxId: TEST_SANDBOX_ID,
-        status: 'creating' as any,
+        status: SandboxStatus.CREATING,
       };
 
       httpClient.post.mockResolvedValue(response);
       auditService.logCreation.mockResolvedValue('audit-log-id');
-      monitoringService.recordCreation.mockImplementation(() => {});
 
       const result = await service.createSandbox(
         undefined,
@@ -199,7 +195,7 @@ describe('SandboxService', () => {
 
       const response: CreateSandboxResponse = {
         sandboxId: TEST_SANDBOX_ID,
-        status: 'creating' as any,
+        status: SandboxStatus.CREATING,
       };
 
       httpClient.post.mockResolvedValue(response);
@@ -281,7 +277,7 @@ describe('SandboxService', () => {
     it('should retry on transient errors', async () => {
       const response: CreateSandboxResponse = {
         sandboxId: TEST_SANDBOX_ID,
-        status: 'creating' as any,
+        status: SandboxStatus.CREATING,
       };
 
       httpClient.post
@@ -362,7 +358,6 @@ describe('SandboxService', () => {
 
       httpClient.post.mockResolvedValue(response);
       auditService.logExecution.mockResolvedValue('audit-log-id');
-      monitoringService.recordExecution.mockImplementation(() => {});
       monitoringService.detectAnomalies.mockResolvedValue({
         hasAnomalies: false,
         anomalies: [],
@@ -685,7 +680,7 @@ describe('SandboxService', () => {
     it('should get sandbox status successfully', async () => {
       const response: SandboxStatusResponse = {
         sandboxId: TEST_SANDBOX_ID,
-        status: 'running' as any,
+        status: SandboxStatus.RUNNING,
         createdAt: new Date(),
         resourceUsage: {
           cpu: 0.5,
@@ -720,7 +715,7 @@ describe('SandboxService', () => {
     it('should retry on transient errors', async () => {
       const response: SandboxStatusResponse = {
         sandboxId: TEST_SANDBOX_ID,
-        status: 'running' as any,
+        status: SandboxStatus.RUNNING,
         createdAt: new Date(),
       };
 

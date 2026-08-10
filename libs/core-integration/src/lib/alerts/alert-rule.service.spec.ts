@@ -49,7 +49,7 @@ describe('AlertRuleService.checkRunAlerts', () => {
     mockCicdRepository.findPolicyViolationsByRun.mockRejectedValue(
       new Error('DB failure in policy check'),
     );
-    mockAlertsRepository.findConfigsByOrg.mockImplementation((_orgId: string) => {
+    mockAlertsRepository.findConfigsByOrg.mockImplementation(() => {
       // Both checkPerformanceAlerts and checkCostAlerts call this.
       // Return a cost-type config and a performance config that won't fire.
       return Promise.resolve([

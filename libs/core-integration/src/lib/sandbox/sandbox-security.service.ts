@@ -22,6 +22,20 @@ export interface ResourceUsage {
   executionTime: number; // milliseconds
 }
 
+/** Minimal shape of an ESTree-compatible AST node, as produced by @typescript-eslint/parser. */
+interface AstNode {
+  type: string;
+  callee?: AstNode;
+  name?: string;
+  value?: unknown;
+  arguments?: AstNode[];
+  [key: string]: unknown;
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 @Injectable()
 export class SandboxSecurityService {
   private readonly logger = new Logger(SandboxSecurityService.name);
@@ -80,9 +94,9 @@ export class SandboxSecurityService {
     }
 
     if (language === 'python') {
-      this.validatePythonCode(code, errors, warnings);
+      this.validatePythonCode(code, errors);
     } else if (language === 'javascript') {
-      this.validateJavaScriptCode(code, errors, warnings);
+      this.validateJavaScriptCode(code, errors);
     } else {
       errors.push(`Unsupported language: ${language}`);
     }
@@ -225,9 +239,9 @@ export class SandboxSecurityService {
       } else {
         errors.push(`AST validation not supported for language: ${language}`);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.warn(
-        `AST validation failed, falling back to pattern matching: ${error.message}`,
+        `AST validation failed, falling back to pattern matching: ${getErrorMessage(error)}`,
       );
       // Fall back to pattern-based validation
       return this.validateCode(code, language);
@@ -290,7 +304,7 @@ export class SandboxSecurityService {
     });
   }
 
-  sanitizeInput(input: any): any {
+  sanitizeInput(input: unknown): unknown {
     if (input === null || input === undefined) {
       return input;
     }
@@ -308,7 +322,7 @@ export class SandboxSecurityService {
     }
 
     if (typeof input === 'object') {
-      const sanitized: any = {};
+      const sanitized: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(input)) {
         sanitized[key] = this.sanitizeInput(value);
       }
@@ -321,7 +335,6 @@ export class SandboxSecurityService {
   private validatePythonCode(
     code: string,
     errors: string[],
-    warnings: string[],
   ): void {
     for (const blocked of this.blockedPythonImports) {
       if (code.includes(blocked)) {
@@ -342,7 +355,6 @@ export class SandboxSecurityService {
   private validateJavaScriptCode(
     code: string,
     errors: string[],
-    warnings: string[],
   ): void {
     for (const pattern of this.blockedJavaScriptPatterns) {
       if (pattern.test(code)) {
@@ -381,8 +393,9 @@ export class SandboxSecurityService {
     warnings: string[],
   ): Promise<void> {
     // Dynamic import to avoid requiring the package if not available
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const parserMod = require('@typescript-eslint/parser') as { parse: (code: string, opts: Record<string, unknown>) => unknown };
+    const parserMod = require('@typescript-eslint/parser') as {
+      parse: (code: string, opts: Record<string, unknown>) => AstNode;
+    };
     const ast = parserMod.parse(code, {
       ecmaVersion: 'latest',
       sourceType: 'module',
@@ -402,7 +415,7 @@ export class SandboxSecurityService {
   ): Promise<void> {
     // For now, use enhanced pattern matching
     // TODO: Integrate python-ast package for full AST parsing
-    this.validatePythonCode(code, errors, warnings);
+    this.validatePythonCode(code, errors);
 
     // Check for dangerous AST patterns using regex (simplified)
     const dangerousPatterns = [
@@ -440,7 +453,7 @@ export class SandboxSecurityService {
    * Traverse JavaScript AST to find dangerous patterns
    */
   private traverseJavaScriptAST(
-    node: any,
+    node: AstNode | null | undefined,
     errors: string[],
     warnings: string[],
     depth = 0,
@@ -452,25 +465,28 @@ export class SandboxSecurityService {
     // Check for dangerous function calls
     if (node.type === 'CallExpression') {
       const callee = node.callee;
-      if (callee.type === 'Identifier') {
-        const name = callee.name;
-        if (name === 'eval') {
-          errors.push('eval() calls are blocked');
-        }
-        if (name === 'Function' && node.callee.type === 'NewExpression') {
-          errors.push('new Function() calls are blocked');
-        }
+      if (callee?.type === 'Identifier' && callee.name === 'eval') {
+        errors.push('eval() calls are blocked');
       }
+    }
+
+    // Check for `new Function(...)` — a distinct AST node type from CallExpression.
+    if (
+      node.type === 'NewExpression' &&
+      node.callee?.type === 'Identifier' &&
+      node.callee.name === 'Function'
+    ) {
+      errors.push('new Function() calls are blocked');
     }
 
     // Check for dangerous requires
     if (node.type === 'CallExpression' && node.callee?.name === 'require') {
-      const arg = node.arguments[0];
-      if (arg?.type === 'Literal') {
-        const module = arg.value;
+      const arg = node.arguments?.[0];
+      if (arg?.type === 'Literal' && typeof arg.value === 'string') {
+        const moduleName = arg.value;
         const blockedModules = ['child_process', 'fs', 'os', 'net', 'http'];
-        if (blockedModules.includes(module)) {
-          errors.push(`Requiring '${module}' is blocked`);
+        if (blockedModules.includes(moduleName)) {
+          errors.push(`Requiring '${moduleName}' is blocked`);
         }
       }
     }
@@ -483,10 +499,10 @@ export class SandboxSecurityService {
       const child = node[key];
       if (Array.isArray(child)) {
         for (const item of child) {
-          this.traverseJavaScriptAST(item, errors, warnings, depth + 1);
+          this.traverseJavaScriptAST(item as AstNode, errors, warnings, depth + 1);
         }
       } else if (child && typeof child === 'object') {
-        this.traverseJavaScriptAST(child, errors, warnings, depth + 1);
+        this.traverseJavaScriptAST(child as AstNode, errors, warnings, depth + 1);
       }
     }
   }
