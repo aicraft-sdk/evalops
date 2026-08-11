@@ -45,6 +45,33 @@ export class UsersRepository {
     return db.select().from(users).orderBy(users.email);
   }
 
+  /**
+   * Targeted single-column update — only `role` (plus a server-set
+   * `updatedAt`) is ever written. Deliberately NOT built on `upsert()`
+   * (insert + onConflictDoUpdate spreading the whole fetched row): spreading
+   * `createdAt` back through an INSERT's VALUES clause round-trips it
+   * through drizzle's `PgTimestamp.mapToDriverValue`
+   * (`value.toISOString()`), which throws `RangeError: Invalid time value`
+   * for rows read back via `PgTimestamp.mapFromDriverValue`'s
+   * `+"+0000"` suffixing in SQLite dev mode. A plain `UPDATE ... SET role,
+   * updated_at` never touches `created_at` at all, avoiding that class of
+   * failure entirely — mirrors `OrganizationsRepository.update()`'s existing
+   * allowlist pattern.
+   */
+  async updateRole(
+    id: string,
+    role: string,
+  ): Promise<typeof users.$inferSelect | undefined> {
+    const [user] = await db
+      .update(users)
+      .set({ role, updatedAt: new Date() } as Partial<
+        typeof users.$inferInsert
+      >)
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
   async upsert(userData: UpsertUserInput): Promise<typeof users.$inferSelect> {
     const { id: _id, ...updateData } = userData;
     const [user] = await db

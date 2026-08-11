@@ -2,9 +2,9 @@ import { Injectable } from '@nestjs/common';
 import {
   UsersRepository,
   OrganizationsRepository,
-  UpsertUserInput,
   organizations,
 } from '@evalops/shared-db';
+import { UserRole } from '@evalops/shared-auth';
 import { UpdateOrganizationDto } from './organization-update.dto';
 
 @Injectable()
@@ -22,16 +22,13 @@ export class AdminService {
     return this.organizationsRepository.findAll();
   }
 
-  async updateUserRole(userId: string, role: string) {
+  async updateUserRole(userId: string, role: UserRole) {
     const user = await this.usersRepository.findById(userId);
     if (!user) {
       throw new Error(`User ${userId} not found`);
     }
 
-    return this.usersRepository.upsert({
-      ...user,
-      role,
-    } as UpsertUserInput);
+    return this.usersRepository.updateRole(userId, role);
   }
 
   async updateOrganization(
