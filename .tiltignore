@@ -72,7 +72,4 @@ temp/
 docs/_build/
 site/
 
-# Attached assets (large files)
-attached_assets/
-
 

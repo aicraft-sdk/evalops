@@ -5,14 +5,12 @@ import path from "path";
 export default defineConfig({
   plugins: [
     react(),
-    // Removed Replit plugins: @replit/vite-plugin-cartographer and @replit/vite-plugin-runtime-error-modal
   ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),
       "@evalops/shared": path.resolve(__dirname, "../../libs/shared/src"),
       "@evalops/shared-db": path.resolve(__dirname, "../../libs/shared-db/src"),
-      "@assets": path.resolve(__dirname, "../../attached_assets"),
     },
   },
   root: path.resolve(__dirname, "."),

@@ -47,7 +47,7 @@ itself.
 ## Content policy
 
 Every claim on this site is sourced from the real repo: `README.md`, `docs/ARCHITECTURE.md`,
-`docs/CLI_GUIDE.md`, `docs/QUICK_START.md`, `project-config.json`, and the actual `apps/`/`libs/`
+`docs/CLI_GUIDE.md`, `docs/QUICK_START.md`, and the actual `apps/`/`libs/`
 code structure. No invented features, no old 6-service topology (`integration-service` and
 `analytics-service` were fully decommissioned — their functionality now lives in `core-service`
 via `libs/core-integration` and `libs/core-analytics`).
