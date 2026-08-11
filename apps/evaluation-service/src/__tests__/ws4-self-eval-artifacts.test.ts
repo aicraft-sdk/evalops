@@ -5,7 +5,7 @@
  * 1. evalops-self.eval.yaml exists at repo root with 4-8 scenarios
  * 2. package.json has the self-eval script
  * 3. CI has the self-evals job
- * 4. AI_CHANGES.md marks E5 as completed
+ * 4. docs/archive/AI_CHANGES.md marks E5 as completed
  */
 
 import * as fs from 'fs';
@@ -123,7 +123,7 @@ describe('WS4 — Self-Eval Artifacts', () => {
   });
 
   describe('AI_CHANGES.md E5 status', () => {
-    const aiChangesPath = path.join(REPO_ROOT, 'AI_CHANGES.md');
+    const aiChangesPath = path.join(REPO_ROOT, 'docs/archive/AI_CHANGES.md');
 
     it('E5 exists as its own section (## E5)', () => {
       const content = fs.readFileSync(aiChangesPath, 'utf-8');

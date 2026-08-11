@@ -3,7 +3,7 @@
 // `npx @bcai/ai-resources-cli tools linter/agents-md-lint` command.
 //
 // Validates root AGENTS.md against the two rules this repo's own docs
-// (AI_CHANGES.md, REVIEW.md, docs/PRESENTATION_DECK.md) document as the
+// (docs/archive/AI_CHANGES.md, docs/archive/REVIEW.md, docs/PRESENTATION_DECK.md) document as the
 // contract the previous CLI-based linter enforced:
 //   - size must stay under the 8 KB limit
 //   - the five required section headers must be present

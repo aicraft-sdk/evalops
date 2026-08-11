@@ -355,7 +355,7 @@ Additionally:
 
 ## Slide 12 — Cons and Gaps (Honest Assessment)
 
-**Production readiness (from `ASSESSMENT.md`, 2026-02-22)**
+**Production readiness (from `docs/archive/ASSESSMENT.md`, 2026-02-22)**
 
 | # | Issue | Risk |
 |---|---|---|
@@ -364,7 +364,7 @@ Additionally:
 | 3 | `IngestionService` DB write is stubbed (TODO comment) | Trace events accepted but not persisted |
 | 4 | No Drizzle migration files generated | DB schema drifts silently; `db:push` is fine for dev, not production |
 | 5 | No artifact storage backend (S3/MinIO/Blob) | `artifact_hashes` stored but actual bytes lost |
-| 6 | RLS not enforced everywhere | `ASSESSMENT.md` identifies some controllers without tenant isolation |
+| 6 | RLS not enforced everywhere | `docs/archive/ASSESSMENT.md` identifies some controllers without tenant isolation |
 
 **Developer experience**
 - **No umbrella CLI.** The only first-party CLI is the CI gate runner (`run-suite`). The everyday loop (create dataset → create prompt → run eval → read results) requires either UI clicks or manual curl commands.
