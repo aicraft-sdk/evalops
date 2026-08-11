@@ -52,7 +52,7 @@
     "@nestjs/axios": "^4.0.1",
     "@nestjs/bull": "^11.0.4",
     "@nestjs/common": "^11.1.9",
-    "@nestjs/config": "^4.0.2",
+    "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.1.9",
     "@nestjs/jwt": "^11.0.1",
     "@nestjs/microservices": "^11.1.9",
