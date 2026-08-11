@@ -466,6 +466,88 @@
 
   .card p { color: var(--text-muted); font-size: 0.92rem; }
 
+  /* Security cards: short summary + click-to-expand modal */
+  .security-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 168px;
+    cursor: pointer;
+  }
+
+  .security-card p { flex: 1 0 auto; margin-bottom: 0; }
+
+  .card-expand {
+    align-self: flex-start;
+    margin-top: 1rem;
+    background: transparent;
+    border: none;
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .card-expand:hover { text-decoration: underline; }
+
+  .card-expand:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    z-index: 50;
+  }
+
+  .modal-overlay[hidden] { display: none; }
+
+  .modal {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    max-width: 640px;
+    width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 1.75rem;
+    position: relative;
+  }
+
+  .modal:focus { outline: none; }
+
+  .modal-close {
+    position: absolute;
+    top: 0.9rem;
+    right: 0.9rem;
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    width: 2rem;
+    height: 2rem;
+    font-size: 1.15rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .modal-close:hover { border-color: var(--accent); color: var(--accent); }
+
+  .modal-close:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .modal-body h3 { margin-top: 0; padding-right: 2rem; }
+
+  .modal-body p { color: var(--text-muted); font-size: 0.94rem; }
+
   /* Command reference */
   .cmd-block {
     border: 1px solid var(--border);
@@ -568,12 +650,12 @@
           <a class="btn btn-primary" href="#getting-started">Get started</a>
           <a class="btn btn-secondary" href="#architecture">See the architecture</a>
         </div>
-        <div class="service-strip" aria-label="Live services in this build">
-          <span class="service-pill"><b>api-gateway</b> :3000</span>
-          <span class="service-pill"><b>auth-service</b> :3001</span>
-          <span class="service-pill"><b>core-service</b> :3002</span>
-          <span class="service-pill"><b>evaluation-service</b> :3003</span>
-          <span class="service-pill"><b>frontend</b> :4200</span>
+        <div class="service-strip" aria-label="Core services in this build">
+          <span class="service-pill"><b>Gateway</b></span>
+          <span class="service-pill"><b>Auth Service</b></span>
+          <span class="service-pill"><b>Core Service</b></span>
+          <span class="service-pill"><b>Evaluation Service</b></span>
+          <span class="service-pill"><b>Web App</b></span>
         </div>
       </header>
     </div>
@@ -584,25 +666,24 @@
         <span class="eyebrow">System design</span>
         <h2>Four services, one gateway</h2>
         <p class="section-lede">
-          EvalOps is an Nx monorepo built as four NestJS microservices plus a React frontend and a
-          Python worker, all communicating through a single API Gateway. There is no
-          <code class="inline">integration-service</code> or <code class="inline">analytics-service</code>
-          anymore &mdash; both were fully decommissioned and their real functionality now lives
-          inside <code class="inline">core-service</code>, mounted as
-          <code class="inline">libs/core-integration</code> and
-          <code class="inline">libs/core-analytics</code>.
+          EvalOps is an Nx monorepo built as four NestJS microservices, a React web app, and a
+          Python worker, all reachable through a single Gateway. The Gateway enforces JWT
+          authentication and role-based access control, then routes each request by path to the
+          service that owns it &mdash; Auth Service, Core Service, or Evaluation Service. Core
+          Service also handles integration work (artifacts, webhooks, alerts, sandboxed
+          execution) and analytics (dashboards, cost tracking, audit trail).
         </p>
 
         <figure class="diagram">
           <svg class="diagram-svg" viewBox="0 0 1040 900" role="img" aria-labelledby="arch-diagram-title arch-diagram-desc" xmlns="http://www.w3.org/2000/svg">
   <title id="arch-diagram-title">EvalOps system architecture</title>
-  <desc id="arch-diagram-desc">Browser, the CLI, SDKs, and the GitHub Action all reach the API Gateway (directly, or via the React frontend for the browser). The gateway enforces JWT and RBAC, then routes by path prefix to Auth Service, Core Service, or Evaluation Service. Core Service also serves the integration and analytics route prefixes via its mounted libraries, one of which calls an external OpenSandbox server over HTTP. All three data-owning services share one PostgreSQL and Redis instance.</desc>
+  <desc id="arch-diagram-desc">Browser, the CLI, SDKs, and the GitHub Action all reach the Gateway (directly, or via the React web app for the browser). The Gateway enforces JWT and RBAC, then routes by path prefix to Auth Service, Core Service, or Evaluation Service. Core Service also serves the integration and analytics route prefixes via its mounted libraries, one of which calls an external sandbox server over HTTP. All three data-owning services share one PostgreSQL and Redis instance.</desc>
   <defs>
   <marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
     <path d="M0,0 L10,5 L0,10 z" fill="var(--text-muted)"/>
   </marker>
 </defs>
-  <rect x="50" y="24" width="220" height="62" rx="10" fill="var(--bg-alt)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="160" y="60">Browser</tspan></text><rect x="290" y="24" width="220" height="62" rx="10" fill="var(--bg-alt)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="400" y="60">@evalops/cli</tspan></text><rect x="530" y="24" width="220" height="62" rx="10" fill="var(--bg-alt)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="640" y="60">JS &amp; Python SDKs</tspan></text><rect x="770" y="24" width="220" height="62" rx="10" fill="var(--bg-alt)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="880" y="48">GitHub Action</tspan></text><text text-anchor="middle" font-size="11.5" font-weight="500" fill="var(--text-muted)" ><tspan x="880" y="68">evaluate-pr</tspan></text><rect x="50" y="148" width="220" height="66" rx="10" fill="var(--bg-alt)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="160" y="172">Frontend</tspan></text><text text-anchor="middle" font-size="11.5" font-weight="500" fill="var(--text-muted)" ><tspan x="160" y="184.5">React 18 / Vite / Shadcn UI</tspan><tspan x="160" y="199.5">:4200</tspan></text><line x1="160" y1="86" x2="160" y2="148" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#arrowhead)"/><rect x="50" y="272" width="940" height="76" rx="10" fill="var(--card-bg)" stroke="var(--accent)" stroke-width="2"/><text text-anchor="middle" font-size="16" font-weight="700" fill="var(--text)" ><tspan x="520" y="302">API Gateway — NestJS · :3000</tspan></text><text text-anchor="middle" font-size="12" font-weight="600" fill="var(--text-muted)" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"><tspan x="520" y="326">JwtAuthGuard + RbacGuard · single /api prefix</tspan></text><line x1="160" y1="214" x2="160" y2="272" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#arrowhead)"/><line x1="400" y1="86" x2="400" y2="272" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#arrowhead)"/><line x1="640" y1="86" x2="640" y2="272" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#arrowhead)"/><line x1="880" y1="86" x2="880" y2="272" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#arrowhead)"/><rect x="50" y="460" width="280" height="84" rx="10" fill="var(--card-bg)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="190" y="484">Auth Service</tspan></text><text text-anchor="middle" font-size="11.5" font-weight="500" fill="var(--text-muted)" ><tspan x="190" y="496.5">:3001</tspan><tspan x="190" y="511.5">users, orgs, JWT, RBAC</tspan></text><rect x="380" y="460" width="280" height="84" rx="10" fill="var(--card-bg)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="520" y="484">Core Service</tspan></text><text text-anchor="middle" font-size="11.5" font-weight="500" fill="var(--text-muted)" ><tspan x="520" y="496.5">:3002</tspan><tspan x="520" y="511.5">prompts, datasets, agents, eval specs</tspan></text><rect x="790" y="460" width="200" height="84" rx="10" fill="var(--card-bg)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="890" y="484">Evaluation Service</tspan></text><text text-anchor="middle" font-size="11.5" font-weight="500" fill="var(--text-muted)" ><tspan x="890" y="496.5">:3003</tspan><tspan x="890" y="511.5">runs, evaluators, policy engine</tspan></text><line x1="190" y1="348" x2="190" y2="460" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#arrowhead)"/><g>
+  <rect x="50" y="24" width="220" height="62" rx="10" fill="var(--bg-alt)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="160" y="60">Browser</tspan></text><rect x="290" y="24" width="220" height="62" rx="10" fill="var(--bg-alt)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="400" y="60">@evalops/cli</tspan></text><rect x="530" y="24" width="220" height="62" rx="10" fill="var(--bg-alt)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="640" y="60">JS &amp; Python SDKs</tspan></text><rect x="770" y="24" width="220" height="62" rx="10" fill="var(--bg-alt)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="880" y="48">GitHub Action</tspan></text><text text-anchor="middle" font-size="11.5" font-weight="500" fill="var(--text-muted)" ><tspan x="880" y="68">evaluate-pr</tspan></text><rect x="50" y="148" width="220" height="66" rx="10" fill="var(--bg-alt)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="160" y="172">Web App</tspan></text><text text-anchor="middle" font-size="11.5" font-weight="500" fill="var(--text-muted)" ><tspan x="160" y="192">React 18 / Vite / Shadcn UI</tspan></text><line x1="160" y1="86" x2="160" y2="148" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#arrowhead)"/><rect x="50" y="272" width="940" height="76" rx="10" fill="var(--card-bg)" stroke="var(--accent)" stroke-width="2"/><text text-anchor="middle" font-size="16" font-weight="700" fill="var(--text)" ><tspan x="520" y="302">Gateway — NestJS</tspan></text><text text-anchor="middle" font-size="12" font-weight="600" fill="var(--text-muted)" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"><tspan x="520" y="326">JwtAuthGuard + RbacGuard · single /api prefix</tspan></text><line x1="160" y1="214" x2="160" y2="272" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#arrowhead)"/><line x1="400" y1="86" x2="400" y2="272" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#arrowhead)"/><line x1="640" y1="86" x2="640" y2="272" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#arrowhead)"/><line x1="880" y1="86" x2="880" y2="272" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#arrowhead)"/><rect x="50" y="460" width="280" height="84" rx="10" fill="var(--card-bg)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="190" y="484">Auth Service</tspan></text><text text-anchor="middle" font-size="11.5" font-weight="500" fill="var(--text-muted)" ><tspan x="190" y="504">users, orgs, JWT, RBAC</tspan></text><rect x="380" y="460" width="280" height="84" rx="10" fill="var(--card-bg)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="520" y="484">Core Service</tspan></text><text text-anchor="middle" font-size="11.5" font-weight="500" fill="var(--text-muted)" ><tspan x="520" y="504">prompts, datasets, agents, eval specs</tspan></text><rect x="790" y="460" width="200" height="84" rx="10" fill="var(--card-bg)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="890" y="484">Evaluation Service</tspan></text><text text-anchor="middle" font-size="11.5" font-weight="500" fill="var(--text-muted)" ><tspan x="890" y="504">runs, evaluators, policy engine</tspan></text><line x1="190" y1="348" x2="190" y2="460" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#arrowhead)"/><g>
     <rect x="143.49" y="390.5" width="93.02000000000001" height="27" rx="10" fill="var(--bg)" stroke="var(--border)" stroke-width="1"/>
     <text x="190" y="407.52" text-anchor="middle" font-size="11" font-weight="600" fill="var(--accent)" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">/api/auth/*</text>
   </g><line x1="520" y1="348" x2="520" y2="460" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#arrowhead)"/><g>
@@ -614,30 +695,30 @@
   </g><line x1="790" y1="502" x2="660" y2="502" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#arrowhead)"/><g>
     <rect x="669.88" y="470.25" width="110.24" height="19.5" rx="9.75" fill="var(--bg)" stroke="var(--border)" stroke-width="1"/>
     <text x="725" y="483.04" text-anchor="middle" font-size="9.5" font-weight="600" fill="var(--accent)" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">/api/sandboxes/*</text>
-  </g><rect x="395" y="604" width="110" height="62" rx="8" fill="var(--bg-alt)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="450" y="628">core-integration</tspan></text><text text-anchor="middle" font-size="11.5" font-weight="500" fill="var(--text-muted)" ><tspan x="450" y="640.5">artifacts, webhooks,</tspan><tspan x="450" y="655.5">alerts, sandbox</tspan></text><rect x="545" y="604" width="110" height="62" rx="8" fill="var(--bg-alt)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="600" y="628">core-analytics</tspan></text><text text-anchor="middle" font-size="11.5" font-weight="500" fill="var(--text-muted)" ><tspan x="600" y="640.5">dashboard, cost,</tspan><tspan x="600" y="655.5">audit trail</tspan></text><path d="M520,544 L520,582" fill="none" stroke="var(--border)" stroke-width="1.5"/><path d="M450,582 L600,582" fill="none" stroke="var(--border)" stroke-width="1.5"/><path d="M450,582 L450,604" fill="none" stroke="var(--border)" stroke-width="1.5"/><path d="M600,582 L600,604" fill="none" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-muted)" ><tspan x="520" y="574">mounted in core-service</tspan></text><rect x="410" y="712" width="220" height="62" rx="10" fill="var(--bg-alt)" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="5,4"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="520" y="736">OpenSandbox Server</tspan></text><text text-anchor="middle" font-size="11.5" font-weight="500" fill="var(--text-muted)" ><tspan x="520" y="756">external — bring your own backend</tspan></text><path d="M450,666 L450,682 L520,682 L520,712" fill="none" stroke="var(--text-muted)" stroke-width="1.75" stroke-dasharray="5,4" marker-end="url(#arrowhead)"/><g>
+  </g><rect x="395" y="604" width="110" height="62" rx="8" fill="var(--bg-alt)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="450" y="628">core-integration</tspan></text><text text-anchor="middle" font-size="11.5" font-weight="500" fill="var(--text-muted)" ><tspan x="450" y="640.5">artifacts, webhooks,</tspan><tspan x="450" y="655.5">alerts, sandbox</tspan></text><rect x="545" y="604" width="110" height="62" rx="8" fill="var(--bg-alt)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="600" y="628">core-analytics</tspan></text><text text-anchor="middle" font-size="11.5" font-weight="500" fill="var(--text-muted)" ><tspan x="600" y="640.5">dashboard, cost,</tspan><tspan x="600" y="655.5">audit trail</tspan></text><path d="M520,544 L520,582" fill="none" stroke="var(--border)" stroke-width="1.5"/><path d="M450,582 L600,582" fill="none" stroke="var(--border)" stroke-width="1.5"/><path d="M450,582 L450,604" fill="none" stroke="var(--border)" stroke-width="1.5"/><path d="M600,582 L600,604" fill="none" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-muted)" ><tspan x="520" y="574">mounted in Core Service</tspan></text><rect x="410" y="712" width="220" height="62" rx="10" fill="var(--bg-alt)" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="5,4"/><text text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" ><tspan x="520" y="736">OpenSandbox Server</tspan></text><text text-anchor="middle" font-size="11.5" font-weight="500" fill="var(--text-muted)" ><tspan x="520" y="756">external — bring your own backend</tspan></text><path d="M450,666 L450,682 L520,682 L520,712" fill="none" stroke="var(--text-muted)" stroke-width="1.75" stroke-dasharray="5,4" marker-end="url(#arrowhead)"/><g>
     <rect x="463.98" y="671.75" width="42.04" height="20.5" rx="10.25" fill="var(--bg)" stroke="var(--border)" stroke-width="1"/>
     <text x="485" y="685.36" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--accent)" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">HTTP</text>
-  </g><rect x="50" y="812" width="940" height="66" rx="10" fill="var(--bg-alt)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="15" font-weight="700" fill="var(--text)" ><tspan x="520" y="842">PostgreSQL + Redis</tspan></text><text text-anchor="middle" font-size="11" font-weight="500" fill="var(--text-muted)" ><tspan x="520" y="862">shared by auth-service, core-service, evaluation-service</tspan></text><line x1="190" y1="544" x2="190" y2="812" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#arrowhead)"/><path d="M400,544 L400,560 L355,560 L355,800 L400,812" fill="none" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#arrowhead)"/><path d="M810,544 L810,560 L725,560 L725,800 L830,812" fill="none" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#arrowhead)"/>
+  </g><rect x="50" y="812" width="940" height="66" rx="10" fill="var(--bg-alt)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="15" font-weight="700" fill="var(--text)" ><tspan x="520" y="842">PostgreSQL + Redis</tspan></text><text text-anchor="middle" font-size="11" font-weight="500" fill="var(--text-muted)" ><tspan x="520" y="862">shared by Auth Service, Core Service, Evaluation Service</tspan></text><line x1="190" y1="544" x2="190" y2="812" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#arrowhead)"/><path d="M400,544 L400,560 L355,560 L355,800 L400,812" fill="none" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#arrowhead)"/><path d="M810,544 L810,560 L725,560 L725,800 L830,812" fill="none" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#arrowhead)"/>
 </svg>
           <figcaption>
-            Real service topology as of the architecture simplification: 4 NestJS services + frontend,
-            with integration and analytics logic folded into <code class="inline">core-service</code>.
+            System topology: a Gateway, three backend services, and a Web App, with integration
+            and analytics functionality contained in the Core Service.
           </figcaption>
           <details class="diagram-fallback">
             <summary>Text description of this diagram</summary>
             <p>
-              The browser talks to the React frontend, which calls the API Gateway (port 3000).
-              The gateway enforces JWT auth and RBAC, then routes requests by path prefix:
-              <code class="inline">/api/auth/*</code> to auth-service (3001),
-              <code class="inline">/api/core/*</code> to core-service (3002),
-              <code class="inline">/api/evaluation/*</code> to evaluation-service (3003), and both
+              The browser talks to the React web app, which calls the Gateway. The Gateway
+              enforces JWT auth and RBAC, then routes requests by path prefix:
+              <code class="inline">/api/auth/*</code> to the Auth Service,
+              <code class="inline">/api/core/*</code> to the Core Service,
+              <code class="inline">/api/evaluation/*</code> to the Evaluation Service, and both
               <code class="inline">/api/integration/*</code> and <code class="inline">/api/analytics/*</code>
-              also to core-service, since that's where those libraries now live. The CLI, JS/Python SDKs,
-              and the GitHub Action all call the gateway the same way the frontend does. For isolated code
-              execution, evaluation-service calls core-service's internal sandbox API
-              (<code class="inline">/api/sandboxes/*</code>), and core-service — via
+              also to the Core Service, since that's where those libraries live. The CLI, JS/Python SDKs,
+              and the GitHub Action all call the Gateway the same way the web app does. For isolated code
+              execution, the Evaluation Service calls the Core Service's internal sandbox API
+              (<code class="inline">/api/sandboxes/*</code>), and the Core Service — via
               <code class="inline">libs/core-integration</code> — is the one that calls out to an external
-              OpenSandbox server. All three data-owning services share one PostgreSQL database (with Redis
+              sandbox server. All three data-owning services share one PostgreSQL database (with Redis
               for rate limiting/idempotency).
             </p>
           </details>
@@ -646,15 +727,15 @@
         <div class="table-wrap">
           <table>
             <thead>
-              <tr><th>Service</th><th>Port</th><th>Responsibility</th></tr>
+              <tr><th>Service</th><th>Responsibility</th></tr>
             </thead>
             <tbody>
-              <tr><td><code class="inline">api-gateway</code></td><td>3000</td><td>Request routing, CORS, JWT auth + RBAC enforcement, forwarding to downstream services</td></tr>
-              <tr><td><code class="inline">auth-service</code></td><td>3001</td><td>Users, organizations, JWT auth, RBAC</td></tr>
-              <tr><td><code class="inline">core-service</code></td><td>3002</td><td>Prompts, datasets, agents, eval specs, templates, artifacts, webhooks, alerts, dashboard metrics, cost analytics, audit trail (via <code class="inline">libs/core-integration</code> + <code class="inline">libs/core-analytics</code>)</td></tr>
-              <tr><td><code class="inline">evaluation-service</code></td><td>3003</td><td>Runs, evaluation engine, policy engine, trace ingestion</td></tr>
-              <tr><td><code class="inline">python-worker</code></td><td>5055</td><td>FastAPI service for advanced LLM evaluations</td></tr>
-              <tr><td><code class="inline">frontend</code></td><td>4200</td><td>React 18 + Vite + Shadcn UI</td></tr>
+              <tr><td>Gateway</td><td>Request routing, CORS, JWT auth + RBAC enforcement, forwarding to downstream services</td></tr>
+              <tr><td>Auth Service</td><td>Users, organizations, JWT auth, RBAC</td></tr>
+              <tr><td>Core Service</td><td>Prompts, datasets, agents, eval specs, templates, artifacts, webhooks, alerts, dashboard metrics, cost analytics, audit trail (via <code class="inline">libs/core-integration</code> + <code class="inline">libs/core-analytics</code>)</td></tr>
+              <tr><td>Evaluation Service</td><td>Runs, evaluation engine, policy engine, trace ingestion</td></tr>
+              <tr><td>Evaluation Worker</td><td>FastAPI service for advanced LLM evaluations</td></tr>
+              <tr><td>Web App</td><td>React 18 + Vite + Shadcn UI</td></tr>
             </tbody>
           </table>
         </div>
@@ -691,7 +772,7 @@
         <figure class="diagram">
           <svg class="diagram-svg" viewBox="0 0 1190 720" role="img" aria-labelledby="seq-diagram-title seq-diagram-desc" xmlns="http://www.w3.org/2000/svg">
   <title id="seq-diagram-title">Eval run sequence, trigger to policy gate</title>
-  <desc id="seq-diagram-desc">A developer or CI job triggers a run via the CLI, SDK, or GitHub Action, which sends a JWT-authenticated POST to the API Gateway. The gateway forwards it to Evaluation Service, which runs the configured evaluators, then asks the Policy Engine to compare scores against thresholds. The verdict flows back through Evaluation Service and the gateway to the caller, which exits 0 on pass or warn, or 1 on fail.</desc>
+  <desc id="seq-diagram-desc">A developer or CI job triggers a run via the CLI, SDK, or GitHub Action, which sends a JWT-authenticated POST to the Gateway. The Gateway forwards it to Evaluation Service, which runs the configured evaluators, then asks the Policy Engine to compare scores against thresholds. The verdict flows back through Evaluation Service and the Gateway to the caller, which exits 0 on pass or warn, or 1 on fail.</desc>
   <defs>
   <marker id="seq-arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
     <path d="M0,0 L10,5 L0,10 z" fill="var(--text-muted)"/>
@@ -700,7 +781,7 @@
     <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
   </marker>
 </defs>
-  <rect x="15" y="20" width="190" height="58" rx="9" fill="var(--card-bg)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)" ><tspan x="110" y="54">Developer / CI</tspan></text><line x1="110" y1="78" x2="110" y2="660" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="3,4"/><circle cx="110" cy="660" r="3" fill="var(--border)"/><rect x="245" y="20" width="190" height="58" rx="9" fill="var(--card-bg)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)" ><tspan x="340" y="37">evalops CLI /</tspan><tspan x="340" y="53">SDK / Action</tspan></text><line x1="340" y1="78" x2="340" y2="660" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="3,4"/><circle cx="340" cy="660" r="3" fill="var(--border)"/><rect x="475" y="20" width="190" height="58" rx="9" fill="var(--card-bg)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)" ><tspan x="570" y="54">API Gateway</tspan></text><line x1="570" y1="78" x2="570" y2="660" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="3,4"/><circle cx="570" cy="660" r="3" fill="var(--border)"/><rect x="705" y="20" width="190" height="58" rx="9" fill="var(--card-bg)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)" ><tspan x="800" y="37">Evaluation</tspan><tspan x="800" y="53">Service</tspan></text><line x1="800" y1="78" x2="800" y2="660" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="3,4"/><circle cx="800" cy="660" r="3" fill="var(--border)"/><rect x="985" y="20" width="190" height="58" rx="9" fill="var(--card-bg)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)" ><tspan x="1080" y="54">Policy Engine</tspan></text><line x1="1080" y1="78" x2="1080" y2="660" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="3,4"/><circle cx="1080" cy="660" r="3" fill="var(--border)"/><line x1="110" y1="110" x2="340" y2="110" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#seq-arrowhead)"/><g>
+  <rect x="15" y="20" width="190" height="58" rx="9" fill="var(--card-bg)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)" ><tspan x="110" y="54">Developer / CI</tspan></text><line x1="110" y1="78" x2="110" y2="660" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="3,4"/><circle cx="110" cy="660" r="3" fill="var(--border)"/><rect x="245" y="20" width="190" height="58" rx="9" fill="var(--card-bg)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)" ><tspan x="340" y="37">evalops CLI /</tspan><tspan x="340" y="53">SDK / Action</tspan></text><line x1="340" y1="78" x2="340" y2="660" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="3,4"/><circle cx="340" cy="660" r="3" fill="var(--border)"/><rect x="475" y="20" width="190" height="58" rx="9" fill="var(--card-bg)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)" ><tspan x="570" y="54">Gateway</tspan></text><line x1="570" y1="78" x2="570" y2="660" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="3,4"/><circle cx="570" cy="660" r="3" fill="var(--border)"/><rect x="705" y="20" width="190" height="58" rx="9" fill="var(--card-bg)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)" ><tspan x="800" y="37">Evaluation</tspan><tspan x="800" y="53">Service</tspan></text><line x1="800" y1="78" x2="800" y2="660" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="3,4"/><circle cx="800" cy="660" r="3" fill="var(--border)"/><rect x="985" y="20" width="190" height="58" rx="9" fill="var(--card-bg)" stroke="var(--border)" stroke-width="1.5"/><text text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)" ><tspan x="1080" y="54">Policy Engine</tspan></text><line x1="1080" y1="78" x2="1080" y2="660" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="3,4"/><circle cx="1080" cy="660" r="3" fill="var(--border)"/><line x1="110" y1="110" x2="340" y2="110" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#seq-arrowhead)"/><g>
     <rect x="101.16" y="78.5" width="247.68" height="23" rx="7" fill="var(--bg)" stroke="var(--border)" stroke-width="1"/>
     <text x="225" y="93.52" text-anchor="middle" font-size="11" font-weight="600" fill="var(--text)" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">evalops eval run "spec-name" --watch</text>
   </g><line x1="340" y1="172" x2="570" y2="172" stroke="var(--text-muted)" stroke-width="1.75" marker-end="url(#seq-arrowhead)"/><g>
@@ -737,13 +818,13 @@
             <summary>Text description of this diagram</summary>
             <p>
               A developer or CI job triggers a run through the CLI, SDK, or GitHub Action. That
-              client sends a JWT-authenticated request to the API Gateway, which forwards it to
-              evaluation-service. Evaluation-service executes the configured evaluators (exact
+              client sends a JWT-authenticated request to the Gateway, which forwards it to the
+              Evaluation Service. The Evaluation Service executes the configured evaluators (exact
               match, rule-based, LLM-as-judge, RAG metrics, safety checks — some may run inside a
-              sandbox, via core-service's sandbox API, which in turn calls an external OpenSandbox
+              sandbox, via the Core Service's sandbox API, which in turn calls an external sandbox
               server for isolation), then hands the resulting scores to the policy
               engine, which compares them against configured pass/warn/fail thresholds. The verdict
-              flows back through the gateway to the caller, which exits with code 0 on pass/warn or
+              flows back through the Gateway to the caller, which exits with code 0 on pass/warn or
               1 on fail — enabling it to gate a CI pipeline.
             </p>
           </details>
@@ -1068,66 +1149,113 @@ def test_pipeline():
         <span class="eyebrow">Security model</span>
         <h2>Auth, isolation, and observability</h2>
 
+        <p class="section-lede">
+          Click any card for the full implementation detail.
+        </p>
+
         <div class="grid-2">
-          <div class="card">
+          <div class="card security-card" data-modal="modal-auth">
             <h3>Authentication <span class="badge">JWT</span></h3>
-            <p>
-              Every service registers <code class="inline">JwtAuthGuard</code> as a global
-              <code class="inline">APP_GUARD</code>. Routes that must stay public (login, register,
-              health checks, the GitHub webhook path) opt out with <code class="inline">@Public()</code>.
-              The gateway enforces this itself now (not just downstream), and also rejects
-              path-traversal sequences in proxied paths before forwarding.
-            </p>
-            <p>
-              <strong>Microsoft Entra ID (Azure AD) SSO is implemented</strong> via MSAL
-              (<code class="inline">apps/auth-service/src/app/auth/microsoft/</code>), reachable
-              through the gateway's <code class="inline">/api/auth/*</code> proxy as
-              <code class="inline">GET /api/auth/microsoft</code> (login redirect) and
-              <code class="inline">GET /api/auth/microsoft/callback</code> (issues a real JWT, sets
-              an httpOnly cookie). It's env-config-gated — disabled unless
-              <code class="inline">MICROSOFT_CLIENT_ID</code>, <code class="inline">MICROSOFT_CLIENT_SECRET</code>,
-              and <code class="inline">MICROSOFT_TENANT_ID</code> are set. SSO currently supports
-              Microsoft Entra ID only; other providers are not yet implemented.
-            </p>
+            <p>JWT enforced globally at every service, plus optional Microsoft Entra ID SSO.</p>
+            <button type="button" class="card-expand" data-modal="modal-auth">View details <span aria-hidden="true">→</span></button>
           </div>
-          <div class="card">
+          <div class="card security-card" data-modal="modal-authz">
             <h3>Authorization <span class="badge">RBAC</span></h3>
-            <p>
-              <code class="inline">RbacGuard</code> + <code class="inline">@Roles()</code> enforce role
-              checks. Role hierarchy: <code class="inline">admin &gt; org_admin &gt; member &gt; viewer</code>.
-            </p>
+            <p>Role-based access control enforces a strict role hierarchy on every request.</p>
+            <button type="button" class="card-expand" data-modal="modal-authz">View details <span aria-hidden="true">→</span></button>
           </div>
-          <div class="card">
+          <div class="card security-card" data-modal="modal-tenant">
             <h3>Multi-tenant isolation <span class="badge">RLS</span></h3>
-            <p>
-              <code class="inline">OrgContextInterceptor</code> sets the Postgres session variable
-              <code class="inline">app.org_id</code> on every request; Row Level Security policies
-              enforce org-scoped access at the database layer, e.g.:
-            </p>
-            <pre><code>CREATE POLICY tenant_isolation ON prompts
-  USING (organization_id = current_setting('app.org_id', true)::uuid);</code></pre>
+            <p>Postgres Row Level Security scopes every query to the requesting organization.</p>
+            <button type="button" class="card-expand" data-modal="modal-tenant">View details <span aria-hidden="true">→</span></button>
           </div>
-          <div class="card">
+          <div class="card security-card" data-modal="modal-s2s">
             <h3>Service-to-service auth</h3>
-            <p>
-              Internal routes (like the artifact-notify endpoint) are protected by
-              <code class="inline">ServiceAuthGuard</code>, checking an
-              <code class="inline">X-Service-Token</code> header against <code class="inline">SERVICE_SECRET</code>.
-            </p>
+            <p>Internal-only routes require a shared service token, separate from user JWTs.</p>
+            <button type="button" class="card-expand" data-modal="modal-s2s">View details <span aria-hidden="true">→</span></button>
           </div>
-          <div class="card">
+          <div class="card security-card" data-modal="modal-rate">
             <h3>Rate limiting</h3>
-            <p>
-              The trace ingestion endpoint is limited to 100 requests/user/minute via a Redis-backed
-              sliding window; it degrades gracefully if Redis is unavailable.
-            </p>
+            <p>Trace ingestion is capped per user via a Redis-backed sliding window.</p>
+            <button type="button" class="card-expand" data-modal="modal-rate">View details <span aria-hidden="true">→</span></button>
           </div>
-          <div class="card">
+          <div class="card security-card" data-modal="modal-audit">
             <h3>Audit trail &amp; structured logging</h3>
-            <p>
-              Every mutation is logged with user, org, and timestamp. Every request emits pino-backed
-              JSON with request/trace correlation, including requests rejected by a guard.
-            </p>
+            <p>Every mutation and request is logged with user, org, and trace correlation.</p>
+            <button type="button" class="card-expand" data-modal="modal-audit">View details <span aria-hidden="true">→</span></button>
+          </div>
+        </div>
+
+        <template id="modal-auth-content">
+          <h3 id="security-modal-title">Authentication <span class="badge">JWT</span></h3>
+          <p>
+            Every service registers <code class="inline">JwtAuthGuard</code> as a global
+            <code class="inline">APP_GUARD</code>. Routes that must stay public (login, register,
+            health checks, the GitHub webhook path) opt out with <code class="inline">@Public()</code>.
+            The gateway enforces this itself now (not just downstream), and also rejects
+            path-traversal sequences in proxied paths before forwarding.
+          </p>
+          <p>
+            <strong>Microsoft Entra ID (Azure AD) SSO is implemented</strong> via MSAL
+            (<code class="inline">apps/auth-service/src/app/auth/microsoft/</code>), reachable
+            through the gateway's <code class="inline">/api/auth/*</code> proxy as
+            <code class="inline">GET /api/auth/microsoft</code> (login redirect) and
+            <code class="inline">GET /api/auth/microsoft/callback</code> (issues a real JWT, sets
+            an httpOnly cookie). It's env-config-gated — disabled unless
+            <code class="inline">MICROSOFT_CLIENT_ID</code>, <code class="inline">MICROSOFT_CLIENT_SECRET</code>,
+            and <code class="inline">MICROSOFT_TENANT_ID</code> are set. SSO currently supports
+            Microsoft Entra ID only; other providers are not yet implemented.
+          </p>
+        </template>
+
+        <template id="modal-authz-content">
+          <h3 id="security-modal-title">Authorization <span class="badge">RBAC</span></h3>
+          <p>
+            <code class="inline">RbacGuard</code> + <code class="inline">@Roles()</code> enforce role
+            checks. Role hierarchy: <code class="inline">admin &gt; org_admin &gt; member &gt; viewer</code>.
+          </p>
+        </template>
+
+        <template id="modal-tenant-content">
+          <h3 id="security-modal-title">Multi-tenant isolation <span class="badge">RLS</span></h3>
+          <p>
+            <code class="inline">OrgContextInterceptor</code> sets the Postgres session variable
+            <code class="inline">app.org_id</code> on every request; Row Level Security policies
+            enforce org-scoped access at the database layer, e.g.:
+          </p>
+          <pre><code>CREATE POLICY tenant_isolation ON prompts
+  USING (organization_id = current_setting('app.org_id', true)::uuid);</code></pre>
+        </template>
+
+        <template id="modal-s2s-content">
+          <h3 id="security-modal-title">Service-to-service auth</h3>
+          <p>
+            Internal routes (like the artifact-notify endpoint) are protected by
+            <code class="inline">ServiceAuthGuard</code>, checking an
+            <code class="inline">X-Service-Token</code> header against <code class="inline">SERVICE_SECRET</code>.
+          </p>
+        </template>
+
+        <template id="modal-rate-content">
+          <h3 id="security-modal-title">Rate limiting</h3>
+          <p>
+            The trace ingestion endpoint is limited to 100 requests/user/minute via a Redis-backed
+            sliding window; it degrades gracefully if Redis is unavailable.
+          </p>
+        </template>
+
+        <template id="modal-audit-content">
+          <h3 id="security-modal-title">Audit trail &amp; structured logging</h3>
+          <p>
+            Every mutation is logged with user, org, and timestamp. Every request emits pino-backed
+            JSON with request/trace correlation, including requests rejected by a guard.
+          </p>
+        </template>
+
+        <div class="modal-overlay" id="security-modal-overlay" hidden>
+          <div class="modal" role="dialog" aria-modal="true" aria-labelledby="security-modal-title" tabindex="-1" id="security-modal">
+            <button type="button" class="modal-close" id="security-modal-close" aria-label="Close">&times;</button>
+            <div class="modal-body" id="security-modal-body"></div>
           </div>
         </div>
       </div>
@@ -1189,6 +1317,61 @@ def test_pipeline():
       } else {
         addCopyButtons();
       }
+    })();
+
+    (function () {
+      // Security card -> modal. Vanilla JS, zero dependencies. Opens on
+      // card/button click, closes on close-button/backdrop click/Escape,
+      // moves focus into the modal on open and back to the trigger on close.
+      var overlay = document.getElementById('security-modal-overlay');
+      if (!overlay) return;
+
+      var modal = document.getElementById('security-modal');
+      var body = document.getElementById('security-modal-body');
+      var closeBtn = document.getElementById('security-modal-close');
+      var lastTrigger = null;
+
+      function onKeydown(e) {
+        if (e.key === 'Escape' || e.keyCode === 27) closeModal();
+      }
+
+      function openModal(card, focusReturnEl) {
+        var modalId = card.getAttribute('data-modal');
+        var template = document.getElementById(modalId + '-content');
+        if (!template) return;
+
+        body.innerHTML = '';
+        body.appendChild(template.content.cloneNode(true));
+
+        lastTrigger = focusReturnEl;
+        overlay.hidden = false;
+        document.body.style.overflow = 'hidden';
+        modal.focus();
+        document.addEventListener('keydown', onKeydown);
+      }
+
+      function closeModal() {
+        overlay.hidden = true;
+        document.body.style.overflow = '';
+        document.removeEventListener('keydown', onKeydown);
+        if (lastTrigger) lastTrigger.focus();
+        lastTrigger = null;
+      }
+
+      document.querySelectorAll('.security-card').forEach(function (card) {
+        // Focus always returns to the accessible expand button, since the
+        // card container itself is not natively focusable.
+        var focusReturnEl = card.querySelector('.card-expand') || card;
+        card.addEventListener('click', function () {
+          openModal(card, focusReturnEl);
+        });
+      });
+
+      closeBtn.addEventListener('click', closeModal);
+
+      overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) closeModal();
+      });
     })();
   </script>
 </body>
