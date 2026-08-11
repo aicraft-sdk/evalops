@@ -11,6 +11,7 @@ import { EvaluatorsLLMService } from './evaluators-llm.service';
 export interface EvaluatorResult {
   score: number;
   cost: number;
+  reasoning?: string;
 }
 
 /** Loose config bag passed by callers for legacy evaluator methods. */
