@@ -35,7 +35,7 @@
     "self-eval": "npm run evalops -- eval run \"EvalOps Self-Evals\" --watch"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^2.0.16",
+    "@ai-sdk/anthropic": "^2.0.94",
     "@ai-sdk/google": "^2.0.14",
     "@ai-sdk/openai": "^2.0.30",
     "@ai-sdk/xai": "^2.0.18",
