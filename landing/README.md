@@ -57,5 +57,5 @@ The same instruction is repeated as an HTML comment directly above the `<form>` 
 
 - The "Back to GitHub repo" link in the footer is a placeholder (`#`) — fill in the real
   repo URL once/if this repository goes public.
-- The pitch content is based on the actual project description in `project-config.json`
-  and the root `README.md` — no unlisted/invented capabilities.
+- The pitch content is based on the actual project description in the root `README.md`
+  and `docs/ARCHITECTURE.md` — no unlisted/invented capabilities.
