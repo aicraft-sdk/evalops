@@ -45,6 +45,12 @@ docs/learnings/personal/
 # Claude Code local state
 .claude/
 
+# Craftflow session-memory state
+.craftflow/
+
+# Local scratch/build tmp
+/tmp/
+
 # Build artifacts and backups
 dist/
 *.backup

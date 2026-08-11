@@ -1,8 +1,8 @@
 {
-  "name": "@evalops/cli",
+  "name": "@ai-craft/evalops-cli",
   "version": "0.2.0",
   "description": "EvalOps CLI — evaluate LLM pipelines from the terminal",
-  "bin": { "evalops": "dist/main.js" },
-  "files": ["dist"],
-  "publishConfig": { "access": "public" }
+  "bin": { "evalops": "main.js" },
+  "files": ["main.js"],
+  "publishConfig": { "access": "restricted" }
 }
