@@ -186,4 +186,36 @@ describe('Admin RBAC routes are reachable by real ADMIN users (real HTTP + real 
 
     expect(res.status).toBe(403);
   });
+
+  it('lets a real ADMIN user set another user role to a valid UserRole enum value', async () => {
+    const token = mintToken(adminUserId, adminEmail);
+
+    const res = await request(app.getHttpServer())
+      .post(`/api/admin/users/${viewerUserId}/role`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ role: 'org_admin' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.role).toBe('org_admin');
+  });
+
+  it('rejects an invalid/garbage role string with 400, not a silent write (regression: no DTO validation)', async () => {
+    const token = mintToken(adminUserId, adminEmail);
+
+    const res = await request(app.getHttpServer())
+      .post(`/api/admin/users/${viewerUserId}/role`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ role: 'xyz' });
+
+    expect(res.status).toBe(400);
+
+    // Confirm the garbage value was NOT persisted despite the rejected request.
+    const usersRes = await request(app.getHttpServer())
+      .get('/api/admin/users')
+      .set('Authorization', `Bearer ${token}`);
+    const targetUser = usersRes.body.find(
+      (u: { id: string }) => u.id === viewerUserId,
+    );
+    expect(targetUser.role).not.toBe('xyz');
+  });
 });
