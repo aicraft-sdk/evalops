@@ -38,7 +38,7 @@ jobs:
         continue-on-error: false
 
       - name: Restore Nx cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .nx/cache
           key: nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
@@ -100,7 +100,7 @@ jobs:
         run: npm ci
 
       - name: Restore Nx cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .nx/cache
           key: nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
@@ -213,7 +213,7 @@ jobs:
         run: npm ci
 
       - name: Restore Nx cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .nx/cache
           key: nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
@@ -272,7 +272,7 @@ jobs:
         run: npm ci
 
       - name: Restore Nx cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .nx/cache
           key: nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
