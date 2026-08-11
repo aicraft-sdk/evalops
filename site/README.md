@@ -4,15 +4,14 @@ A single-page static documentation and showcase site for EvalOps ("SonarQube for
 the real service architecture, features, and getting-started/CLI/SDK usage — published via
 GitHub Pages.
 
-Plain HTML/CSS/vanilla JS, no build step, no framework, no bundler. Works via `file://` or any
-static file server. The only external dependency is the [Mermaid](https://mermaid.js.org/) CDN
-script, used to render the two architecture/workflow diagrams client-side (no build-time diagram
-generation).
+Plain HTML/CSS/vanilla JS, no build step, no framework, no bundler, no external dependencies.
+Works fully offline via `file://` or any static file server. The two architecture/workflow
+diagrams are hand-crafted inline SVG (no diagramming library, no client-side rendering step).
 
 ## What this is
 
-- `index.html` — the entire site: architecture (with a Mermaid topology diagram), an eval-run →
-  policy-gate workflow (Mermaid sequence diagram), features, getting-started, CLI reference,
+- `index.html` — the entire site: architecture (with a hand-drawn topology diagram), an eval-run
+  → policy-gate workflow (hand-drawn sequence diagram), features, getting-started, CLI reference,
   JS/Python SDK usage, GitHub Action usage, and the security model — all inline in one file.
 - `.nojekyll` — tells GitHub Pages not to run Jekyll processing over this directory.
 - Dark-mode aware via `prefers-color-scheme` (no JS toggle needed), same approach as
@@ -27,9 +26,8 @@ python3 -m http.server
 # then open http://localhost:8000
 ```
 
-Or open `site/index.html` directly in a browser — there's no build step. The Mermaid diagrams
-still need network access to load the CDN script (`cdn.jsdelivr.net`); everything else works
-fully offline via `file://`.
+Or open `site/index.html` directly in a browser — there's no build step and no network dependency
+of any kind.
 
 ## How the GitHub Pages deploy is wired
 
