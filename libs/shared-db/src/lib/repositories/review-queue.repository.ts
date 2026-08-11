@@ -69,18 +69,16 @@ export class ReviewQueueRepository {
 
   async update(
     id: string,
-    data: Record<string, unknown>,
+    data: Partial<typeof reviewQueueItems.$inferSelect>,
   ): Promise<typeof reviewQueueItems.$inferSelect | undefined> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const dataAny = data as any;
     const resolvedAt =
-      dataAny.status === 'fixed' ||
-      dataAny.status === 'dismissed' ||
-      dataAny.status === 'promoted'
+      data.status === 'fixed' ||
+      data.status === 'dismissed' ||
+      data.status === 'promoted'
         ? new Date()
         : undefined;
 
-    const updateData = {
+    const updateData: Partial<typeof reviewQueueItems.$inferSelect> = {
       ...data,
       updatedAt: new Date(),
       ...(resolvedAt !== undefined ? { resolvedAt } : {}),
@@ -88,8 +86,7 @@ export class ReviewQueueRepository {
 
     const [updated] = await db
       .update(reviewQueueItems)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .set(updateData as any)
+      .set(updateData)
       .where(eq(reviewQueueItems.id, id))
       .returning();
     return updated;

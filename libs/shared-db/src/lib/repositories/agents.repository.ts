@@ -3,43 +3,30 @@ import { db } from '../db';
 import { agents, agentVersions } from '../schema';
 import { eq, and, desc } from 'drizzle-orm';
 
-/**
- * Drizzle 0.39 $inferInsert only includes notNull-without-default columns.
- * Nullable and defaulted columns (description, active, tags, metadata,
- * modelProvider, modelName, id, createdAt, updatedAt) are excluded, which
- * makes $inferInsert too narrow for our service data.
- *
- * Use $inferSelect (all columns) with auto-generated fields made optional
- * as the parameter type. Drizzle silently ignores unknown or undefined
- * values at runtime, so extra fields are safe. The `as any` cast at the
- * .values() / .set() call site satisfies Drizzle's internal Exactly<> check.
- */
-type CreateAgentData = Omit<
-  typeof agents.$inferSelect,
-  'id' | 'createdAt' | 'updatedAt'
-> & {
-  id?: string;
-  createdAt?: Date;
-  updatedAt?: Date;
-};
-
+// Both create()/createVersion() (insert) and update() (partial update)
+// payloads below are built from $inferSelect, never $inferInsert:
+// drizzle's $inferInsert conditional types (NotNull/HasDefault branding)
+// silently collapse to only the required columns (dropping optional/
+// nullable columns from the type entirely, with or without Partial<>)
+// when compiled under strictNullChecks: false — which every backend
+// app's tsconfig uses today (only shared-db's own tsconfig sets
+// strict: true). $inferSelect does not depend on that branding and
+// stays fully typed either way. See
+// runs.repository.update-types.spec.ts for the update() reproduction;
+// confirmed directly on this file for create()/createVersion() too
+// (core-service failed to compile with $inferInsert here).
 type UpdateAgentData = Partial<typeof agents.$inferSelect>;
-
-type CreateAgentVersionData = Omit<
-  typeof agentVersions.$inferSelect,
-  'id' | 'createdAt'
-> & {
-  id?: string;
-  createdAt?: Date;
-};
 
 @Injectable()
 export class AgentsRepository {
   async create(
-    data: CreateAgentData,
+    data: Omit<typeof agents.$inferSelect, 'id' | 'createdAt' | 'updatedAt'> & {
+      id?: string;
+      createdAt?: Date;
+      updatedAt?: Date;
+    },
   ): Promise<typeof agents.$inferSelect> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const [agent] = await db.insert(agents).values([data as any]).returning();
+    const [agent] = await db.insert(agents).values([data]).returning();
     return agent;
   }
 
@@ -77,18 +64,19 @@ export class AgentsRepository {
   ): Promise<void> {
     await db
       .update(agents)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .set(data as any)
+      .set(data)
       .where(
         and(eq(agents.id, id), eq(agents.organizationId, organizationId)),
       );
   }
 
   async createVersion(
-    data: CreateAgentVersionData,
+    data: Omit<typeof agentVersions.$inferSelect, 'id' | 'createdAt'> & {
+      id?: string;
+      createdAt?: Date;
+    },
   ): Promise<void> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await db.insert(agentVersions).values([data as any]);
+    await db.insert(agentVersions).values([data]);
   }
 
   async findVersions(
