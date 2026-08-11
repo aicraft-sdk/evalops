@@ -220,13 +220,27 @@ export class RunsRepository {
   }
 
   // Policy Violations
+  //
+  // NOTE: uses $inferSelect (not $inferInsert) for the same reason documented
+  // on update() above — $inferInsert's NotNull/HasDefault branding silently
+  // collapses under strictNullChecks: false. Required columns (no default on
+  // policy_violations) are pinned via Pick<...>; the rest (evidence) stays
+  // optional via Partial<Omit<...>>.
   async createPolicyViolation(
-    data: Record<string, unknown>,
+    data: Pick<
+      typeof policyViolations.$inferSelect,
+      'runId' | 'policyId' | 'ruleIndex' | 'severity' | 'message' | 'organizationId'
+    > &
+      Partial<
+        Omit<
+          typeof policyViolations.$inferSelect,
+          'runId' | 'policyId' | 'ruleIndex' | 'severity' | 'message' | 'organizationId'
+        >
+      >,
   ): Promise<typeof policyViolations.$inferSelect> {
     const [violation] = await db
       .insert(policyViolations)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .values(data as any)
+      .values(data)
       .returning();
     return violation;
   }
