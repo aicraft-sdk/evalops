@@ -48,6 +48,9 @@ docs/learnings/personal/
 # Craftflow session-memory state
 .craftflow/
 
+# Local plans scratchpad
+docs/plans/
+
 # Local scratch/build tmp
 /tmp/
 
