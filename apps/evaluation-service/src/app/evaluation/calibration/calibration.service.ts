@@ -23,6 +23,11 @@ export class CalibrationService {
   ) {}
 
   async runCalibration(input: RunCalibrationInput) {
+    const threshold = input.judgeThreshold ?? DEFAULT_JUDGE_THRESHOLD;
+    if (threshold < 0 || threshold > 1) {
+      throw new BadRequestException('judgeThreshold must be between 0 and 1');
+    }
+
     const examples = await this.goldenSets.listExamples(input.goldenSetId);
     if (examples.length === 0) {
       throw new BadRequestException('Golden set has no examples to calibrate against');
@@ -33,7 +38,6 @@ export class CalibrationService {
       );
     }
 
-    const threshold = input.judgeThreshold ?? DEFAULT_JUDGE_THRESHOLD;
     const pairs: LabelPair[] = [];
     const disagreements: Array<{
       exampleId: string;
@@ -42,9 +46,39 @@ export class CalibrationService {
       judgeScore: number;
       judgeReasoning?: string;
     }> = [];
+    const excludedExamples: Array<{ exampleId: string; reason: string }> = [];
 
     for (const example of examples) {
-      const judgeResult = await this.scoreExample(example, input);
+      let judgeResult: { score: number; reasoning?: string };
+      try {
+        judgeResult = await this.scoreExample(example, input);
+      } catch (error: unknown) {
+        // An invalid judgeEvaluator is a caller/config error that applies
+        // identically to every example in this run (not a transient
+        // per-example judge failure) — fail the whole run fast instead of
+        // silently excluding every example one at a time.
+        if (error instanceof BadRequestException) {
+          throw error;
+        }
+        // Any other genuine thrown exception from a single example's judge
+        // call must not abort the whole calibration run — exclude just this
+        // example.
+        excludedExamples.push({
+          exampleId: example.id,
+          reason: `Judge call threw: ${error instanceof Error ? error.message : String(error)}`,
+        });
+        continue;
+      }
+
+      if (this.isLikelySwallowedFailure(judgeResult)) {
+        excludedExamples.push({
+          exampleId: example.id,
+          reason:
+            'Judge returned score:0 with no reasoning — likely a swallowed AI-provider failure (evaluators-llm.service.ts catch-all default), excluded from kappa rather than trusted as a genuine judge verdict',
+        });
+        continue;
+      }
+
       const judgeLabel = judgeResult.score >= threshold;
       pairs.push({ human: example.humanLabel, judge: judgeLabel });
       if (judgeLabel !== example.humanLabel) {
@@ -58,6 +92,12 @@ export class CalibrationService {
       }
     }
 
+    if (pairs.length === 0) {
+      throw new BadRequestException(
+        `All ${examples.length} example(s) failed to score (likely swallowed AI-provider failures) — cannot compute calibration from zero usable data points`,
+      );
+    }
+
     const kappaResult = computeCohensKappa(pairs);
 
     return this.goldenSets.createCalibrationRun({
@@ -67,13 +107,46 @@ export class CalibrationService {
       judgeThreshold: threshold,
       agreementRate: kappaResult.agreementRate,
       kappa: kappaResult.kappa,
-      isCalibrated: (kappaResult.kappa ?? 0) >= KAPPA_CALIBRATED_THRESHOLD,
+      // A run can't be "calibrated" if it isn't even statistically reliable.
+      isCalibrated:
+        kappaResult.isReliable && (kappaResult.kappa ?? 0) >= KAPPA_CALIBRATED_THRESHOLD,
       isReliable: kappaResult.isReliable,
       sampleCount: kappaResult.sampleCount,
-      disagreements,
+      // Stored as an object (not a bare array) so the excluded-examples count
+      // is visible on the persisted run without a new migration/column —
+      // `disagreements` is jsonb with no shape constraint at the DB level.
+      disagreements: {
+        items: disagreements,
+        excludedCount: excludedExamples.length,
+        excludedExamples,
+      },
       organizationId: input.organizationId,
       triggeredBy: input.triggeredBy,
     });
+  }
+
+  /**
+   * Heuristic detector for a swallowed AI-provider failure, NOT a proof.
+   *
+   * Every one of evaluators-llm.service.ts's 12 judge methods has an outer
+   * catch-all that, on any thrown error (provider timeout, malformed
+   * response, etc.), returns exactly `{ score: 0, cost: 0 }` — no
+   * `reasoning` field at all. A genuine JSON-parsed judge verdict of 0
+   * normally still carries a `reason` string (per the structured-output
+   * prompt instruction), so `score === 0 && reasoning === undefined` is the
+   * best available signal without modifying evaluators-llm.service.ts's 12
+   * catch blocks (out of scope for this fix).
+   *
+   * Known false positive: `evaluateContextPrecision`/`ContextRecall`/
+   * `ContextRelevancy` legitimately early-return `{ score: 0, cost: 0 }`
+   * (no `reasoning`) when `contexts` is empty — a real "no context supplied"
+   * result, not a failure. Those examples will also be excluded here. This
+   * is an accepted limitation of a per-example heuristic that cannot see
+   * *why* a zero came back; it trades a rare false exclusion for closing the
+   * far larger risk of a swallowed failure silently corrupting kappa.
+   */
+  private isLikelySwallowedFailure(result: { score: number; reasoning?: string }): boolean {
+    return result.score === 0 && result.reasoning === undefined;
   }
 
   private async scoreExample(

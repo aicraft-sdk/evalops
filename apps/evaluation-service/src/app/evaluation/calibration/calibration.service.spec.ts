@@ -129,8 +129,8 @@ describe('CalibrationService.runCalibration', () => {
     });
 
     const call = goldenSetsRepo.createCalibrationRun.mock.calls[0][0];
-    expect(call.disagreements).toHaveLength(1);
-    expect(call.disagreements[0]).toEqual(
+    expect(call.disagreements.items).toHaveLength(1);
+    expect(call.disagreements.items[0]).toEqual(
       expect.objectContaining({
         exampleId: 'e4',
         humanLabel: true,
@@ -139,6 +139,7 @@ describe('CalibrationService.runCalibration', () => {
         judgeReasoning: 'disagrees',
       }),
     );
+    expect(call.disagreements.excludedCount).toBe(0);
     expect(evaluators.evaluateFactuality).toHaveBeenCalledTimes(5);
     expect(call.isReliable).toBe(true);
     expect(call.sampleCount).toBe(5);
@@ -155,6 +156,123 @@ describe('CalibrationService.runCalibration', () => {
         triggeredBy: 'user-1',
       }),
     ).rejects.toThrow(/unsupported judgeEvaluator/i);
+  });
+
+  it('excludes an example whose judge result looks like a swallowed provider failure (score:0, no reasoning) from kappa and persists the excluded count', async () => {
+    goldenSetsRepo.listExamples.mockResolvedValue(fiveExamplesIncludingOneBad());
+    evaluators.evaluateFactuality
+      .mockResolvedValueOnce({ score: 0.9, reasoning: 'good', cost: 0 }) // e1 human=true, judge=true -> agree
+      .mockResolvedValueOnce({ score: 0.2, reasoning: 'bad match', cost: 0 }) // e2 human=false, judge=false -> agree
+      .mockResolvedValueOnce({ score: 0, cost: 0 }) // e3 -- swallowed-failure signature, must be excluded
+      .mockResolvedValueOnce({ score: 0.1, reasoning: 'disagrees', cost: 0 }) // e4 human=true, judge=false -> DISAGREE
+      .mockResolvedValueOnce({ score: 0.4, reasoning: 'good', cost: 0 }); // e5 human=false, judge=false -> agree
+
+    await service.runCalibration({
+      goldenSetId: 'gs1',
+      judgeEvaluator: 'factuality',
+      organizationId: 'org-1',
+      triggeredBy: 'user-1',
+    });
+
+    const call = goldenSetsRepo.createCalibrationRun.mock.calls[0][0];
+    // e3 excluded -> only 4 usable pairs
+    expect(call.sampleCount).toBe(4);
+    expect(call.disagreements.excludedCount).toBe(1);
+    expect(call.disagreements.excludedExamples).toEqual([
+      expect.objectContaining({ exampleId: 'e3' }),
+    ]);
+    expect(call.disagreements.items).toHaveLength(1);
+    expect(call.disagreements.items[0]).toEqual(
+      expect.objectContaining({ exampleId: 'e4', humanLabel: true, judgeLabel: false }),
+    );
+  });
+
+  it('throws instead of persisting a run when ALL examples look like swallowed failures (zero usable data points)', async () => {
+    goldenSetsRepo.listExamples.mockResolvedValue(threeExamplesIncludingOneBad());
+    evaluators.evaluateFactuality.mockResolvedValue({ score: 0, cost: 0 });
+
+    await expect(
+      service.runCalibration({
+        goldenSetId: 'gs1',
+        judgeEvaluator: 'factuality',
+        organizationId: 'org-1',
+        triggeredBy: 'user-1',
+      }),
+    ).rejects.toThrow(/all.*failed to score/i);
+    expect(goldenSetsRepo.createCalibrationRun).not.toHaveBeenCalled();
+  });
+
+  it('excludes an example when scoreExample throws, without aborting the rest of the run', async () => {
+    goldenSetsRepo.listExamples.mockResolvedValue(fiveExamplesIncludingOneBad());
+    evaluators.evaluateFactuality
+      .mockResolvedValueOnce({ score: 0.9, reasoning: 'good', cost: 0 }) // e1 agree
+      .mockResolvedValueOnce({ score: 0.2, reasoning: 'bad match', cost: 0 }) // e2 agree
+      .mockRejectedValueOnce(new Error('provider exploded')) // e3 -- thrown, must be excluded
+      .mockResolvedValueOnce({ score: 0.9, reasoning: 'good', cost: 0 }) // e4 agree
+      .mockResolvedValueOnce({ score: 0.4, reasoning: 'good', cost: 0 }); // e5 agree
+
+    await service.runCalibration({
+      goldenSetId: 'gs1',
+      judgeEvaluator: 'factuality',
+      organizationId: 'org-1',
+      triggeredBy: 'user-1',
+    });
+
+    const call = goldenSetsRepo.createCalibrationRun.mock.calls[0][0];
+    expect(call.sampleCount).toBe(4);
+    expect(call.disagreements.excludedCount).toBe(1);
+    expect(call.disagreements.excludedExamples[0].exampleId).toBe('e3');
+  });
+
+  it('rejects a judgeThreshold below 0', async () => {
+    goldenSetsRepo.listExamples.mockResolvedValue(threeExamplesIncludingOneBad());
+
+    await expect(
+      service.runCalibration({
+        goldenSetId: 'gs1',
+        judgeEvaluator: 'factuality',
+        judgeThreshold: -0.1,
+        organizationId: 'org-1',
+        triggeredBy: 'user-1',
+      }),
+    ).rejects.toThrow(/judgeThreshold/i);
+    expect(goldenSetsRepo.createCalibrationRun).not.toHaveBeenCalled();
+  });
+
+  it('rejects a judgeThreshold above 1', async () => {
+    goldenSetsRepo.listExamples.mockResolvedValue(threeExamplesIncludingOneBad());
+
+    await expect(
+      service.runCalibration({
+        goldenSetId: 'gs1',
+        judgeEvaluator: 'factuality',
+        judgeThreshold: 1.1,
+        organizationId: 'org-1',
+        triggeredBy: 'user-1',
+      }),
+    ).rejects.toThrow(/judgeThreshold/i);
+    expect(goldenSetsRepo.createCalibrationRun).not.toHaveBeenCalled();
+  });
+
+  it('sets isCalibrated:false whenever isReliable:false, even if raw kappa would be >= 0.8', async () => {
+    goldenSetsRepo.listExamples.mockResolvedValue(threeExamplesIncludingOneBad());
+    // All 3 examples agree perfectly with human labels -> kappa would compute to 1.0,
+    // but sampleCount (3) < MIN_RELIABLE_SAMPLES (5) -> isReliable:false.
+    evaluators.evaluateFactuality
+      .mockResolvedValueOnce({ score: 0.9, reasoning: 'good', cost: 0 }) // e1 human=true
+      .mockResolvedValueOnce({ score: 0.1, reasoning: 'bad', cost: 0 }) // e2 human=false
+      .mockResolvedValueOnce({ score: 0.9, reasoning: 'good', cost: 0 }); // e3 human=true
+
+    await service.runCalibration({
+      goldenSetId: 'gs1',
+      judgeEvaluator: 'factuality',
+      organizationId: 'org-1',
+      triggeredBy: 'user-1',
+    });
+
+    const call = goldenSetsRepo.createCalibrationRun.mock.calls[0][0];
+    expect(call.isReliable).toBe(false);
+    expect(call.isCalibrated).toBe(false);
   });
 });
 
