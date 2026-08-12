@@ -29,6 +29,8 @@ import Agents from "@/pages/agents";
 import AgentDetail from "@/pages/agent-detail";
 import Simulations from "@/pages/simulations";
 import ReviewQueue from "@/pages/review-queue";
+import GoldenSets from "@/pages/golden-sets";
+import GoldenSetDetail from "@/pages/golden-set-detail";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -48,6 +50,8 @@ function Router() {
           <Route path="/runs" component={Runs} />
           <Route path="/runs/:runId" component={RunDetails} />
           <Route path="/policies" component={Policies} />
+          <Route path="/golden-sets" component={GoldenSets} />
+          <Route path="/golden-sets/:id" component={GoldenSetDetail} />
           <Route path="/audit-trail" component={AuditTrail} />
           <Route path="/templates" component={Templates} />
           <Route path="/templates/builder" component={Templates} />
