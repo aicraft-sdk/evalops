@@ -180,6 +180,37 @@ describe('GoldenSetsController (e2e-style, mocked services)', () => {
         currentUser.id,
       );
     });
+
+    it('accepts a string input value (201) - matches the Add Example form, which always sends input as a plain string', async () => {
+      goldenSetsService.addExample.mockResolvedValue({
+        id: 'ex2',
+        goldenSetId: 'gs1',
+        input: 'what is the capital of France?',
+        output: 'the answer',
+        humanLabel: true,
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/golden-sets/gs1/examples')
+        .send({
+          input: 'what is the capital of France?',
+          output: 'the answer',
+          humanLabel: true,
+        })
+        .expect(201);
+
+      expect(res.body.id).toBe('ex2');
+      expect(goldenSetsService.addExample).toHaveBeenCalledWith(
+        'gs1',
+        {
+          input: 'what is the capital of France?',
+          output: 'the answer',
+          humanLabel: true,
+        },
+        currentUser.organizationId,
+        currentUser.id,
+      );
+    });
   });
 
   describe('GET /golden-sets/:id/examples', () => {

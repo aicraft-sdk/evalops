@@ -109,4 +109,29 @@ describe('GoldenSetDetail Page', () => {
     expect(screen.queryByTestId('text-kappa')).not.toBeInTheDocument()
     expect(screen.getByTestId('badge-calibration-status')).toHaveTextContent('Uncalibrated')
   })
+
+  it('shows a "not found" state when the requested id is not in the resolved golden-sets list', async () => {
+    server.use(
+      http.get('/api/evaluation/golden-sets', () => HttpResponse.json([])),
+    )
+
+    renderDetail()
+
+    expect(await screen.findByTestId('text-golden-set-not-found')).toHaveTextContent(
+      'Golden set not found',
+    )
+    expect(screen.queryByTestId('text-golden-set-detail-title')).not.toBeInTheDocument()
+  })
+
+  it('shows a "not found" state when the golden-sets list query errors', async () => {
+    server.use(
+      http.get('/api/evaluation/golden-sets', () => new HttpResponse(null, { status: 500 })),
+    )
+
+    renderDetail()
+
+    expect(await screen.findByTestId('text-golden-set-not-found')).toHaveTextContent(
+      'Golden set not found',
+    )
+  })
 })

@@ -21,9 +21,11 @@ export class CreateGoldenSetDto {
 }
 
 export class AddGoldenSetExampleDto {
+  // Loosely typed to match `output`/`expected` below: the frontend Add
+  // Example form always sends this as a plain string, and the persisted
+  // column is a jsonb blob with no fixed shape - see project memory.
   @IsOptional()
-  @IsObject()
-  input?: Record<string, unknown>;
+  input?: unknown;
 
   @IsNotEmpty()
   output!: unknown;

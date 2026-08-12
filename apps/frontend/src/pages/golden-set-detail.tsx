@@ -124,11 +124,20 @@ export default function GoldenSetDetail() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: goldenSets } = useQuery<GoldenSet[]>({
+  const {
+    data: goldenSets,
+    isLoading: goldenSetsLoading,
+    isError: goldenSetsErrored,
+  } = useQuery<GoldenSet[]>({
     queryKey: ["/api/golden-sets"],
     enabled: isAuthenticated,
   });
   const goldenSet = goldenSets?.find((g) => g.id === id);
+  // Only judge "not found" once the list query has actually settled
+  // (not still loading/disabled) - otherwise this would flash "not found"
+  // on every initial render before the list has resolved.
+  const goldenSetNotFound =
+    !goldenSetsLoading && (goldenSetsErrored || (goldenSets !== undefined && !goldenSet));
 
   const { data: examples, isLoading: examplesLoading } = useQuery<GoldenSetExample[]>({
     queryKey: [`/api/golden-sets/${id}/examples`],
@@ -210,6 +219,27 @@ export default function GoldenSetDetail() {
 
   if (isLoading) {
     return <div className="min-h-screen bg-background" />;
+  }
+
+  if (goldenSetNotFound) {
+    return (
+      <div className="flex h-screen bg-background">
+        <Sidebar />
+        <main className="flex-1 overflow-auto">
+          <header className="bg-card border-b border-border px-6 py-4 sticky top-0 z-10">
+            <Link href="/golden-sets" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-2">
+              <ArrowLeft className="w-4 h-4" />
+              Golden Sets
+            </Link>
+          </header>
+          <div className="p-6">
+            <p className="text-muted-foreground" data-testid="text-golden-set-not-found">
+              Golden set not found
+            </p>
+          </div>
+        </main>
+      </div>
+    );
   }
 
   return (
