@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   GoldenSetsRepository,
   GoldenSet,
@@ -134,6 +134,7 @@ export class GoldenSetsService {
     id: string,
     organizationId: string,
   ): Promise<GoldenSetExampleResponse[]> {
+    await this.getOwnedGoldenSet(id, organizationId);
     const rows = await this.repo.listExamples(id);
     return rows.map(toGoldenSetExampleResponse);
   }
@@ -144,6 +145,7 @@ export class GoldenSetsService {
     organizationId: string,
     createdBy: string,
   ): Promise<GoldenSetExampleResponse> {
+    await this.getOwnedGoldenSet(id, organizationId);
     const row = await this.repo.addExample({
       goldenSetId: id,
       input: dto.input ?? null,
@@ -163,14 +165,41 @@ export class GoldenSetsService {
     id: string,
     organizationId: string,
   ): Promise<CalibrationRunResponse[]> {
+    await this.getOwnedGoldenSet(id, organizationId);
     const rows = await this.repo.listCalibrationRuns(id);
     return rows.map(toCalibrationRunResponse);
   }
 
+  /**
+   * Used by GoldenSetsController before delegating to CalibrationService,
+   * which does not itself org-scope its goldenSetId lookup (it reads
+   * examples straight off the repository with no organizationId filter) —
+   * mirrors this repo's documented cross-tenant IDOR precedent on
+   * POST /policies/evaluate/:runId (see project memory), closed here instead
+   * of repeated.
+   */
   async verifyGoldenSetOwnership(
     id: string,
     organizationId: string,
   ): Promise<void> {
-    await this.repo.findGoldenSetById(id);
+    await this.getOwnedGoldenSet(id, organizationId);
+  }
+
+  /**
+   * Fetches the parent golden set and verifies it belongs to
+   * organizationId, throwing NotFoundException (never leaking whether a
+   * differently-owned row exists) on any mismatch or missing row. Every
+   * read/write scoped by a golden-set :id must call this before touching the
+   * repository — do NOT trust :id alone.
+   */
+  private async getOwnedGoldenSet(
+    id: string,
+    organizationId: string,
+  ): Promise<GoldenSet> {
+    const goldenSet = await this.repo.findGoldenSetById(id);
+    if (!goldenSet || goldenSet.organizationId !== organizationId) {
+      throw new NotFoundException(`Golden set ${id} not found`);
+    }
+    return goldenSet;
   }
 }
