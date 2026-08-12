@@ -1,6 +1,6 @@
 import { render, type RenderOptions } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ThemeProvider } from 'next-themes'
+import { ThemeProvider } from '../components/layout/theme-provider'
 import { Router } from 'wouter'
 import { ReactElement } from 'react'
 
@@ -17,7 +17,7 @@ const AllTheProviders = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider attribute="class" defaultTheme="light">
+      <ThemeProvider>
         <Router>
           {children}
         </Router>
