@@ -443,4 +443,98 @@ describe('EvaluatorsLLMService.parseJudgeResult — REM-FIX hardening', () => {
       expect.stringContaining('out of expected range'),
     );
   });
+
+  it('rejects a null score field instead of silently coercing it to 0', async () => {
+    // Without the fix, Number(null) === 0, which is not NaN, so a judge
+    // signaling refusal via score:null becomes a confident "perfect 0".
+    aiProvider.generateResponse.mockResolvedValue({
+      response: '{"score": null, "reason": "refusal"}',
+      cost: 0.001,
+    });
+
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+
+    expect(result.score).not.toBe(0);
+    expect(result.score).toBeCloseTo(0.7); // evaluateFactuality's fallback default
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('not coercible to a number'),
+    );
+  });
+
+  it('rejects a boolean true score field instead of silently coercing it to 0.01', async () => {
+    // Without the fix, Number(true) === 1, so a boolean gets silently
+    // interpreted as a real judge score.
+    aiProvider.generateResponse.mockResolvedValue({
+      response: '{"score": true, "reason": "test"}',
+      cost: 0.001,
+    });
+
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+
+    expect(result.score).not.toBeCloseTo(0.01, 5);
+    expect(result.score).toBeCloseTo(0.7);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('not coercible to a number'),
+    );
+  });
+
+  it('rejects a boolean false score field instead of silently coercing it to 0', async () => {
+    aiProvider.generateResponse.mockResolvedValue({
+      response: '{"score": false, "reason": "test"}',
+      cost: 0.001,
+    });
+
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+
+    expect(result.score).not.toBe(0);
+    expect(result.score).toBeCloseTo(0.7);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('not coercible to a number'),
+    );
+  });
+
+  it('rejects an array-typed score field instead of silently coercing it to 0', async () => {
+    aiProvider.generateResponse.mockResolvedValue({
+      response: '{"score": [], "reason": "test"}',
+      cost: 0.001,
+    });
+
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+
+    expect(result.score).not.toBe(0);
+    expect(result.score).toBeCloseTo(0.7);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('not coercible to a number'),
+    );
+  });
+
+  it('extracts and parses JSON correctly when the reason string contains an unmatched opening brace', async () => {
+    // Without string-aware bracket counting, the literal "{" inside the
+    // reason string never lets depth return to 0, so no candidate is found
+    // and reasoning is silently lost to the digit-regex fallback.
+    aiProvider.generateResponse.mockResolvedValue({
+      response: '{"score":85,"reason":"missing brace in code like if (x) {"}',
+      cost: 0.001,
+    });
+
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+
+    expect(result.score).toBeCloseTo(0.85);
+    expect(result.reasoning).toBe('missing brace in code like if (x) {');
+  });
+
+  it('extracts and parses JSON correctly when the reason string contains an unmatched closing brace', async () => {
+    // Without string-aware bracket counting, the literal "}" inside the
+    // reason string truncates the candidate mid-string, JSON.parse throws,
+    // and reasoning is silently lost to the digit-regex fallback.
+    aiProvider.generateResponse.mockResolvedValue({
+      response: '{"score":85,"reason":"unexpected } in the middle"}',
+      cost: 0.001,
+    });
+
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+
+    expect(result.score).toBeCloseTo(0.85);
+    expect(result.reasoning).toBe('unexpected } in the middle');
+  });
 });

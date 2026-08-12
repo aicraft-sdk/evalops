@@ -565,13 +565,34 @@ Respond with a JSON object: {"score": <0-100 integer>, "reason": "<one sentence>
    * Finds non-overlapping top-level `{...}` substrings via bracket counting
    * (not a greedy first-`{`-to-last-`}` regex, which would merge unrelated
    * brace groups into one unparseable blob).
+   *
+   * String-aware: `{`/`}` characters inside a JSON string value (e.g. a
+   * `reason` sentence containing literal braces) do not affect depth,
+   * matching the JSON spec's rule that such characters need no escaping
+   * inside strings.
    */
   private extractJsonCandidates(text: string): string[] {
     const candidates: string[] = [];
     let depth = 0;
     let start = -1;
+    let inString = false;
+    let escaped = false;
     for (let i = 0; i < text.length; i++) {
       const ch = text[i];
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (ch === '\\') {
+          escaped = true;
+        } else if (ch === '"') {
+          inString = false;
+        }
+        continue;
+      }
+      if (ch === '"') {
+        inString = true;
+        continue;
+      }
       if (ch === '{') {
         if (depth === 0) {
           start = i;
@@ -602,15 +623,35 @@ Respond with a JSON object: {"score": <0-100 integer>, "reason": "<one sentence>
       let parsed: { score?: unknown; reason?: unknown };
       try {
         parsed = JSON.parse(candidates[i]);
-      } catch {
+      } catch (error: unknown) {
+        this.logger.warn(
+          `Judge response candidate is not valid JSON; trying next candidate: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
         continue;
       }
       if (!parsed || typeof parsed !== 'object' || !('score' in parsed)) {
+        this.logger.warn(
+          'Judge response JSON candidate is missing a "score" field; trying next candidate.',
+        );
         continue;
       }
 
-      const numericScore = Number(parsed.score);
-      if (Number.isNaN(numericScore)) {
+      // Explicit type check BEFORE coercing: Number() is too permissive and
+      // silently accepts null (-> 0), booleans (-> 1/0), and arrays (-> 0/element),
+      // none of which are NaN — recreating exactly the silent-mis-scoring
+      // defect this parser exists to prevent. Only a genuine number, or a
+      // string that looks like a number, is coercible.
+      let numericScore: number;
+      if (typeof parsed.score === 'number' && Number.isFinite(parsed.score)) {
+        numericScore = parsed.score;
+      } else if (
+        typeof parsed.score === 'string' &&
+        /^-?\d+(\.\d+)?$/.test(parsed.score.trim())
+      ) {
+        numericScore = Number(parsed.score.trim());
+      } else {
         this.logger.warn(
           `Judge score "${String(parsed.score)}" is present but not coercible to a number; falling back.`,
         );
