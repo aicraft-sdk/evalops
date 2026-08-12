@@ -17,6 +17,7 @@ import { OtlpModule } from './otlp/otlp.module';
 import { TracesModule } from './traces/traces.module';
 import { MigrationModule } from './migration/migration.module';
 import { SandboxExecutionModule } from './sandbox-execution/sandbox-execution.module';
+import { GoldenSetsModule } from './golden-sets/golden-sets.module';
 import { JwtAuthGuard } from '@evalops/shared-auth';
 import {
   LoggingInterceptor,
@@ -52,6 +53,7 @@ import { JwtStrategy } from './auth/jwt.strategy';
     TracesModule,
     MigrationModule,
     SandboxExecutionModule,
+    GoldenSetsModule,
   ],
   controllers: [AppController, HealthController],
   providers: [
