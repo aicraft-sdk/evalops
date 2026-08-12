@@ -5,6 +5,7 @@ import {
   IsBoolean,
   IsObject,
   IsNumber,
+  IsArray,
   Min,
   Max,
 } from 'class-validator';
@@ -31,6 +32,8 @@ export class AddGoldenSetExampleDto {
   expected?: unknown;
 
   @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   context?: string[];
 
   @IsBoolean()

@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { Logger } from '@nestjs/common';
 import { GoldenSetsRepository, GoldenSetExample } from '@evalops/shared-db';
 import { EvaluatorsService } from '../evaluators/evaluators.service';
 import { CalibrationService } from './calibration.service';
@@ -222,6 +223,38 @@ describe('CalibrationService.runCalibration', () => {
     expect(call.sampleCount).toBe(4);
     expect(call.disagreements.excludedCount).toBe(1);
     expect(call.disagreements.excludedExamples[0].exampleId).toBe('e3');
+  });
+
+  it('stores a generic, non-leaking reason (not the raw error message) when scoreExample throws, and logs the real error server-side', async () => {
+    goldenSetsRepo.listExamples.mockResolvedValue(fiveExamplesIncludingOneBad());
+    const loggerErrorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const rawError = new Error('secret internal detail: api key sk-XXXX rejected by provider.internal.example.com');
+    evaluators.evaluateFactuality
+      .mockResolvedValueOnce({ score: 0.9, reasoning: 'good', cost: 0 }) // e1 agree
+      .mockResolvedValueOnce({ score: 0.2, reasoning: 'bad match', cost: 0 }) // e2 agree
+      .mockRejectedValueOnce(rawError) // e3 -- thrown, must be excluded
+      .mockResolvedValueOnce({ score: 0.9, reasoning: 'good', cost: 0 }) // e4 agree
+      .mockResolvedValueOnce({ score: 0.4, reasoning: 'good', cost: 0 }); // e5 agree
+
+    await service.runCalibration({
+      goldenSetId: 'gs1',
+      judgeEvaluator: 'factuality',
+      organizationId: 'org-1',
+      triggeredBy: 'user-1',
+    });
+
+    const call = goldenSetsRepo.createCalibrationRun.mock.calls[0][0];
+    const excludedExample = call.disagreements.excludedExamples[0];
+    expect(excludedExample.exampleId).toBe('e3');
+    expect(excludedExample.reason).toBe('Judge call failed unexpectedly');
+    expect(excludedExample.reason).not.toContain('secret internal detail');
+    expect(excludedExample.reason).not.toContain('sk-XXXX');
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('e3'),
+      rawError,
+    );
+
+    loggerErrorSpy.mockRestore();
   });
 
   it('rejects a judgeThreshold below 0', async () => {

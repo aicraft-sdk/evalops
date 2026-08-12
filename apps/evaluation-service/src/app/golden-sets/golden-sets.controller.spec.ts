@@ -143,6 +143,22 @@ describe('GoldenSetsController (e2e-style, mocked services)', () => {
       expect(goldenSetsService.addExample).not.toHaveBeenCalled();
     });
 
+    it('rejects a non-array context field (400)', async () => {
+      await request(app.getHttpServer())
+        .post('/golden-sets/gs1/examples')
+        .send({ output: 'the answer', humanLabel: true, context: 'not-an-array' })
+        .expect(400);
+      expect(goldenSetsService.addExample).not.toHaveBeenCalled();
+    });
+
+    it('rejects a context array with non-string elements (400)', async () => {
+      await request(app.getHttpServer())
+        .post('/golden-sets/gs1/examples')
+        .send({ output: 'the answer', humanLabel: true, context: [1, 2, 3] })
+        .expect(400);
+      expect(goldenSetsService.addExample).not.toHaveBeenCalled();
+    });
+
     it('accepts a valid body (201)', async () => {
       goldenSetsService.addExample.mockResolvedValue({
         id: 'ex1',

@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { GoldenSetsRepository, GoldenSetExample } from '@evalops/shared-db';
 import { EvaluatorsService } from '../evaluators/evaluators.service';
 import { computeCohensKappa, LabelPair } from './cohens-kappa';
@@ -17,6 +17,8 @@ const KAPPA_CALIBRATED_THRESHOLD = 0.8;
 
 @Injectable()
 export class CalibrationService {
+  private readonly logger = new Logger(CalibrationService.name);
+
   constructor(
     private readonly goldenSets: GoldenSetsRepository,
     private readonly evaluators: EvaluatorsService,
@@ -76,10 +78,18 @@ export class CalibrationService {
         }
         // Any other genuine thrown exception from a single example's judge
         // call must not abort the whole calibration run — exclude just this
-        // example.
+        // example. The raw error message may contain provider-internal
+        // detail (endpoints, keys, stack fragments) and must never reach
+        // `excludedExamples`, which persists into `disagreements` and is
+        // returned verbatim via GET /golden-sets/:id/calibration-runs — log
+        // it server-side instead and store a generic reason.
+        this.logger.error(
+          `Judge call threw for example ${example.id} (goldenSetId=${input.goldenSetId}, judgeEvaluator=${input.judgeEvaluator})`,
+          error instanceof Error ? error : new Error(String(error)),
+        );
         excludedExamples.push({
           exampleId: example.id,
-          reason: `Judge call threw: ${error instanceof Error ? error.message : String(error)}`,
+          reason: 'Judge call failed unexpectedly',
         });
         continue;
       }
