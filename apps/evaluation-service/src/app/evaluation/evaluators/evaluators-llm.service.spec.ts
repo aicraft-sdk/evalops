@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { Logger } from '@nestjs/common';
 import { AIProviderService } from '../../ai-provider/ai-provider.service';
 import { EvaluatorsLLMService } from './evaluators-llm.service';
 
@@ -344,5 +345,102 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
       expect(renderedPrompt).toContain('Respond with a JSON object');
       expect(renderedPrompt).toContain('Rate this response: resp vs expected');
     });
+  });
+});
+
+describe('EvaluatorsLLMService.parseJudgeResult — REM-FIX hardening', () => {
+  let service: EvaluatorsLLMService;
+  let aiProvider: { generateResponse: jest.Mock };
+  let warnSpy: jest.SpyInstance;
+
+  beforeEach(async () => {
+    aiProvider = { generateResponse: jest.fn() };
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        EvaluatorsLLMService,
+        { provide: AIProviderService, useValue: aiProvider },
+      ],
+    }).compile();
+    service = moduleRef.get(EvaluatorsLLMService);
+    warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  it('coerces a string-typed score field to a number instead of falling through to the raw-text digit regex', async () => {
+    // Without the fix, typeof parsed.score === 'number' is false for "85",
+    // so the code silently falls through to matching the "2" in "Attempt 2:".
+    aiProvider.generateResponse.mockResolvedValue({
+      response:
+        'Attempt 2: {"score":"85","reason":"Mostly accurate, minor omission"}',
+      cost: 0.001,
+    });
+
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+
+    expect(result.score).toBeCloseTo(0.85);
+    expect(result.reasoning).toBe('Mostly accurate, minor omission');
+  });
+
+  it('parses the terminal JSON verdict object, not a merged blob spanning an earlier unrelated {...} example', async () => {
+    // Without the fix, /\{[\s\S]*\}/ spans from the first { to the LAST },
+    // merging both objects into unparseable text, then the raw-text digit
+    // regex grabs "12" from the first (unrelated) example object.
+    aiProvider.generateResponse.mockResolvedValue({
+      response:
+        'Example format: {"score": 12, "note": "schema example"} Actual verdict: {"score": 88, "reason": "Well cited and accurate"}',
+      cost: 0.001,
+    });
+
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+
+    expect(result.score).toBeCloseTo(0.88);
+    expect(result.reasoning).toBe('Well cited and accurate');
+  });
+
+  it('preserves reasoning when a well-formed JSON object is followed by trailing prose', async () => {
+    // Without the fix, startsWith('{') treats the WHOLE trimmed string
+    // (including trailing prose) as the JSON candidate, so JSON.parse throws
+    // and reasoning is silently lost via the fallback chain.
+    aiProvider.generateResponse.mockResolvedValue({
+      response:
+        '{"score":85,"reason":"Thorough and correct"} Let me know if you need more detail.',
+      cost: 0.001,
+    });
+
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+
+    expect(result.score).toBeCloseTo(0.85);
+    expect(result.reasoning).toBe('Thorough and correct');
+  });
+
+  it('clamps an out-of-range high score to 1 and logs a warning', async () => {
+    aiProvider.generateResponse.mockResolvedValue({
+      response: '{"score": 9999, "reason": "test"}',
+      cost: 0.001,
+    });
+
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+
+    expect(result.score).toBe(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('out of expected range'),
+    );
+  });
+
+  it('clamps an out-of-range low (negative) score to 0 and logs a warning', async () => {
+    aiProvider.generateResponse.mockResolvedValue({
+      response: '{"score": -500, "reason": "test"}',
+      cost: 0.001,
+    });
+
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+
+    expect(result.score).toBe(0);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('out of expected range'),
+    );
   });
 });

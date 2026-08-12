@@ -561,31 +561,73 @@ Respond with a JSON object: {"score": <0-100 integer>, "reason": "<one sentence>
     }
   }
 
+  /**
+   * Finds non-overlapping top-level `{...}` substrings via bracket counting
+   * (not a greedy first-`{`-to-last-`}` regex, which would merge unrelated
+   * brace groups into one unparseable blob).
+   */
+  private extractJsonCandidates(text: string): string[] {
+    const candidates: string[] = [];
+    let depth = 0;
+    let start = -1;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === '{') {
+        if (depth === 0) {
+          start = i;
+        }
+        depth++;
+      } else if (ch === '}' && depth > 0) {
+        depth--;
+        if (depth === 0 && start !== -1) {
+          candidates.push(text.slice(start, i + 1));
+          start = -1;
+        }
+      }
+    }
+    return candidates;
+  }
+
   private parseJudgeResult(
     judgeResponse: string,
     fallbackScore100: number,
   ): { score: number; reasoning?: string } {
     const trimmed = judgeResponse.trim();
-    const jsonCandidate = trimmed.startsWith('{')
-      ? trimmed
-      : trimmed.match(/\{[\s\S]*\}/)?.[0];
-
-    if (jsonCandidate) {
+    // Always run candidate extraction (never special-case "starts with {" as
+    // "the whole string is the JSON"), and prefer the LAST syntactically
+    // plausible object with a `score` field — the judge's real verdict is
+    // expected to be the terminal JSON per the prompt's output instruction.
+    const candidates = this.extractJsonCandidates(trimmed);
+    for (let i = candidates.length - 1; i >= 0; i--) {
+      let parsed: { score?: unknown; reason?: unknown };
       try {
-        const parsed = JSON.parse(jsonCandidate) as {
-          score?: unknown;
-          reason?: unknown;
-        };
-        if (typeof parsed.score === 'number') {
-          return {
-            score: Math.max(0, Math.min(1, parsed.score / 100)),
-            reasoning:
-              typeof parsed.reason === 'string' ? parsed.reason : undefined,
-          };
-        }
+        parsed = JSON.parse(candidates[i]);
       } catch {
-        // fall through to regex extraction
+        continue;
       }
+      if (!parsed || typeof parsed !== 'object' || !('score' in parsed)) {
+        continue;
+      }
+
+      const numericScore = Number(parsed.score);
+      if (Number.isNaN(numericScore)) {
+        this.logger.warn(
+          `Judge score "${String(parsed.score)}" is present but not coercible to a number; falling back.`,
+        );
+        break;
+      }
+
+      if (numericScore < 0 || numericScore > 100) {
+        this.logger.warn(
+          `Judge score ${numericScore} is out of expected range [0,100]; clamping.`,
+        );
+      }
+
+      return {
+        score: Math.max(0, Math.min(1, numericScore / 100)),
+        reasoning:
+          typeof parsed.reason === 'string' ? parsed.reason : undefined,
+      };
     }
 
     const match = judgeResponse.match(/(\d+(?:\.\d+)?)/);
