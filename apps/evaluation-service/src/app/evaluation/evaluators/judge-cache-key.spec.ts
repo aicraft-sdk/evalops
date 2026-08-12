@@ -50,4 +50,10 @@ describe('computeJudgeCacheKey', () => {
   it('produces a 64-character lowercase hex sha256 digest', () => {
     expect(computeJudgeCacheKey(base)).toMatch(/^[a-f0-9]{64}$/);
   });
+
+  it('does not collide "expected" absent (undefined) with "expected" explicitly empty string', () => {
+    const absent = computeJudgeCacheKey({ ...base, expected: undefined });
+    const explicitlyEmpty = computeJudgeCacheKey({ ...base, expected: '' });
+    expect(absent).not.toBe(explicitlyEmpty);
+  });
 });

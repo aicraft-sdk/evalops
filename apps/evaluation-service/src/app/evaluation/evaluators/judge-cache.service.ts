@@ -8,6 +8,23 @@ export interface JudgeComputeResult {
   cost: number;
 }
 
+/** Postgres SQLSTATE for a unique-constraint violation. */
+const POSTGRES_UNIQUE_VIOLATION = '23505';
+
+/**
+ * True when `error` is a Postgres/Drizzle error carrying the given SQLSTATE
+ * code (exposed as `.code` by both the `pg` driver and Drizzle's pass-through
+ * error objects).
+ */
+function hasPostgresErrorCode(error: unknown, code: string): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === code
+  );
+}
+
 @Injectable()
 export class JudgeCacheService {
   private readonly logger = new Logger(JudgeCacheService.name);
@@ -36,7 +53,12 @@ export class JudgeCacheService {
         };
       }
     } catch (error: unknown) {
-      this.logger.warn(
+      // Unlike the write path below, there is no "expected benign" failure
+      // mode for a cache lookup (no concurrent-race equivalent) - RLS
+      // misconfiguration on SELECT silently filters rows rather than
+      // throwing, so any thrown error here is a genuine infra/config
+      // problem worth surfacing loudly, not routine contention.
+      this.logger.error(
         `Judge cache lookup failed for ${evaluatorName}, failing open to a live call:`,
         error,
       );
@@ -58,10 +80,22 @@ export class JudgeCacheService {
         organizationId,
       });
     } catch (error: unknown) {
-      this.logger.warn(
-        `Judge cache write failed for ${evaluatorName} (result still returned):`,
-        error,
-      );
+      if (hasPostgresErrorCode(error, POSTGRES_UNIQUE_VIOLATION)) {
+        // Expected, benign: another concurrent request already wrote this
+        // exact cache key first. Not worth warn/error-level noise.
+        this.logger.debug(
+          `Judge cache write skipped for ${evaluatorName}: cache key already written by a concurrent request`,
+        );
+      } else {
+        // Any other failure (DB outage, RLS denial, schema mismatch, etc.)
+        // indicates a genuinely broken cache/RLS configuration - log loudly
+        // so it's distinguishable from normal cache contention, even though
+        // we still fail open and return the live result below.
+        this.logger.error(
+          `Judge cache write failed for ${evaluatorName} (result still returned):`,
+          error,
+        );
+      }
     }
 
     return result;

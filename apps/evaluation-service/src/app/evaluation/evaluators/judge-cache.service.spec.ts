@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { Logger } from '@nestjs/common';
 import { JudgeCacheRepository } from '@evalops/shared-db';
 import { JudgeCacheService } from './judge-cache.service';
 
@@ -68,6 +69,25 @@ describe('JudgeCacheService.getOrCompute', () => {
     expect(result.score).toBe(0.4);
   });
 
+  it('logs a cache-lookup failure at .error (no benign-race case exists on read, unlike write)', async () => {
+    repo.findByCacheKey.mockRejectedValue(new Error('connection reset'));
+    const computeFn = jest.fn().mockResolvedValue({ score: 0.4, cost: 0.001 });
+    const warnSpy = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const errorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+
+    await service.getOrCompute('evaluateFactuality', keyInput(), 'org-1', computeFn);
+
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
   it('fails open: a write DB error does not throw and still returns the live result', async () => {
     repo.findByCacheKey.mockResolvedValue(undefined);
     repo.create.mockRejectedValue(new Error('write failed'));
@@ -78,6 +98,55 @@ describe('JudgeCacheService.getOrCompute', () => {
     );
 
     expect(result.score).toBe(0.7);
+  });
+
+  it('quietly logs (not warn/error) a unique-violation write race and still returns the live result', async () => {
+    repo.findByCacheKey.mockResolvedValue(undefined);
+    const uniqueViolation = Object.assign(new Error('duplicate key value violates unique constraint'), {
+      code: '23505',
+    });
+    repo.create.mockRejectedValue(uniqueViolation);
+    const computeFn = jest.fn().mockResolvedValue({ score: 0.55, cost: 0.001 });
+    const warnSpy = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const errorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+
+    const result = await service.getOrCompute(
+      'evaluateFactuality', keyInput(), 'org-1', computeFn,
+    );
+
+    expect(result.score).toBe(0.55);
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
+  it('logs at .error (not .warn) a non-unique-violation write failure, e.g. a generic connection error', async () => {
+    repo.findByCacheKey.mockResolvedValue(undefined);
+    repo.create.mockRejectedValue(new Error('connection terminated unexpectedly'));
+    const computeFn = jest.fn().mockResolvedValue({ score: 0.42, cost: 0.001 });
+    const warnSpy = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const errorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+
+    const result = await service.getOrCompute(
+      'evaluateFactuality', keyInput(), 'org-1', computeFn,
+    );
+
+    expect(result.score).toBe(0.42);
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 });
 
