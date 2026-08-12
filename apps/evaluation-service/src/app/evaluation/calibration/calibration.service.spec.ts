@@ -157,3 +157,117 @@ describe('CalibrationService.runCalibration', () => {
     ).rejects.toThrow(/unsupported judgeEvaluator/i);
   });
 });
+
+describe('CalibrationService.runCalibration — scoreExample dispatch (Task 5.3 arms)', () => {
+  let service: CalibrationService;
+  let goldenSetsRepo: {
+    listExamples: jest.Mock;
+    createCalibrationRun: jest.Mock;
+  };
+  let evaluators: Record<string, jest.Mock>;
+  const dispatchExample = makeExample({
+    id: 'e1',
+    input: 'the input question',
+    output: 'the output text',
+    expected: 'the expected answer',
+    context: ['ctx-a', 'ctx-b'],
+    humanLabel: true,
+    isBadExample: true,
+  });
+
+  beforeEach(async () => {
+    goldenSetsRepo = {
+      listExamples: jest.fn().mockResolvedValue([dispatchExample]),
+      createCalibrationRun: jest.fn().mockImplementation((data) => Promise.resolve({ id: 'run-1', ...data })),
+    };
+    evaluators = {
+      evaluateLLMAsJudge: jest.fn(),
+      evaluateBattle: jest.fn().mockResolvedValue({ score: 0.9, reasoning: 'r', cost: 0 }),
+      evaluateFactuality: jest.fn(),
+      evaluateSecurity: jest.fn(),
+      evaluateAnswerRelevancy: jest.fn(),
+      evaluateContextPrecision: jest.fn().mockResolvedValue({ score: 0.9, reasoning: 'r', cost: 0 }),
+      evaluateContextRecall: jest.fn().mockResolvedValue({ score: 0.9, reasoning: 'r', cost: 0 }),
+      evaluateContextRelevancy: jest.fn().mockResolvedValue({ score: 0.9, reasoning: 'r', cost: 0 }),
+      evaluateFaithfulness: jest.fn(),
+      evaluateAnswerCorrectness: jest.fn(),
+      evaluatePIIDetection: jest.fn().mockResolvedValue({ score: 0.9, reasoning: 'r', cost: 0 }),
+      evaluateJailbreakDetection: jest.fn().mockResolvedValue({ score: 0.9, reasoning: 'r', cost: 0 }),
+    };
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        CalibrationService,
+        { provide: GoldenSetsRepository, useValue: goldenSetsRepo },
+        { provide: EvaluatorsService, useValue: evaluators },
+      ],
+    }).compile();
+    service = moduleRef.get(CalibrationService);
+  });
+
+  it('dispatches "battle" to evaluateBattle(response, expected, config, seed, organizationId)', async () => {
+    await service.runCalibration({
+      goldenSetId: 'gs1', judgeEvaluator: 'battle', judgeConfig: { foo: 'bar' },
+      organizationId: 'org-1', triggeredBy: 'user-1',
+    });
+
+    expect(evaluators.evaluateBattle).toHaveBeenCalledWith(
+      'the output text', 'the expected answer', { foo: 'bar' }, 1, 'org-1',
+    );
+  });
+
+  it('dispatches "context_precision" to evaluateContextPrecision(response, query, contexts, config, seed, organizationId)', async () => {
+    await service.runCalibration({
+      goldenSetId: 'gs1', judgeEvaluator: 'context_precision', judgeConfig: { foo: 'bar' },
+      organizationId: 'org-1', triggeredBy: 'user-1',
+    });
+
+    expect(evaluators.evaluateContextPrecision).toHaveBeenCalledWith(
+      'the output text', 'the input question', ['ctx-a', 'ctx-b'], { foo: 'bar' }, 1, 'org-1',
+    );
+  });
+
+  it('dispatches "context_recall" to evaluateContextRecall(expectedAnswer, contexts, config, seed, organizationId)', async () => {
+    await service.runCalibration({
+      goldenSetId: 'gs1', judgeEvaluator: 'context_recall', judgeConfig: { foo: 'bar' },
+      organizationId: 'org-1', triggeredBy: 'user-1',
+    });
+
+    expect(evaluators.evaluateContextRecall).toHaveBeenCalledWith(
+      'the expected answer', ['ctx-a', 'ctx-b'], { foo: 'bar' }, 1, 'org-1',
+    );
+  });
+
+  it('dispatches "context_relevancy" to evaluateContextRelevancy(query, contexts, config, seed, organizationId)', async () => {
+    await service.runCalibration({
+      goldenSetId: 'gs1', judgeEvaluator: 'context_relevancy', judgeConfig: { foo: 'bar' },
+      organizationId: 'org-1', triggeredBy: 'user-1',
+    });
+
+    expect(evaluators.evaluateContextRelevancy).toHaveBeenCalledWith(
+      'the input question', ['ctx-a', 'ctx-b'], { foo: 'bar' }, 1, 'org-1',
+    );
+  });
+
+  it('dispatches "pii_detection" to evaluatePIIDetection(response, config, seed, organizationId)', async () => {
+    await service.runCalibration({
+      goldenSetId: 'gs1', judgeEvaluator: 'pii_detection', judgeConfig: { foo: 'bar' },
+      organizationId: 'org-1', triggeredBy: 'user-1',
+    });
+
+    expect(evaluators.evaluatePIIDetection).toHaveBeenCalledWith(
+      'the output text', { foo: 'bar' }, 1, 'org-1',
+    );
+  });
+
+  it('dispatches "jailbreak_detection" to evaluateJailbreakDetection(input, response, config, seed, organizationId)', async () => {
+    await service.runCalibration({
+      goldenSetId: 'gs1', judgeEvaluator: 'jailbreak_detection', judgeConfig: { foo: 'bar' },
+      organizationId: 'org-1', triggeredBy: 'user-1',
+    });
+
+    expect(evaluators.evaluateJailbreakDetection).toHaveBeenCalledWith(
+      'the input question', 'the output text', { foo: 'bar' }, 1, 'org-1',
+    );
+  });
+});

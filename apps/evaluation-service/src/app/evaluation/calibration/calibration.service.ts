@@ -116,9 +116,24 @@ export class CalibrationService {
         return this.evaluators.evaluateFaithfulness(outputText, contexts, config, seed, input.organizationId);
       case 'answer_correctness':
         return this.evaluators.evaluateAnswerCorrectness(outputText, expectedText, config, seed, input.organizationId);
-      // battle, context_precision, context_recall, context_relevancy,
-      // pii_detection, jailbreak_detection are added test-first in the next
-      // TDD slice (Task 5.3) — see calibration.service.spec.ts.
+      case 'battle':
+        return this.evaluators.evaluateBattle(outputText, expectedText, config, seed, input.organizationId);
+      case 'context_precision':
+        return this.evaluators.evaluateContextPrecision(outputText, example.input, contexts, config, seed, input.organizationId);
+      case 'context_recall':
+        return this.evaluators.evaluateContextRecall(expectedText, contexts, config, seed, input.organizationId);
+      case 'context_relevancy':
+        return this.evaluators.evaluateContextRelevancy(example.input, contexts, config, seed, input.organizationId);
+      case 'pii_detection':
+        return this.evaluators.evaluatePIIDetection(outputText, config, seed, input.organizationId);
+      case 'jailbreak_detection':
+        return this.evaluators.evaluateJailbreakDetection(
+          (example.input as string) ?? '',
+          outputText,
+          config,
+          seed,
+          input.organizationId,
+        );
       default:
         throw new BadRequestException(`Unsupported judgeEvaluator: ${input.judgeEvaluator}`);
     }
