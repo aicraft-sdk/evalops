@@ -43,7 +43,7 @@ EvalOps is an Nx monorepo built as four NestJS microservices plus a React fronte
 | `api-gateway`         | 3000 | Request routing, CORS, JWT auth enforcement + forwarding |
 | `auth-service`        | 3001 | Users, organizations, JWT auth, RBAC               |
 | `core-service`        | 3002 | Prompts, datasets, agents, eval specs, templates, Azure Blob artifacts, webhooks, alerts, dashboard metrics, cost analytics, audit trail |
-| `evaluation-service`  | 3003 | Runs, evaluation engine, policies, trace ingestion |
+| `evaluation-service`  | 3003 | Runs, evaluation engine, policies, trace ingestion, golden sets & judge calibration |
 | `python-worker`       | 5055 | FastAPI service for advanced LLM evaluations       |
 
 ### Shared Libraries
@@ -68,6 +68,9 @@ EvalOps is an Nx monorepo built as four NestJS microservices plus a React fronte
 - **Trace event ingestion** — SDK instruments agents in-flight; events stream to `runs.trace_events` JSONB
 - **Artifact storage** — Azure Blob Storage with SAS URL download, SHA-256 content hashing
 - **Cost analytics** — per-run token cost tracking across providers
+- **Golden sets & judge calibration** — curate human-labeled example sets in the
+  **Golden Sets** UI (`/golden-sets`), then run calibration to measure an LLM-judge
+  evaluator's agreement with human labels (Cohen's kappa) before trusting it in eval runs
 - **Audit trail** — every mutation logged with user, org, and timestamp
 - **Row Level Security** — PostgreSQL RLS enforces org-level data isolation
 - **OpenTelemetry** — OTLP gRPC traces exported to any OTel-compatible collector
@@ -164,7 +167,7 @@ All routes go through the API Gateway on port 3000.
 | -------------------- | ------------------- | ------------------------------------------------------------------------------- |
 | `/api/auth/*`        | auth-service        | `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/user`         |
 | `/api/core/*`        | core-service        | `GET /api/core/prompts`, `POST /api/core/agents`, `GET /api/core/eval-specs`    |
-| `/api/evaluation/*`  | evaluation-service  | `POST /api/evaluation/runs`, `POST /api/evaluation/ingestion/events`, `POST/PUT/DELETE /api/evaluation/policies` (org_admin/admin) |
+| `/api/evaluation/*`  | evaluation-service  | `POST /api/evaluation/runs`, `POST /api/evaluation/ingestion/events`, `POST/PUT/DELETE /api/evaluation/policies` (org_admin/admin), `GET/POST /api/evaluation/golden-sets` (+ `:id/examples`, `:id/calibration-runs`) |
 | `/api/integration/*` | core-service        | `GET /api/integration/artifacts/:runId/:file`, `POST /api/integration/webhooks` |
 | `/api/analytics/*`   | core-service        | `GET /api/analytics/dashboard`, `GET /api/analytics/audit-trail`                |
 
