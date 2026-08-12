@@ -1,19 +1,38 @@
 import { render, type RenderOptions } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from '../components/layout/theme-provider'
+import { getQueryFn } from '../lib/queryClient'
 import { Router } from 'wouter'
-import { ReactElement } from 'react'
+import { ReactElement, useState } from 'react'
 
 // Custom render function with providers
 const AllTheProviders = ({ children }: { children: React.ReactNode }) => {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-        refetchOnWindowFocus: false,
-      },
-    },
-  })
+  // Must be memoized (useState initializer, not a plain body-level `new`) -
+  // otherwise every re-render (e.g. a query settling from loading to
+  // loaded, which is exactly what auth-gated pages do) creates a brand new
+  // QueryClient, wiping all in-flight/cached query state and re-triggering
+  // an infinite loading loop for any component that gates its render on
+  // `isLoading`.
+  //
+  // Also needs the same default `queryFn` as the app's real singleton
+  // QueryClient (`@/lib/queryClient`) - every page in this app calls
+  // `useQuery({ queryKey: [...] })` with NO explicit `queryFn`, relying
+  // entirely on this default to actually fetch. Without it, every query
+  // resolves to `status: 'error'` (missing queryFn) with `data: undefined`
+  // and pages silently render their empty/loading state instead of real
+  // mocked data.
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            queryFn: getQueryFn({ on401: 'returnNull' }),
+            retry: false,
+            refetchOnWindowFocus: false,
+          },
+        },
+      }),
+  )
 
   return (
     <QueryClientProvider client={queryClient}>
