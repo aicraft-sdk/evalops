@@ -1,28 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { JudgeCacheRepository } from '@evalops/shared-db';
+import {
+  JudgeCacheRepository,
+  isUniqueConstraintViolation,
+} from '@evalops/shared-db';
 import { computeJudgeCacheKey, JudgeCacheKeyInput } from './judge-cache-key';
 
 export interface JudgeComputeResult {
   score: number;
   reasoning?: string;
   cost: number;
-}
-
-/** Postgres SQLSTATE for a unique-constraint violation. */
-const POSTGRES_UNIQUE_VIOLATION = '23505';
-
-/**
- * True when `error` is a Postgres/Drizzle error carrying the given SQLSTATE
- * code (exposed as `.code` by both the `pg` driver and Drizzle's pass-through
- * error objects).
- */
-function hasPostgresErrorCode(error: unknown, code: string): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: unknown }).code === code
-  );
 }
 
 @Injectable()
@@ -80,9 +66,11 @@ export class JudgeCacheService {
         organizationId,
       });
     } catch (error: unknown) {
-      if (hasPostgresErrorCode(error, POSTGRES_UNIQUE_VIOLATION)) {
+      if (isUniqueConstraintViolation(error)) {
         // Expected, benign: another concurrent request already wrote this
-        // exact cache key first. Not worth warn/error-level noise.
+        // exact cache key first. Not worth warn/error-level noise. Covers
+        // both the Postgres driver (prod, code '23505') and better-sqlite3
+        // (EVALOPS_DEV_MODE, code 'SQLITE_CONSTRAINT_UNIQUE').
         this.logger.debug(
           `Judge cache write skipped for ${evaluatorName}: cache key already written by a concurrent request`,
         );

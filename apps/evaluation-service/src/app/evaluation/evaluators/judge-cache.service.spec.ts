@@ -7,8 +7,15 @@ import { JudgeCacheService } from './judge-cache.service';
 // which throws if DATABASE_URL isn't set (see libs/shared-db/src/lib/db.ts).
 // Mock it here since JudgeCacheRepository is only used as a DI token in this
 // unit test (matches the pattern in simulations.service.spec.ts).
+//
+// isUniqueConstraintViolation is pulled in via the real (non-mocked)
+// '@evalops/shared-db/dialect-utils' deep import - that file has no
+// dependency on '../db', so requiring it for real here exercises the exact
+// classification logic judge-cache.service.ts calls in production, instead
+// of re-implementing an equivalent check in this test file.
 jest.mock('@evalops/shared-db', () => ({
   JudgeCacheRepository: class JudgeCacheRepository {},
+  ...jest.requireActual('@evalops/shared-db/dialect-utils'),
 }));
 
 describe('JudgeCacheService.getOrCompute', () => {
@@ -119,6 +126,54 @@ describe('JudgeCacheService.getOrCompute', () => {
     );
 
     expect(result.score).toBe(0.55);
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
+  it('quietly logs (not warn/error) a REAL better-sqlite3 SQLITE_CONSTRAINT_UNIQUE write race (EVALOPS_DEV_MODE driver) and still returns the live result', async () => {
+    // Construct a genuine better-sqlite3 unique-constraint error (not a
+    // hand-built {code: 'SQLITE_CONSTRAINT_UNIQUE'} mock object) to prove
+    // the benign-race classification actually recognizes what the real
+    // dev-mode driver throws, not just an assumption about its shape.
+    const Database = require('better-sqlite3');
+    const sqliteDb = new Database(':memory:');
+    sqliteDb.exec(
+      'CREATE TABLE t (id TEXT PRIMARY KEY, cache_key TEXT UNIQUE NOT NULL)',
+    );
+    sqliteDb
+      .prepare('INSERT INTO t (id, cache_key) VALUES (?, ?)')
+      .run('1', 'dup');
+    let realSqliteUniqueViolation: unknown;
+    try {
+      sqliteDb
+        .prepare('INSERT INTO t (id, cache_key) VALUES (?, ?)')
+        .run('2', 'dup');
+    } catch (error) {
+      realSqliteUniqueViolation = error;
+    }
+    sqliteDb.close();
+    expect((realSqliteUniqueViolation as { code?: string }).code).toBe(
+      'SQLITE_CONSTRAINT_UNIQUE',
+    );
+
+    repo.findByCacheKey.mockResolvedValue(undefined);
+    repo.create.mockRejectedValue(realSqliteUniqueViolation);
+    const computeFn = jest.fn().mockResolvedValue({ score: 0.33, cost: 0.001 });
+    const warnSpy = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const errorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+
+    const result = await service.getOrCompute(
+      'evaluateFactuality', keyInput(), 'org-1', computeFn,
+    );
+
+    expect(result.score).toBe(0.33);
     expect(warnSpy).not.toHaveBeenCalled();
     expect(errorSpy).not.toHaveBeenCalled();
 
