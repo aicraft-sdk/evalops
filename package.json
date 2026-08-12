@@ -38,7 +38,7 @@
     "@ai-sdk/anthropic": "^2.0.16",
     "@ai-sdk/google": "^2.0.14",
     "@ai-sdk/openai": "^2.0.30",
-    "@ai-sdk/xai": "^2.0.18",
+    "@ai-sdk/xai": "^2.0.84",
     "@alibaba-group/opensandbox": "^0.1.4",
     "@anthropic-ai/sdk": "^0.37.0",
     "@azure/identity": "^4.4.1",
