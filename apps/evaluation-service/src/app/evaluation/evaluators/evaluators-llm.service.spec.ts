@@ -537,4 +537,52 @@ describe('EvaluatorsLLMService.parseJudgeResult — REM-FIX hardening', () => {
     expect(result.score).toBeCloseTo(0.85);
     expect(result.reasoning).toBe('unexpected } in the middle');
   });
+
+  it('parses a scientific-notation numeric string score ("8.5e1") and preserves reasoning', async () => {
+    // Without the fix, /^-?\d+(\.\d+)?$/ rejects "8.5e1" as non-coercible,
+    // triggering a fallback that (a) loses reasoning entirely and (b) can
+    // mis-extract "8.5" from the raw text as if it were the whole score.
+    aiProvider.generateResponse.mockResolvedValue({
+      response: '{"score":"8.5e1","reason":"ok"}',
+      cost: 0.001,
+    });
+
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+
+    expect(result.score).toBeCloseTo(0.85);
+    expect(result.reasoning).toBe('ok');
+  });
+
+  it('prefers the terminal scientific-notation verdict over an earlier plain-integer draft candidate', async () => {
+    // Proves the regex widening AND that continue-vs-break doesn't
+    // accidentally prefer the earlier candidate once the terminal one is
+    // recognized as valid.
+    aiProvider.generateResponse.mockResolvedValue({
+      response:
+        'Draft: {"score":40,"reason":"draft guess"} Final: {"score":"8.5e1","reason":"final verdict"}',
+      cost: 0.001,
+    });
+
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+
+    expect(result.score).toBeCloseTo(0.85);
+    expect(result.reasoning).toBe('final verdict');
+  });
+
+  it('falls back to the earlier valid candidate when the terminal candidate has a genuinely non-coercible score (null)', async () => {
+    // Proves the break->continue fix: a genuinely malformed terminal
+    // candidate (which the regex widening cannot help) no longer abandons
+    // the whole loop and falls to the crude whole-text digit regex - it
+    // tries the next-earlier candidate instead.
+    aiProvider.generateResponse.mockResolvedValue({
+      response:
+        'Draft: {"score":40,"reason":"earlier valid draft"} Final: {"score":null,"reason":"refusal"}',
+      cost: 0.001,
+    });
+
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+
+    expect(result.score).toBeCloseTo(0.4);
+    expect(result.reasoning).toBe('earlier valid draft');
+  });
 });

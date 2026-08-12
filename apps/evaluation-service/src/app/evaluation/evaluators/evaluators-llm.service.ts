@@ -648,14 +648,14 @@ Respond with a JSON object: {"score": <0-100 integer>, "reason": "<one sentence>
         numericScore = parsed.score;
       } else if (
         typeof parsed.score === 'string' &&
-        /^-?\d+(\.\d+)?$/.test(parsed.score.trim())
+        /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(parsed.score.trim())
       ) {
         numericScore = Number(parsed.score.trim());
       } else {
         this.logger.warn(
-          `Judge score "${String(parsed.score)}" is present but not coercible to a number; falling back.`,
+          `Judge score "${String(parsed.score)}" is present but not coercible to a number; trying next candidate.`,
         );
-        break;
+        continue;
       }
 
       if (numericScore < 0 || numericScore > 100) {
