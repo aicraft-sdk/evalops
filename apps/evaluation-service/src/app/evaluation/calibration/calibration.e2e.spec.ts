@@ -1,16 +1,26 @@
 /**
- * End-to-end integration test against a real (not mocked) Postgres database —
- * proves the full golden-set calibration flow: createGoldenSet -> addExample
- * (multiple, including a bad example) -> runCalibration -> a calibration_runs
- * row is actually persisted with the correct shape.
+ * CalibrationService + real-Postgres integration test (NOT a full end-to-end
+ * test — see calibration.http-e2e.spec.ts in this same directory for that).
+ * Proves the full golden-set calibration flow at the service layer:
+ * createGoldenSet -> addExample (multiple, including a bad example) ->
+ * runCalibration -> a calibration_runs row is actually persisted with the
+ * correct shape.
  *
  * Purity boundary: DB access is real (GoldenSetsRepository talks to a real,
  * throwaway, migration-replayed Postgres database exactly like
- * golden-sets.repository.spec.ts). Only the outbound AI-provider boundary is
- * mocked (EvaluatorsService), because that is the actual external dependency
- * this plan's tests are not meant to spend real API calls on. This test
- * exercises the REAL CalibrationService/computeCohensKappa logic (11
- * remediation cycles fixed swallowed-failure exclusion, class-diversity
+ * golden-sets.repository.spec.ts). This test mocks EvaluatorsService itself
+ * — one layer above the real outbound AI-provider boundary — so it does NOT
+ * exercise JudgeCacheService, AIProviderService, JwtAuthGuard, or
+ * GoldenSetsController; those are only exercised by
+ * calibration.http-e2e.spec.ts, which boots the real NestJS module graph
+ * (real HTTP via supertest, real JwtAuthGuard verifying a real signed JWT,
+ * real GoldenSetsController/GoldenSetsService/CalibrationService/
+ * EvaluatorsService/EvaluatorsLLMService/JudgeCacheService) and mocks only
+ * AIProviderService.generateResponse — the genuine external boundary. THIS
+ * file remains valuable and fast as a CalibrationService-focused regression
+ * test; calibration.http-e2e.spec.ts is the genuine end-to-end complement.
+ * This test exercises the REAL CalibrationService/computeCohensKappa logic
+ * (11 remediation cycles fixed swallowed-failure exclusion, class-diversity
  * guards, and fabricated-default exclusion bugs in this exact service — see
  * calibration.service.ts's own comments) — not a simplified stand-in.
  *
