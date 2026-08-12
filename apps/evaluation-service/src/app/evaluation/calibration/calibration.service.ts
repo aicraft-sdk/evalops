@@ -98,6 +98,20 @@ export class CalibrationService {
       );
     }
 
+    // The per-example exclusion loop above can drop the golden set's ONLY
+    // bad-labeled (humanLabel:false) example if its judge call looks like a
+    // swallowed failure. `pairs.length === 0` only catches "everything
+    // excluded" — it does not catch "some survived, but all one class now".
+    // Without this check, computeCohensKappa's pe===1 degenerate case
+    // fabricates kappa:1 (and, if sampleCount also clears
+    // MIN_RELIABLE_SAMPLES, isCalibrated:true) from single-class agreement
+    // alone, with zero real discernment evidence against a bad example.
+    if (!pairs.some((pair) => pair.human === false)) {
+      throw new BadRequestException(
+        'Calibration requires at least one bad-labeled example with a valid judge score; all bad-labeled examples were excluded as likely scoring failures',
+      );
+    }
+
     const kappaResult = computeCohensKappa(pairs);
 
     return this.goldenSets.createCalibrationRun({

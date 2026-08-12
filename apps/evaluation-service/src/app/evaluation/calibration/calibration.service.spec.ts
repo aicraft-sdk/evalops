@@ -254,6 +254,41 @@ describe('CalibrationService.runCalibration', () => {
     expect(goldenSetsRepo.createCalibrationRun).not.toHaveBeenCalled();
   });
 
+  it('throws instead of persisting a fabricated kappa when the ONLY bad-labeled example is excluded as a likely swallowed failure, leaving zero negative-class discernment evidence', async () => {
+    // Only e1 is a bad/negative-class example (humanLabel:false). It comes
+    // back with the swallowed-failure signature and is excluded. The 5
+    // surviving examples are all humanLabel:true and all agree with the
+    // judge (judge score >= threshold) -- pe would degenerate to 1, and
+    // without a class-diversity guard computeCohensKappa's pe===1 branch
+    // fabricates kappa:1 from pure single-class agreement, not real judge
+    // discernment against any bad example.
+    goldenSetsRepo.listExamples.mockResolvedValue([
+      makeExample({ id: 'e1', humanLabel: false, isBadExample: true }),
+      makeExample({ id: 'e2', humanLabel: true, isBadExample: false }),
+      makeExample({ id: 'e3', humanLabel: true, isBadExample: false }),
+      makeExample({ id: 'e4', humanLabel: true, isBadExample: false }),
+      makeExample({ id: 'e5', humanLabel: true, isBadExample: false }),
+      makeExample({ id: 'e6', humanLabel: true, isBadExample: false }),
+    ]);
+    evaluators.evaluateFactuality
+      .mockResolvedValueOnce({ score: 0, cost: 0 }) // e1 -- swallowed-failure signature, excluded (the ONLY bad example)
+      .mockResolvedValueOnce({ score: 0.9, reasoning: 'good', cost: 0 }) // e2 agree
+      .mockResolvedValueOnce({ score: 0.9, reasoning: 'good', cost: 0 }) // e3 agree
+      .mockResolvedValueOnce({ score: 0.9, reasoning: 'good', cost: 0 }) // e4 agree
+      .mockResolvedValueOnce({ score: 0.9, reasoning: 'good', cost: 0 }) // e5 agree
+      .mockResolvedValueOnce({ score: 0.9, reasoning: 'good', cost: 0 }); // e6 agree
+
+    await expect(
+      service.runCalibration({
+        goldenSetId: 'gs1',
+        judgeEvaluator: 'factuality',
+        organizationId: 'org-1',
+        triggeredBy: 'user-1',
+      }),
+    ).rejects.toThrow(/at least one bad-labeled example with a valid judge score/i);
+    expect(goldenSetsRepo.createCalibrationRun).not.toHaveBeenCalled();
+  });
+
   it('sets isCalibrated:false whenever isReliable:false, even if raw kappa would be >= 0.8', async () => {
     goldenSetsRepo.listExamples.mockResolvedValue(threeExamplesIncludingOneBad());
     // All 3 examples agree perfectly with human labels -> kappa would compute to 1.0,
@@ -289,7 +324,12 @@ describe('CalibrationService.runCalibration — scoreExample dispatch (Task 5.3 
     output: 'the output text',
     expected: 'the expected answer',
     context: ['ctx-a', 'ctx-b'],
-    humanLabel: true,
+    // humanLabel:false matches this file's isBadExample:true convention
+    // (see threeExamplesIncludingOneBad/fiveExamplesIncludingOneBad) so this
+    // single-example fixture still satisfies the negative-class survival
+    // check in CalibrationService — these tests only assert dispatch call
+    // args, not calibration-outcome shape.
+    humanLabel: false,
     isBadExample: true,
   });
 
