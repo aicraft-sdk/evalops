@@ -7,6 +7,15 @@ import { EvaluatorsLLMService } from './evaluators-llm.service';
 import { EvaluatorsDeterministicService } from './evaluators-deterministic.service';
 import { EvaluationModule } from '../evaluation.module';
 
+// '@evalops/shared-db' is a barrel that loads '../db' at module-load time,
+// which throws if DATABASE_URL isn't set (see libs/shared-db/src/lib/db.ts).
+// EvaluatorsLLMService now transitively pulls it in via JudgeCacheService,
+// which is only used here via a factory-injected mock - mock the barrel
+// too (matches the pattern in judge-cache.service.spec.ts).
+jest.mock('@evalops/shared-db', () => ({
+  JudgeCacheRepository: class JudgeCacheRepository {},
+}));
+
 // ---------------------------------------------------------------------------
 // HIGH-2: LLM fallback scores must be 0 on error (not 0.5/0.7/0.8)
 // ---------------------------------------------------------------------------
@@ -21,15 +30,26 @@ describe('EvaluatorsLLMService — error catch blocks return { score: 0 }', () =
           provide: 'AIProviderService',
           useValue: {
             generateResponse: jest.fn().mockRejectedValue(new Error('AI provider down')),
+            getDefaultModel: jest.fn().mockReturnValue('gpt-4'),
+          },
+        },
+        {
+          provide: 'JudgeCacheService',
+          useValue: {
+            // Pass-through: computeFn's rejection must still propagate to
+            // each method's own catch block, unmodified by the cache layer.
+            getOrCompute: jest.fn((_name, _keyInput, _orgId, computeFn) => computeFn()),
           },
         },
       ],
     })
       .overrideProvider(EvaluatorsLLMService)
       .useFactory({
-        factory: (aiProvider: { generateResponse: jest.Mock }) =>
-          new EvaluatorsLLMService(aiProvider as never),
-        inject: ['AIProviderService'],
+        factory: (
+          aiProvider: { generateResponse: jest.Mock },
+          judgeCache: { getOrCompute: jest.Mock },
+        ) => new EvaluatorsLLMService(aiProvider as never, judgeCache as never),
+        inject: ['AIProviderService', 'JudgeCacheService'],
       })
       .compile();
 
@@ -37,55 +57,55 @@ describe('EvaluatorsLLMService — error catch blocks return { score: 0 }', () =
   });
 
   it('evaluateBattle catch block returns score 0, not 0.5', async () => {
-    const result = await service.evaluateBattle('resp', 'expected', {}, 42);
+    const result = await service.evaluateBattle('resp', 'expected', {}, 42, 'org-1');
     expect(result.score).toBe(0);
     expect(result.cost).toBe(0);
   });
 
   it('evaluateFactuality catch block returns score 0, not 0.7', async () => {
-    const result = await service.evaluateFactuality('resp', 'input', {}, 42);
+    const result = await service.evaluateFactuality('resp', 'input', {}, 42, 'org-1');
     expect(result.score).toBe(0);
     expect(result.cost).toBe(0);
   });
 
   it('evaluateSecurity catch block returns score 0, not 0.8', async () => {
-    const result = await service.evaluateSecurity('resp', {}, 42);
+    const result = await service.evaluateSecurity('resp', {}, 42, 'org-1');
     expect(result.score).toBe(0);
     expect(result.cost).toBe(0);
   });
 
   it('evaluateAnswerRelevancy catch block returns score 0, not 0.7', async () => {
-    const result = await service.evaluateAnswerRelevancy('resp', 'input', {}, 42);
+    const result = await service.evaluateAnswerRelevancy('resp', 'input', {}, 42, 'org-1');
     expect(result.score).toBe(0);
     expect(result.cost).toBe(0);
   });
 
   it('evaluateContextPrecision catch block returns score 0, not 0.6', async () => {
-    const result = await service.evaluateContextPrecision('resp', 'query', ['ctx'], {}, 42);
+    const result = await service.evaluateContextPrecision('resp', 'query', ['ctx'], {}, 42, 'org-1');
     expect(result.score).toBe(0);
     expect(result.cost).toBe(0);
   });
 
   it('evaluateContextRecall catch block returns score 0, not 0.6', async () => {
-    const result = await service.evaluateContextRecall('expected', ['ctx'], {}, 42);
+    const result = await service.evaluateContextRecall('expected', ['ctx'], {}, 42, 'org-1');
     expect(result.score).toBe(0);
     expect(result.cost).toBe(0);
   });
 
   it('evaluateContextRelevancy catch block returns score 0, not 0.7', async () => {
-    const result = await service.evaluateContextRelevancy('query', ['ctx'], {}, 42);
+    const result = await service.evaluateContextRelevancy('query', ['ctx'], {}, 42, 'org-1');
     expect(result.score).toBe(0);
     expect(result.cost).toBe(0);
   });
 
   it('evaluateFaithfulness catch block returns score 0, not 0.8', async () => {
-    const result = await service.evaluateFaithfulness('resp', ['ctx'], {}, 42);
+    const result = await service.evaluateFaithfulness('resp', ['ctx'], {}, 42, 'org-1');
     expect(result.score).toBe(0);
     expect(result.cost).toBe(0);
   });
 
   it('evaluateAnswerCorrectness catch block returns score 0, not 0.7', async () => {
-    const result = await service.evaluateAnswerCorrectness('resp', 'expected', {}, 42);
+    const result = await service.evaluateAnswerCorrectness('resp', 'expected', {}, 42, 'org-1');
     expect(result.score).toBe(0);
     expect(result.cost).toBe(0);
   });
@@ -93,7 +113,7 @@ describe('EvaluatorsLLMService — error catch blocks return { score: 0 }', () =
   it('evaluateAnswerCorrectness non-error path for absent expectedAnswer stays 0.5', async () => {
     // This is NOT an error path — it's the explicit "no expected answer" sentinel.
     // The fix must NOT change this branch.
-    const result = await service.evaluateAnswerCorrectness('resp', '', {}, 42);
+    const result = await service.evaluateAnswerCorrectness('resp', '', {}, 42, 'org-1');
     expect(result.score).toBe(0.5);
   });
 });

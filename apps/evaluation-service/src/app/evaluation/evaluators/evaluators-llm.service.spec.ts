@@ -1,18 +1,57 @@
 import { Test } from '@nestjs/testing';
 import { Logger } from '@nestjs/common';
 import { AIProviderService } from '../../ai-provider/ai-provider.service';
+import { JudgeCacheService } from './judge-cache.service';
 import { EvaluatorsLLMService } from './evaluators-llm.service';
+
+// '@evalops/shared-db' is a barrel that loads '../db' at module-load time,
+// which throws if DATABASE_URL isn't set (see libs/shared-db/src/lib/db.ts).
+// JudgeCacheService is only used here via useValue mocks, so mock the barrel
+// too - matches the pattern in judge-cache.service.spec.ts.
+jest.mock('@evalops/shared-db', () => ({
+  JudgeCacheRepository: class JudgeCacheRepository {},
+}));
+
+describe('EvaluatorsLLMService — JudgeCacheService wiring (Task 3.1)', () => {
+  it('routes through JudgeCacheService.getOrCompute and skips the AI call on a cache hit', async () => {
+    const cacheService = { getOrCompute: jest.fn().mockResolvedValue({ score: 0.5, cost: 0 }) };
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        EvaluatorsLLMService,
+        { provide: AIProviderService, useValue: { generateResponse: jest.fn(), getDefaultModel: jest.fn().mockReturnValue('gpt-4') } },
+        { provide: JudgeCacheService, useValue: cacheService },
+      ],
+    }).compile();
+    const svc = moduleRef.get(EvaluatorsLLMService);
+
+    const result = await svc.evaluateFactuality('resp', 'q', {}, 1, 'org-1');
+
+    expect(cacheService.getOrCompute).toHaveBeenCalledWith(
+      'evaluateFactuality',
+      expect.objectContaining({ model: expect.any(String), seed: 1 }),
+      'org-1',
+      expect.any(Function),
+    );
+    expect(result.score).toBe(0.5);
+  });
+});
 
 describe('EvaluatorsLLMService.parseJudgeResult (via evaluateFactuality)', () => {
   let service: EvaluatorsLLMService;
-  let aiProvider: { generateResponse: jest.Mock };
+  let aiProvider: { generateResponse: jest.Mock; getDefaultModel: jest.Mock };
 
   beforeEach(async () => {
-    aiProvider = { generateResponse: jest.fn() };
+    aiProvider = { generateResponse: jest.fn(), getDefaultModel: jest.fn().mockReturnValue('gpt-4') };
     const moduleRef = await Test.createTestingModule({
       providers: [
         EvaluatorsLLMService,
         { provide: AIProviderService, useValue: aiProvider },
+        {
+          provide: JudgeCacheService,
+          // Pass-through: always invokes computeFn (cache miss), so these
+          // tests keep exercising the real AI-call + parseJudgeResult path.
+          useValue: { getOrCompute: jest.fn((_name, _keyInput, _orgId, computeFn) => computeFn()) },
+        },
       ],
     }).compile();
     service = moduleRef.get(EvaluatorsLLMService);
@@ -24,7 +63,7 @@ describe('EvaluatorsLLMService.parseJudgeResult (via evaluateFactuality)', () =>
       cost: 0.001,
     });
 
-    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1, 'org-1');
 
     expect(result.score).toBeCloseTo(0.85);
     expect(result.reasoning).toBe('Mostly accurate, minor omission');
@@ -36,7 +75,7 @@ describe('EvaluatorsLLMService.parseJudgeResult (via evaluateFactuality)', () =>
       cost: 0.001,
     });
 
-    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1, 'org-1');
 
     expect(result.score).toBeCloseTo(0.72);
     expect(result.reasoning).toBeUndefined();
@@ -48,7 +87,7 @@ describe('EvaluatorsLLMService.parseJudgeResult (via evaluateFactuality)', () =>
       cost: 0,
     });
 
-    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1, 'org-1');
 
     expect(result.score).toBeCloseTo(0.7); // evaluateFactuality's existing '70' default
     expect(result.reasoning).toBeUndefined();
@@ -57,14 +96,20 @@ describe('EvaluatorsLLMService.parseJudgeResult (via evaluateFactuality)', () =>
 
 describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
   let service: EvaluatorsLLMService;
-  let aiProvider: { generateResponse: jest.Mock };
+  let aiProvider: { generateResponse: jest.Mock; getDefaultModel: jest.Mock };
 
   beforeEach(async () => {
-    aiProvider = { generateResponse: jest.fn() };
+    aiProvider = { generateResponse: jest.fn(), getDefaultModel: jest.fn().mockReturnValue('gpt-4') };
     const moduleRef = await Test.createTestingModule({
       providers: [
         EvaluatorsLLMService,
         { provide: AIProviderService, useValue: aiProvider },
+        {
+          provide: JudgeCacheService,
+          // Pass-through: always invokes computeFn (cache miss), so these
+          // tests keep exercising the real AI-call + parseJudgeResult path.
+          useValue: { getOrCompute: jest.fn((_name, _keyInput, _orgId, computeFn) => computeFn()) },
+        },
       ],
     }).compile();
     service = moduleRef.get(EvaluatorsLLMService);
@@ -76,7 +121,7 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         response: '{"score": 90, "reason": "Response A is clearer"}',
         cost: 0.001,
       });
-      const result = await service.evaluateBattle('A', 'B', {}, 1);
+      const result = await service.evaluateBattle('A', 'B', {}, 1, 'org-1');
       expect(result.score).toBeCloseTo(0.9);
       expect(result.reasoning).toBe('Response A is clearer');
     });
@@ -86,7 +131,7 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         response: 'no numeric content at all',
         cost: 0,
       });
-      const result = await service.evaluateBattle('A', 'B', {}, 1);
+      const result = await service.evaluateBattle('A', 'B', {}, 1, 'org-1');
       expect(result.score).toBeCloseTo(0.5);
       expect(result.reasoning).toBeUndefined();
     });
@@ -98,7 +143,7 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         response: '{"score": 95, "reason": "No PII or injection detected"}',
         cost: 0.001,
       });
-      const result = await service.evaluateSecurity('resp', {}, 1);
+      const result = await service.evaluateSecurity('resp', {}, 1, 'org-1');
       expect(result.score).toBeCloseTo(0.95);
       expect(result.reasoning).toBe('No PII or injection detected');
     });
@@ -108,7 +153,7 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         response: 'no numeric content at all',
         cost: 0,
       });
-      const result = await service.evaluateSecurity('resp', {}, 1);
+      const result = await service.evaluateSecurity('resp', {}, 1, 'org-1');
       expect(result.score).toBeCloseTo(0.8);
       expect(result.reasoning).toBeUndefined();
     });
@@ -120,7 +165,7 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         response: '{"score": 88, "reason": "Directly answers the question"}',
         cost: 0.001,
       });
-      const result = await service.evaluateAnswerRelevancy('resp', 'question', {}, 1);
+      const result = await service.evaluateAnswerRelevancy('resp', 'question', {}, 1, 'org-1');
       expect(result.score).toBeCloseTo(0.88);
       expect(result.reasoning).toBe('Directly answers the question');
     });
@@ -130,7 +175,7 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         response: 'no numeric content at all',
         cost: 0,
       });
-      const result = await service.evaluateAnswerRelevancy('resp', 'question', {}, 1);
+      const result = await service.evaluateAnswerRelevancy('resp', 'question', {}, 1, 'org-1');
       expect(result.score).toBeCloseTo(0.7);
       expect(result.reasoning).toBeUndefined();
     });
@@ -142,7 +187,7 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         response: '{"score": 65, "reason": "Context mostly relevant"}',
         cost: 0.001,
       });
-      const result = await service.evaluateContextPrecision('resp', 'query', ['ctx'], {}, 1);
+      const result = await service.evaluateContextPrecision('resp', 'query', ['ctx'], {}, 1, 'org-1');
       expect(result.score).toBeCloseTo(0.65);
       expect(result.reasoning).toBe('Context mostly relevant');
     });
@@ -152,7 +197,7 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         response: 'no numeric content at all',
         cost: 0,
       });
-      const result = await service.evaluateContextPrecision('resp', 'query', ['ctx'], {}, 1);
+      const result = await service.evaluateContextPrecision('resp', 'query', ['ctx'], {}, 1, 'org-1');
       expect(result.score).toBeCloseTo(0.6);
       expect(result.reasoning).toBeUndefined();
     });
@@ -164,7 +209,7 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         response: '{"score": 55, "reason": "Missed some expected facts"}',
         cost: 0.001,
       });
-      const result = await service.evaluateContextRecall('expected', ['ctx'], {}, 1);
+      const result = await service.evaluateContextRecall('expected', ['ctx'], {}, 1, 'org-1');
       expect(result.score).toBeCloseTo(0.55);
       expect(result.reasoning).toBe('Missed some expected facts');
     });
@@ -174,7 +219,7 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         response: 'no numeric content at all',
         cost: 0,
       });
-      const result = await service.evaluateContextRecall('expected', ['ctx'], {}, 1);
+      const result = await service.evaluateContextRecall('expected', ['ctx'], {}, 1, 'org-1');
       expect(result.score).toBeCloseTo(0.6);
       expect(result.reasoning).toBeUndefined();
     });
@@ -186,7 +231,7 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         response: '{"score": 75, "reason": "Context aligns with query"}',
         cost: 0.001,
       });
-      const result = await service.evaluateContextRelevancy('query', ['ctx'], {}, 1);
+      const result = await service.evaluateContextRelevancy('query', ['ctx'], {}, 1, 'org-1');
       expect(result.score).toBeCloseTo(0.75);
       expect(result.reasoning).toBe('Context aligns with query');
     });
@@ -196,7 +241,7 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         response: 'no numeric content at all',
         cost: 0,
       });
-      const result = await service.evaluateContextRelevancy('query', ['ctx'], {}, 1);
+      const result = await service.evaluateContextRelevancy('query', ['ctx'], {}, 1, 'org-1');
       expect(result.score).toBeCloseTo(0.7);
       expect(result.reasoning).toBeUndefined();
     });
@@ -208,7 +253,7 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         response: '{"score": 82, "reason": "Faithful to source context"}',
         cost: 0.001,
       });
-      const result = await service.evaluateFaithfulness('resp', ['ctx'], {}, 1);
+      const result = await service.evaluateFaithfulness('resp', ['ctx'], {}, 1, 'org-1');
       expect(result.score).toBeCloseTo(0.82);
       expect(result.reasoning).toBe('Faithful to source context');
     });
@@ -218,7 +263,7 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         response: 'no numeric content at all',
         cost: 0,
       });
-      const result = await service.evaluateFaithfulness('resp', ['ctx'], {}, 1);
+      const result = await service.evaluateFaithfulness('resp', ['ctx'], {}, 1, 'org-1');
       expect(result.score).toBeCloseTo(0.8);
       expect(result.reasoning).toBeUndefined();
     });
@@ -230,7 +275,7 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         response: '{"score": 91, "reason": "Matches expected answer"}',
         cost: 0.001,
       });
-      const result = await service.evaluateAnswerCorrectness('resp', 'expected', {}, 1);
+      const result = await service.evaluateAnswerCorrectness('resp', 'expected', {}, 1, 'org-1');
       expect(result.score).toBeCloseTo(0.91);
       expect(result.reasoning).toBe('Matches expected answer');
     });
@@ -240,7 +285,7 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         response: 'no numeric content at all',
         cost: 0,
       });
-      const result = await service.evaluateAnswerCorrectness('resp', 'expected', {}, 1);
+      const result = await service.evaluateAnswerCorrectness('resp', 'expected', {}, 1, 'org-1');
       expect(result.score).toBeCloseTo(0.7);
       expect(result.reasoning).toBeUndefined();
     });
@@ -256,6 +301,7 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         'contact me at foo@example.com',
         { strictness: 'strict' },
         1,
+        'org-1',
       );
       expect(result.reasoning).toBe('Contains an email address');
     });
@@ -269,6 +315,7 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         'contact me at foo@example.com',
         { strictness: 'strict' },
         1,
+        'org-1',
       );
       expect(result.reasoning).toBeUndefined();
     });
@@ -285,6 +332,7 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         'resp',
         {},
         1,
+        'org-1',
       );
       expect(result.reasoning).toBe('Contains a prompt injection attempt');
     });
@@ -294,7 +342,7 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         response: 'no numeric content at all',
         cost: 0,
       });
-      const result = await service.evaluateJailbreakDetection('benign', 'resp', {}, 1);
+      const result = await service.evaluateJailbreakDetection('benign', 'resp', {}, 1, 'org-1');
       expect(result.reasoning).toBeUndefined();
     });
   });
@@ -310,6 +358,8 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         'expected',
         'Rate this response: {response} vs {expected}',
         1,
+        undefined,
+        'org-1',
       );
       expect(result.score).toBeCloseTo(0.77);
       expect(result.reasoning).toBe('Meets most rubric criteria');
@@ -325,6 +375,8 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         'expected',
         'Rate this response: {response} vs {expected}',
         1,
+        undefined,
+        'org-1',
       );
       expect(result.score).toBeCloseTo(0.65);
       expect(result.reasoning).toBeUndefined();
@@ -340,6 +392,8 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
         'expected',
         'Rate this response: {response} vs {expected}',
         1,
+        undefined,
+        'org-1',
       );
       const [renderedPrompt] = aiProvider.generateResponse.mock.calls[0];
       expect(renderedPrompt).toContain('Respond with a JSON object');
@@ -350,15 +404,19 @@ describe('EvaluatorsLLMService — per-method JSON parsing (Task 1.3)', () => {
 
 describe('EvaluatorsLLMService.parseJudgeResult — REM-FIX hardening', () => {
   let service: EvaluatorsLLMService;
-  let aiProvider: { generateResponse: jest.Mock };
+  let aiProvider: { generateResponse: jest.Mock; getDefaultModel: jest.Mock };
   let warnSpy: jest.SpyInstance;
 
   beforeEach(async () => {
-    aiProvider = { generateResponse: jest.fn() };
+    aiProvider = { generateResponse: jest.fn(), getDefaultModel: jest.fn().mockReturnValue('gpt-4') };
     const moduleRef = await Test.createTestingModule({
       providers: [
         EvaluatorsLLMService,
         { provide: AIProviderService, useValue: aiProvider },
+        {
+          provide: JudgeCacheService,
+          useValue: { getOrCompute: jest.fn((_name, _keyInput, _orgId, computeFn) => computeFn()) },
+        },
       ],
     }).compile();
     service = moduleRef.get(EvaluatorsLLMService);
@@ -378,7 +436,7 @@ describe('EvaluatorsLLMService.parseJudgeResult — REM-FIX hardening', () => {
       cost: 0.001,
     });
 
-    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1, 'org-1');
 
     expect(result.score).toBeCloseTo(0.85);
     expect(result.reasoning).toBe('Mostly accurate, minor omission');
@@ -394,7 +452,7 @@ describe('EvaluatorsLLMService.parseJudgeResult — REM-FIX hardening', () => {
       cost: 0.001,
     });
 
-    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1, 'org-1');
 
     expect(result.score).toBeCloseTo(0.88);
     expect(result.reasoning).toBe('Well cited and accurate');
@@ -410,7 +468,7 @@ describe('EvaluatorsLLMService.parseJudgeResult — REM-FIX hardening', () => {
       cost: 0.001,
     });
 
-    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1, 'org-1');
 
     expect(result.score).toBeCloseTo(0.85);
     expect(result.reasoning).toBe('Thorough and correct');
@@ -422,7 +480,7 @@ describe('EvaluatorsLLMService.parseJudgeResult — REM-FIX hardening', () => {
       cost: 0.001,
     });
 
-    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1, 'org-1');
 
     expect(result.score).toBe(1);
     expect(warnSpy).toHaveBeenCalledWith(
@@ -436,7 +494,7 @@ describe('EvaluatorsLLMService.parseJudgeResult — REM-FIX hardening', () => {
       cost: 0.001,
     });
 
-    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1, 'org-1');
 
     expect(result.score).toBe(0);
     expect(warnSpy).toHaveBeenCalledWith(
@@ -452,7 +510,7 @@ describe('EvaluatorsLLMService.parseJudgeResult — REM-FIX hardening', () => {
       cost: 0.001,
     });
 
-    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1, 'org-1');
 
     expect(result.score).not.toBe(0);
     expect(result.score).toBeCloseTo(0.7); // evaluateFactuality's fallback default
@@ -469,7 +527,7 @@ describe('EvaluatorsLLMService.parseJudgeResult — REM-FIX hardening', () => {
       cost: 0.001,
     });
 
-    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1, 'org-1');
 
     expect(result.score).not.toBeCloseTo(0.01, 5);
     expect(result.score).toBeCloseTo(0.7);
@@ -484,7 +542,7 @@ describe('EvaluatorsLLMService.parseJudgeResult — REM-FIX hardening', () => {
       cost: 0.001,
     });
 
-    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1, 'org-1');
 
     expect(result.score).not.toBe(0);
     expect(result.score).toBeCloseTo(0.7);
@@ -499,7 +557,7 @@ describe('EvaluatorsLLMService.parseJudgeResult — REM-FIX hardening', () => {
       cost: 0.001,
     });
 
-    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1, 'org-1');
 
     expect(result.score).not.toBe(0);
     expect(result.score).toBeCloseTo(0.7);
@@ -517,7 +575,7 @@ describe('EvaluatorsLLMService.parseJudgeResult — REM-FIX hardening', () => {
       cost: 0.001,
     });
 
-    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1, 'org-1');
 
     expect(result.score).toBeCloseTo(0.85);
     expect(result.reasoning).toBe('missing brace in code like if (x) {');
@@ -532,7 +590,7 @@ describe('EvaluatorsLLMService.parseJudgeResult — REM-FIX hardening', () => {
       cost: 0.001,
     });
 
-    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1, 'org-1');
 
     expect(result.score).toBeCloseTo(0.85);
     expect(result.reasoning).toBe('unexpected } in the middle');
@@ -547,7 +605,7 @@ describe('EvaluatorsLLMService.parseJudgeResult — REM-FIX hardening', () => {
       cost: 0.001,
     });
 
-    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1, 'org-1');
 
     expect(result.score).toBeCloseTo(0.85);
     expect(result.reasoning).toBe('ok');
@@ -563,7 +621,7 @@ describe('EvaluatorsLLMService.parseJudgeResult — REM-FIX hardening', () => {
       cost: 0.001,
     });
 
-    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1, 'org-1');
 
     expect(result.score).toBeCloseTo(0.85);
     expect(result.reasoning).toBe('final verdict');
@@ -580,7 +638,7 @@ describe('EvaluatorsLLMService.parseJudgeResult — REM-FIX hardening', () => {
       cost: 0.001,
     });
 
-    const result = await service.evaluateFactuality('resp', 'question', {}, 1);
+    const result = await service.evaluateFactuality('resp', 'question', {}, 1, 'org-1');
 
     expect(result.score).toBeCloseTo(0.4);
     expect(result.reasoning).toBe('earlier valid draft');

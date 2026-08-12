@@ -76,9 +76,12 @@ export class EvaluatorsService {
     expected: string,
     judgePrompt: string,
     seed: number,
-    datasetSample?: Record<string, unknown> | string,
+    // Default value (not `?`) so a required `organizationId` can follow it —
+    // see the matching comment in EvaluatorsLLMService.evaluateLLMAsJudge.
+    datasetSample: Record<string, unknown> | string | undefined = undefined,
+    organizationId: string,
   ): Promise<EvaluatorResult> {
-    return this.llm.evaluateLLMAsJudge(response, expected, judgePrompt, seed, datasetSample);
+    return this.llm.evaluateLLMAsJudge(response, expected, judgePrompt, seed, datasetSample, organizationId);
   }
 
   async evaluateBattle(
@@ -86,8 +89,9 @@ export class EvaluatorsService {
     expected: string,
     config: EvaluatorConfig,
     seed: number,
+    organizationId: string,
   ): Promise<EvaluatorResult> {
-    return this.llm.evaluateBattle(response, expected, config, seed);
+    return this.llm.evaluateBattle(response, expected, config, seed, organizationId);
   }
 
   async evaluateFactuality(
@@ -95,16 +99,18 @@ export class EvaluatorsService {
     input: unknown,
     config: EvaluatorConfig,
     seed: number,
+    organizationId: string,
   ): Promise<EvaluatorResult> {
-    return this.llm.evaluateFactuality(response, input, config, seed);
+    return this.llm.evaluateFactuality(response, input, config, seed, organizationId);
   }
 
   async evaluateSecurity(
     response: string,
     config: EvaluatorConfig,
     seed: number,
+    organizationId: string,
   ): Promise<EvaluatorResult> {
-    return this.llm.evaluateSecurity(response, config, seed);
+    return this.llm.evaluateSecurity(response, config, seed, organizationId);
   }
 
   async evaluateAnswerRelevancy(
@@ -112,8 +118,9 @@ export class EvaluatorsService {
     input: unknown,
     config: EvaluatorConfig,
     seed: number,
+    organizationId: string,
   ): Promise<EvaluatorResult> {
-    return this.llm.evaluateAnswerRelevancy(response, input, config, seed);
+    return this.llm.evaluateAnswerRelevancy(response, input, config, seed, organizationId);
   }
 
   async evaluateContextPrecision(
@@ -122,8 +129,9 @@ export class EvaluatorsService {
     contexts: string[],
     config: EvaluatorConfig,
     seed: number,
+    organizationId: string,
   ): Promise<EvaluatorResult> {
-    return this.llm.evaluateContextPrecision(response, query, contexts, config, seed);
+    return this.llm.evaluateContextPrecision(response, query, contexts, config, seed, organizationId);
   }
 
   async evaluateContextRecall(
@@ -131,8 +139,9 @@ export class EvaluatorsService {
     contexts: string[],
     config: EvaluatorConfig,
     seed: number,
+    organizationId: string,
   ): Promise<EvaluatorResult> {
-    return this.llm.evaluateContextRecall(expectedAnswer, contexts, config, seed);
+    return this.llm.evaluateContextRecall(expectedAnswer, contexts, config, seed, organizationId);
   }
 
   async evaluateContextRelevancy(
@@ -140,8 +149,9 @@ export class EvaluatorsService {
     contexts: string[],
     config: EvaluatorConfig,
     seed: number,
+    organizationId: string,
   ): Promise<EvaluatorResult> {
-    return this.llm.evaluateContextRelevancy(query, contexts, config, seed);
+    return this.llm.evaluateContextRelevancy(query, contexts, config, seed, organizationId);
   }
 
   async evaluateFaithfulness(
@@ -149,8 +159,9 @@ export class EvaluatorsService {
     contexts: string[],
     config: EvaluatorConfig,
     seed: number,
+    organizationId: string,
   ): Promise<EvaluatorResult> {
-    return this.llm.evaluateFaithfulness(response, contexts, config, seed);
+    return this.llm.evaluateFaithfulness(response, contexts, config, seed, organizationId);
   }
 
   async evaluateAnswerCorrectness(
@@ -158,16 +169,18 @@ export class EvaluatorsService {
     expectedAnswer: string,
     config: EvaluatorConfig,
     seed: number,
+    organizationId: string,
   ): Promise<EvaluatorResult> {
-    return this.llm.evaluateAnswerCorrectness(response, expectedAnswer, config, seed);
+    return this.llm.evaluateAnswerCorrectness(response, expectedAnswer, config, seed, organizationId);
   }
 
   async evaluatePIIDetection(
     response: string,
     config: EvaluatorConfig,
     seed: number,
+    organizationId: string,
   ): Promise<EvaluatorResult> {
-    return this.llm.evaluatePIIDetection(response, config, seed);
+    return this.llm.evaluatePIIDetection(response, config, seed, organizationId);
   }
 
   async evaluateJailbreakDetection(
@@ -175,7 +188,8 @@ export class EvaluatorsService {
     response: string,
     config: EvaluatorConfig,
     seed: number,
+    organizationId: string,
   ): Promise<EvaluatorResult> {
-    return this.llm.evaluateJailbreakDetection(input, response, config, seed);
+    return this.llm.evaluateJailbreakDetection(input, response, config, seed, organizationId);
   }
 }
