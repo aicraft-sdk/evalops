@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { CheckCircle, LayoutDashboard, TrendingUp, Archive, ClipboardList, Zap, Shield, FileText, Moon, Sun, Database, Menu, X, Settings, Code, ChevronDown, ChevronRight, DollarSign, Package, Users, Cpu, Bot, AlertCircle } from "lucide-react";
+import { CheckCircle, LayoutDashboard, TrendingUp, Archive, ClipboardList, Zap, Shield, FileText, Moon, Sun, Database, Menu, X, Settings, Code, ChevronDown, ChevronRight, DollarSign, Package, Users, Cpu, Bot, AlertCircle, ClipboardCheck } from "lucide-react";
 import { useTheme } from "./theme-provider";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,7 @@ const navigation: NavigationItem[] = [
     children: [
       { name: "Providers", href: "/providers", icon: Users },
       { name: "Policies", href: "/policies", icon: Shield },
+      { name: "Golden Sets", href: "/golden-sets", icon: ClipboardCheck },
       { name: "Model Registry", href: "/model-registry", icon: Package },
     ]
   },

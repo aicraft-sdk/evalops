@@ -354,7 +354,9 @@ export class SimulationRunnerService {
             agentResponse,
             '', // No expected output for judge
             judgePrompt,
-            Date.now() // Seed
+            Date.now(), // Seed
+            undefined, // No dataset sample for simulation turns
+            organizationId
           );
 
           validationResults.judge = {

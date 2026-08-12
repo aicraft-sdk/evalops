@@ -9,6 +9,7 @@ export interface ModelConfig {
   frequencyPenalty?: number;
   presencePenalty?: number;
   model?: string;
+  responseFormat?: 'json_object';
 }
 
 export interface GenerationResponse {
@@ -54,6 +55,10 @@ export class AIProviderService {
       'text-embedding-ada-002';
   }
 
+  getDefaultModel(): string {
+    return this.defaultModel;
+  }
+
   async generateResponse(
     prompt: string,
     input: string,
@@ -64,16 +69,40 @@ export class AIProviderService {
       const fullPrompt = this.constructPrompt(prompt, input);
       const model = modelConfig.model || this.defaultModel;
 
-      const response = await this.client.chat.completions.create({
+      const buildParams = (includeResponseFormat: boolean) => ({
         model,
-        messages: [{ role: 'user', content: fullPrompt }],
+        messages: [{ role: 'user' as const, content: fullPrompt }],
         temperature: modelConfig.temperature ?? 1.0,
         max_completion_tokens: modelConfig.maxTokens ?? 1000,
         top_p: modelConfig.topP ?? 1.0,
         frequency_penalty: modelConfig.frequencyPenalty ?? 0,
         presence_penalty: modelConfig.presencePenalty ?? 0,
         seed: seed ? Math.floor(seed) : undefined,
+        ...(includeResponseFormat && modelConfig.responseFormat === 'json_object'
+          ? { response_format: { type: 'json_object' as const } }
+          : {}),
       });
+
+      let response;
+      try {
+        response = await this.client.chat.completions.create(
+          buildParams(true),
+        );
+      } catch (error: unknown) {
+        const isResponseFormatRejection =
+          error instanceof Error &&
+          (error as { status?: number }).status === 400 &&
+          /response_format/i.test(error.message);
+        if (!isResponseFormatRejection || !modelConfig.responseFormat) {
+          throw error;
+        }
+        this.logger.warn(
+          `Model ${model} rejected response_format=json_object; retrying without it`,
+        );
+        response = await this.client.chat.completions.create(
+          buildParams(false),
+        );
+      }
 
       const completion = response.choices[0]?.message?.content || '';
       const usage = response.usage;

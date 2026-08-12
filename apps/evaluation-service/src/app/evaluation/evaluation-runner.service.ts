@@ -45,8 +45,13 @@ export class EvaluationRunnerService {
     sample: Record<string, unknown>,
     evalSpec: Record<string, unknown>,
     seed: number,
-    runId?: string,
-    authToken?: string,
+    // Default values (not `?`) below so a required `organizationId` can
+    // follow them per TS1016 ("required parameter cannot follow an optional
+    // parameter") -- behaviorally identical for callers: omitting an arg or
+    // passing `undefined` explicitly both resolve to `undefined`.
+    runId: string | undefined = undefined,
+    authToken: string | undefined = undefined,
+    organizationId: string,
   ): Promise<EvaluationResult> {
     const result: EvaluationResult = {};
     let response: unknown;
@@ -215,7 +220,8 @@ export class EvaluationRunnerService {
               typeof sample.expected === 'string' ? sample.expected : (sample.expected != null ? JSON.stringify(sample.expected) : ''),
               judgePrompt,
               seed,
-              sample
+              sample,
+              organizationId
             );
             result.llmAsJudgeWinRate = judgeResult.score;
             cost += judgeResult.cost;
@@ -229,7 +235,8 @@ export class EvaluationRunnerService {
                 : JSON.stringify(response),
               typeof sample.expected === 'string' ? sample.expected : (sample.expected != null ? JSON.stringify(sample.expected) : ''),
               evaluator.config ?? {},
-              seed
+              seed,
+              organizationId
             );
             result.battle = battleResult.score;
             cost += battleResult.cost;
@@ -243,7 +250,8 @@ export class EvaluationRunnerService {
                 : JSON.stringify(response),
               sample.input,
               evaluator.config ?? {},
-              seed
+              seed,
+              organizationId
             );
             result.factuality = factualityResult.score;
             cost += factualityResult.cost;
@@ -256,7 +264,8 @@ export class EvaluationRunnerService {
                 ? response
                 : JSON.stringify(response),
               evaluator.config ?? {},
-              seed
+              seed,
+              organizationId
             );
             result.security = securityResult.score;
             cost += securityResult.cost;
@@ -271,7 +280,8 @@ export class EvaluationRunnerService {
                   : JSON.stringify(response),
                 sample.input,
                 evaluator.config ?? {},
-                seed
+                seed,
+                organizationId
               );
             result.answerRelevancy = answerRelevancyResult.score;
             cost += answerRelevancyResult.cost;
@@ -287,7 +297,8 @@ export class EvaluationRunnerService {
                 sample.input,
                 (sample.context as string[] | undefined) ?? [],
                 evaluator.config ?? {},
-                seed
+                seed,
+                organizationId
               );
             result.contextPrecision = precisionResult.score;
             cost += precisionResult.cost;
@@ -299,7 +310,8 @@ export class EvaluationRunnerService {
               typeof sample.expected === 'string' ? sample.expected : (sample.expected != null ? JSON.stringify(sample.expected) : ''),
               (sample.context as string[] | undefined) ?? [],
               evaluator.config ?? {},
-              seed
+              seed,
+              organizationId
             );
             result.contextRecall = recallResult.score;
             cost += recallResult.cost;
@@ -312,7 +324,8 @@ export class EvaluationRunnerService {
                 sample.input,
                 (sample.context as string[] | undefined) ?? [],
                 evaluator.config ?? {},
-                seed
+                seed,
+                organizationId
               );
             result.contextRelevancy = contextRelevancyResult.score;
             cost += contextRelevancyResult.cost;
@@ -327,7 +340,8 @@ export class EvaluationRunnerService {
                   : JSON.stringify(response),
                 (sample.context as string[] | undefined) ?? [],
                 evaluator.config ?? {},
-                seed
+                seed,
+                organizationId
               );
             result.faithfulness = faithfulnessResult.score;
             cost += faithfulnessResult.cost;
@@ -342,7 +356,8 @@ export class EvaluationRunnerService {
                   : JSON.stringify(response),
                 typeof sample.expected === 'string' ? sample.expected : (sample.expected != null ? JSON.stringify(sample.expected) : ''),
                 evaluator.config ?? {},
-                seed
+                seed,
+                organizationId
               );
             result.answerCorrectness = correctnessResult.score;
             cost += correctnessResult.cost;
@@ -355,7 +370,8 @@ export class EvaluationRunnerService {
                 ? response
                 : JSON.stringify(response),
               evaluator.config ?? {},
-              seed
+              seed,
+              organizationId
             );
             result.piiDetection = piiResult.score;
             cost += piiResult.cost;
@@ -372,7 +388,8 @@ export class EvaluationRunnerService {
                   ? response
                   : JSON.stringify(response),
                 evaluator.config ?? {},
-                seed
+                seed,
+                organizationId
               );
             result.jailbreakDetection = jailbreakResult.score;
             cost += jailbreakResult.cost;

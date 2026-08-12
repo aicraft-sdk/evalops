@@ -75,3 +75,13 @@ global.ResizeObserver = class ResizeObserver {
   unobserve() {}
   disconnect() {}
 }
+
+// jsdom does not implement these, but Radix UI's Select/Dialog primitives
+// call them during pointer interaction - without these, any test that
+// opens a Radix <Select> throws "target.hasPointerCapture is not a function"
+if (typeof Element !== 'undefined') {
+  Element.prototype.hasPointerCapture = Element.prototype.hasPointerCapture || (() => false)
+  Element.prototype.setPointerCapture = Element.prototype.setPointerCapture || (() => {})
+  Element.prototype.releasePointerCapture = Element.prototype.releasePointerCapture || (() => {})
+  Element.prototype.scrollIntoView = Element.prototype.scrollIntoView || (() => {})
+}

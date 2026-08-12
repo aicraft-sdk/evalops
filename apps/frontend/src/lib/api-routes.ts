@@ -30,6 +30,7 @@ const SERVICE_ROUTES: Record<string, string> = {
   '/api/python-worker': '/api/evaluation/python-worker',
   '/api/simulations': '/api/evaluation/simulations',
   '/api/reviews': '/api/evaluation/reviews',
+  '/api/golden-sets': '/api/evaluation/golden-sets',
 
   // Analytics Service
   '/api/analytics': '/api/analytics',

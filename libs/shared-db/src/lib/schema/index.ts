@@ -9,6 +9,8 @@ export * from './permissions';
 export * from './azure';
 export * from './agents';
 export * from './integration';
+export * from './judge-cache';
+export * from './golden-sets';
 
 // Import all tables and set up cross-module relations
 import { users, organizations } from './core';
