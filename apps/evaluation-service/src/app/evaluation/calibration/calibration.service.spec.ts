@@ -325,6 +325,104 @@ describe('CalibrationService.runCalibration', () => {
     expect(goldenSetsRepo.createCalibrationRun).not.toHaveBeenCalled();
   });
 
+  it('excludes a faithfulness example missing context BEFORE calling the judge, keeping others scored', async () => {
+    goldenSetsRepo.listExamples.mockResolvedValue([
+      makeExample({ id: 'e1', humanLabel: true, isBadExample: false, context: ['ctx'] }),
+      makeExample({ id: 'e2', humanLabel: false, isBadExample: true, context: ['ctx'] }),
+      makeExample({ id: 'e3', humanLabel: true, isBadExample: false, context: null }), // missing context -> excluded pre-dispatch
+      makeExample({ id: 'e4', humanLabel: true, isBadExample: false, context: [] }), // empty context -> excluded pre-dispatch
+      makeExample({ id: 'e5', humanLabel: false, isBadExample: false, context: ['ctx'] }),
+    ]);
+    evaluators.evaluateFaithfulness.mockResolvedValue({ score: 0.9, reasoning: 'faithful', cost: 0 });
+
+    await service.runCalibration({
+      goldenSetId: 'gs1',
+      judgeEvaluator: 'faithfulness',
+      organizationId: 'org-1',
+      triggeredBy: 'user-1',
+    });
+
+    // Only e1, e2, e5 (real context) ever reach the evaluator — e3/e4 are
+    // excluded before dispatch, never fabricated as score:1.
+    expect(evaluators.evaluateFaithfulness).toHaveBeenCalledTimes(3);
+    const call = goldenSetsRepo.createCalibrationRun.mock.calls[0][0];
+    expect(call.sampleCount).toBe(3);
+    expect(call.disagreements.excludedCount).toBe(2);
+    expect(call.disagreements.excludedExamples).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          exampleId: 'e3',
+          reason: expect.stringMatching(/faithfulness.*context/i),
+        }),
+        expect.objectContaining({
+          exampleId: 'e4',
+          reason: expect.stringMatching(/faithfulness.*context/i),
+        }),
+      ]),
+    );
+  });
+
+  it('excludes an answer_correctness example missing expected BEFORE calling the judge, keeping others scored', async () => {
+    goldenSetsRepo.listExamples.mockResolvedValue([
+      makeExample({ id: 'e1', humanLabel: true, isBadExample: false, expected: 'exp' }),
+      makeExample({ id: 'e2', humanLabel: false, isBadExample: true, expected: 'exp' }),
+      makeExample({ id: 'e3', humanLabel: true, isBadExample: false, expected: null }), // missing -> excluded pre-dispatch
+      makeExample({ id: 'e4', humanLabel: true, isBadExample: false, expected: '' }), // empty string -> excluded pre-dispatch
+      makeExample({ id: 'e5', humanLabel: false, isBadExample: false, expected: 'exp' }),
+    ]);
+    evaluators.evaluateAnswerCorrectness.mockResolvedValue({ score: 0.9, reasoning: 'correct', cost: 0 });
+
+    await service.runCalibration({
+      goldenSetId: 'gs1',
+      judgeEvaluator: 'answer_correctness',
+      organizationId: 'org-1',
+      triggeredBy: 'user-1',
+    });
+
+    // Only e1, e2, e5 (real expected value) ever reach the evaluator — e3/e4
+    // are excluded before dispatch, never fabricated as score:0.5.
+    expect(evaluators.evaluateAnswerCorrectness).toHaveBeenCalledTimes(3);
+    const call = goldenSetsRepo.createCalibrationRun.mock.calls[0][0];
+    expect(call.sampleCount).toBe(3);
+    expect(call.disagreements.excludedCount).toBe(2);
+    expect(call.disagreements.excludedExamples).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          exampleId: 'e3',
+          reason: expect.stringMatching(/answer_correctness.*expected/i),
+        }),
+        expect.objectContaining({
+          exampleId: 'e4',
+          reason: expect.stringMatching(/answer_correctness.*expected/i),
+        }),
+      ]),
+    );
+  });
+
+  it('does NOT exclude a pii_detection example with a legitimate clean (score:0, no reasoning) result', async () => {
+    goldenSetsRepo.listExamples.mockResolvedValue(fiveExamplesIncludingOneBad());
+    evaluators.evaluatePIIDetection
+      .mockResolvedValueOnce({ score: 0, cost: 0 }) // e1 -- legit clean fast-path, human=true
+      .mockResolvedValueOnce({ score: 0.9, reasoning: 'pii found', cost: 0 }) // e2 human=false
+      .mockResolvedValueOnce({ score: 0, cost: 0 }) // e3 -- legit clean fast-path, human=true
+      .mockResolvedValueOnce({ score: 0, cost: 0 }) // e4 -- legit clean fast-path, human=true
+      .mockResolvedValueOnce({ score: 0.9, reasoning: 'pii found', cost: 0 }); // e5 human=false
+
+    await service.runCalibration({
+      goldenSetId: 'gs1',
+      judgeEvaluator: 'pii_detection',
+      judgeThreshold: 0.5,
+      organizationId: 'org-1',
+      triggeredBy: 'user-1',
+    });
+
+    const call = goldenSetsRepo.createCalibrationRun.mock.calls[0][0];
+    // All 5 examples count as real data points -- score:0/no-reasoning is
+    // never treated as a swallowed failure for pii_detection.
+    expect(call.sampleCount).toBe(5);
+    expect(call.disagreements.excludedCount).toBe(0);
+  });
+
   it('sets isCalibrated:false whenever isReliable:false, even if raw kappa would be >= 0.8', async () => {
     goldenSetsRepo.listExamples.mockResolvedValue(threeExamplesIncludingOneBad());
     // All 3 examples agree perfectly with human labels -> kappa would compute to 1.0,

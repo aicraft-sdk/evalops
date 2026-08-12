@@ -49,6 +49,20 @@ export class CalibrationService {
     const excludedExamples: Array<{ exampleId: string; reason: string }> = [];
 
     for (const example of examples) {
+      const missingFieldReason = this.checkRequiredFieldForEvaluator(
+        example,
+        input.judgeEvaluator,
+      );
+      if (missingFieldReason) {
+        // Skip dispatch entirely — evaluateFaithfulness/evaluateAnswerCorrectness
+        // fabricate a non-zero default (score:1 / score:0.5, no LLM call, no
+        // `reasoning`) when their required input is missing, which bypasses
+        // isLikelySwallowedFailure's score===0 check entirely and would get
+        // counted as a real judge verdict. Excluding pre-dispatch closes that.
+        excludedExamples.push({ exampleId: example.id, reason: missingFieldReason });
+        continue;
+      }
+
       let judgeResult: { score: number; reasoning?: string };
       try {
         judgeResult = await this.scoreExample(example, input);
@@ -70,7 +84,7 @@ export class CalibrationService {
         continue;
       }
 
-      if (this.isLikelySwallowedFailure(judgeResult)) {
+      if (this.isLikelySwallowedFailure(judgeResult, input.judgeEvaluator)) {
         excludedExamples.push({
           exampleId: example.id,
           reason:
@@ -159,9 +173,58 @@ export class CalibrationService {
    * is an accepted limitation of a per-example heuristic that cannot see
    * *why* a zero came back; it trades a rare false exclusion for closing the
    * far larger risk of a swallowed failure silently corrupting kappa.
+   *
+   * `evaluatePIIDetection` is a deliberate exception, never checked here:
+   * its pattern-only fast path (no PII detected via regex, non-strict mode)
+   * legitimately returns `{ score: 0, cost: 0 }` with no `reasoning` — a
+   * correctly-computed clean result (no LLM call by design), not a failure
+   * signal. Treating it as swallowed-failure-shaped would wrongly exclude
+   * every genuine "no PII found" data point from kappa.
    */
-  private isLikelySwallowedFailure(result: { score: number; reasoning?: string }): boolean {
+  private isLikelySwallowedFailure(
+    result: { score: number; reasoning?: string },
+    judgeEvaluator: string,
+  ): boolean {
+    if (judgeEvaluator === 'pii_detection') {
+      return false;
+    }
     return result.score === 0 && result.reasoning === undefined;
+  }
+
+  /**
+   * Some judge methods fabricate a non-zero default (no LLM call at all)
+   * when their required input is missing, bypassing isLikelySwallowedFailure's
+   * score===0 signal entirely:
+   *  - evaluateFaithfulness returns { score: 1, cost: 0 } when contexts is empty
+   *  - evaluateAnswerCorrectness returns { score: 0.5, cost: 0 } when expected is missing
+   * Detecting this BEFORE dispatch (rather than trying to infer it from the
+   * result afterward) is the only reliable way to keep these fabricated
+   * defaults out of kappa without modifying evaluators-llm.service.ts.
+   *
+   * Returns an exclusion reason string, or null if the example has what
+   * this judgeEvaluator needs.
+   */
+  private checkRequiredFieldForEvaluator(
+    example: GoldenSetExample,
+    judgeEvaluator: string,
+  ): string | null {
+    if (judgeEvaluator === 'faithfulness') {
+      const contexts = example.context as string[] | null;
+      if (!Array.isArray(contexts) || contexts.length === 0) {
+        return 'faithfulness requires non-empty context, example has none';
+      }
+    }
+
+    if (judgeEvaluator === 'answer_correctness') {
+      const expected = example.expected;
+      const isEmpty =
+        expected == null || (typeof expected === 'string' && expected.trim() === '');
+      if (isEmpty) {
+        return 'answer_correctness requires a non-empty expected value, example has none';
+      }
+    }
+
+    return null;
   }
 
   private async scoreExample(
