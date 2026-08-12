@@ -99,16 +99,17 @@ export class CalibrationService {
     }
 
     // The per-example exclusion loop above can drop the golden set's ONLY
-    // bad-labeled (humanLabel:false) example if its judge call looks like a
+    // bad-labeled (humanLabel:false) example OR its ONLY good-labeled
+    // (humanLabel:true) example if that example's judge call looks like a
     // swallowed failure. `pairs.length === 0` only catches "everything
     // excluded" — it does not catch "some survived, but all one class now".
-    // Without this check, computeCohensKappa's pe===1 degenerate case
-    // fabricates kappa:1 (and, if sampleCount also clears
+    // Without this check (on BOTH classes), computeCohensKappa's pe===1
+    // degenerate case fabricates kappa:1 (and, if sampleCount also clears
     // MIN_RELIABLE_SAMPLES, isCalibrated:true) from single-class agreement
-    // alone, with zero real discernment evidence against a bad example.
-    if (!pairs.some((pair) => pair.human === false)) {
+    // alone, with zero real discernment evidence against the missing class.
+    if (!pairs.some((pair) => pair.human === false) || !pairs.some((pair) => pair.human === true)) {
       throw new BadRequestException(
-        'Calibration requires at least one bad-labeled example with a valid judge score; all bad-labeled examples were excluded as likely scoring failures',
+        'Calibration requires at least one good-labeled and one bad-labeled example with a valid judge score; exclusions left only one class of human label, which cannot demonstrate real judge discernment',
       );
     }
 

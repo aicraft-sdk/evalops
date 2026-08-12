@@ -285,7 +285,43 @@ describe('CalibrationService.runCalibration', () => {
         organizationId: 'org-1',
         triggeredBy: 'user-1',
       }),
-    ).rejects.toThrow(/at least one bad-labeled example with a valid judge score/i);
+    ).rejects.toThrow(/at least one good-labeled and one bad-labeled example with a valid judge score/i);
+    expect(goldenSetsRepo.createCalibrationRun).not.toHaveBeenCalled();
+  });
+
+  it('throws instead of persisting a fabricated kappa when the ONLY good-labeled example is excluded as a likely swallowed failure, leaving zero positive-class discernment evidence', async () => {
+    // Only e1 is a good/positive-class example (humanLabel:true). It comes
+    // back with the swallowed-failure signature and is excluded. The 5
+    // surviving examples are all humanLabel:false (bad examples) and all
+    // agree with the judge (judge score < threshold) -- pe would degenerate
+    // to 1, and without a class-diversity guard on BOTH classes,
+    // computeCohensKappa's pe===1 branch fabricates kappa:1 from pure
+    // single-class agreement, not real judge discernment against any good
+    // example.
+    goldenSetsRepo.listExamples.mockResolvedValue([
+      makeExample({ id: 'e1', humanLabel: true, isBadExample: false }),
+      makeExample({ id: 'e2', humanLabel: false, isBadExample: true }),
+      makeExample({ id: 'e3', humanLabel: false, isBadExample: true }),
+      makeExample({ id: 'e4', humanLabel: false, isBadExample: true }),
+      makeExample({ id: 'e5', humanLabel: false, isBadExample: true }),
+      makeExample({ id: 'e6', humanLabel: false, isBadExample: true }),
+    ]);
+    evaluators.evaluateFactuality
+      .mockResolvedValueOnce({ score: 0, cost: 0 }) // e1 -- swallowed-failure signature, excluded (the ONLY good example)
+      .mockResolvedValueOnce({ score: 0.1, reasoning: 'bad match', cost: 0 }) // e2 agree
+      .mockResolvedValueOnce({ score: 0.1, reasoning: 'bad match', cost: 0 }) // e3 agree
+      .mockResolvedValueOnce({ score: 0.1, reasoning: 'bad match', cost: 0 }) // e4 agree
+      .mockResolvedValueOnce({ score: 0.1, reasoning: 'bad match', cost: 0 }) // e5 agree
+      .mockResolvedValueOnce({ score: 0.1, reasoning: 'bad match', cost: 0 }); // e6 agree
+
+    await expect(
+      service.runCalibration({
+        goldenSetId: 'gs1',
+        judgeEvaluator: 'factuality',
+        organizationId: 'org-1',
+        triggeredBy: 'user-1',
+      }),
+    ).rejects.toThrow(/at least one good-labeled and one bad-labeled example with a valid judge score/i);
     expect(goldenSetsRepo.createCalibrationRun).not.toHaveBeenCalled();
   });
 
@@ -326,16 +362,29 @@ describe('CalibrationService.runCalibration — scoreExample dispatch (Task 5.3 
     context: ['ctx-a', 'ctx-b'],
     // humanLabel:false matches this file's isBadExample:true convention
     // (see threeExamplesIncludingOneBad/fiveExamplesIncludingOneBad) so this
-    // single-example fixture still satisfies the negative-class survival
-    // check in CalibrationService — these tests only assert dispatch call
-    // args, not calibration-outcome shape.
+    // fixture satisfies the negative-class survival check in
+    // CalibrationService — these tests only assert dispatch call args, not
+    // calibration-outcome shape.
     humanLabel: false,
     isBadExample: true,
+  });
+  // The class-diversity guard now requires BOTH a good-labeled and a
+  // bad-labeled example to survive — add a second, good-labeled example so
+  // these dispatch-only tests keep exercising a single scoreExample() call
+  // per assertion via toHaveBeenCalledWith while still satisfying the guard.
+  const dispatchExampleGood = makeExample({
+    id: 'e2',
+    input: 'the input question',
+    output: 'the output text',
+    expected: 'the expected answer',
+    context: ['ctx-a', 'ctx-b'],
+    humanLabel: true,
+    isBadExample: false,
   });
 
   beforeEach(async () => {
     goldenSetsRepo = {
-      listExamples: jest.fn().mockResolvedValue([dispatchExample]),
+      listExamples: jest.fn().mockResolvedValue([dispatchExample, dispatchExampleGood]),
       createCalibrationRun: jest.fn().mockImplementation((data) => Promise.resolve({ id: 'run-1', ...data })),
     };
     evaluators = {
