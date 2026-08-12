@@ -3,10 +3,26 @@ import { RunsRepository, SampleResultsRepository } from '@evalops/shared-db';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
+import { createHash } from 'crypto';
 import { CoreClientService } from '../core-client/core-client.service';
 import { PoliciesService } from '../policies/policies.service';
 import { ReviewsService } from '../reviews/reviews.service';
 import { EvaluationRunnerService } from './evaluation-runner.service';
+
+/**
+ * Deterministic fallback seed for suite reruns where `evalSpec.seeds` is
+ * unset. Replaces a `Math.random()` fallback so cache keys (which include
+ * `seed`) are stable across reruns of the same eval spec + repetition,
+ * letting Success Criterion #1 (cache hits on suite reruns) hold in the
+ * common unseeded case. Preserves existing behavior exactly when
+ * `evalSpec.seeds` IS configured (this helper is only invoked as a fallback).
+ */
+export function deriveFallbackSeed(evalSpecId: string, repetitionIndex: number): number {
+  const digest = createHash('sha256').update(`${evalSpecId}:${repetitionIndex}`).digest('hex');
+  // First 8 hex chars -> a positive 32-bit-range integer, matching the
+  // existing `Math.random() * 1000000`-style magnitude used elsewhere here.
+  return parseInt(digest.slice(0, 8), 16) % 1000000;
+}
 
 export interface EvaluationResult {
   exactMatch?: number;
@@ -106,7 +122,7 @@ export class EvaluationService {
         const seed =
           seedsArray && seedsArray.length > rep && seedsArray[rep] != null
             ? seedsArray[rep]
-            : Math.random() * 1000000;
+            : deriveFallbackSeed(evalSpec.id as string, rep);
 
         for (let sampleIndex = 0; sampleIndex < samples.length; sampleIndex++) {
           const sample = samples[sampleIndex];
