@@ -18,6 +18,7 @@ import { AlertsRepository } from './repositories/alerts.repository';
 import { AuditRepository } from './repositories/audit.repository';
 import { MetricsRepository } from './repositories/metrics.repository';
 import { PersonalAccessTokensRepository } from './repositories/personal-access-tokens.repository';
+import { JudgeCacheRepository } from './repositories/judge-cache.repository';
 
 const REPOSITORIES = [
   UsersRepository,
@@ -39,6 +40,7 @@ const REPOSITORIES = [
   AuditRepository,
   MetricsRepository,
   PersonalAccessTokensRepository,
+  JudgeCacheRepository,
 ];
 
 @Global()

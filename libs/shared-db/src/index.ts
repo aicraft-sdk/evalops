@@ -26,5 +26,6 @@ export * from './lib/repositories/alerts.repository';
 export * from './lib/repositories/audit.repository';
 export * from './lib/repositories/metrics.repository';
 export * from './lib/repositories/personal-access-tokens.repository';
+export * from './lib/repositories/judge-cache.repository';
 export * from './lib/shared-db.module';
 
