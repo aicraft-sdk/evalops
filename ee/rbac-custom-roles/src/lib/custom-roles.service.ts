@@ -47,13 +47,12 @@ export class CustomRolesService {
   async remove(organizationId: string, roleId: string) {
     await this.assertMutableCustomRole(organizationId, roleId);
     // roles.id is referenced by 4 FKs, all `ON DELETE no action` - every one must be cleared
-    // (or, for permission_audit_log, detached) or deleteRole() throws an unhandled FK
-    // violation for any role with >=1 row in the referencing table.
-    await this.permissionsRepository.replaceRolePermissions(roleId, []); // role_permissions
-    await this.permissionsRepository.clearUserRolesForRole(roleId); // user_roles
-    await this.permissionsRepository.clearResourcePermissionsForRole(roleId); // resource_permissions
-    await this.permissionsRepository.detachPermissionAuditLogForRole(roleId); // permission_audit_log (preserved, detached)
-    return this.permissionsRepository.deleteRole(roleId);
+    // (or, for permission_audit_log, detached) or a raw deleteRole() would throw an unhandled
+    // FK violation for any role with >=1 row in a referencing table. deleteRoleWithDependents
+    // runs the whole clear/detach/delete sequence inside a single transaction (see its doc
+    // comment on PermissionsRepository), so a failure partway through never reaches the final
+    // delete step.
+    return this.permissionsRepository.deleteRoleWithDependents(roleId);
   }
 
   private async assertMutableCustomRole(organizationId: string, roleId: string) {

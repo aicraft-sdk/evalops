@@ -10,6 +10,10 @@ import {
 } from '../schema';
 import { eq, and, or } from 'drizzle-orm';
 
+// EVALOPS_DEV_MODE must be set before any shared-db import (see db.ts) — safe
+// to read here since it is already frozen by the time this module loads.
+const isDevMode = process.env['EVALOPS_DEV_MODE'] === '1';
+
 @Injectable()
 export class PermissionsRepository {
   async getUserRoles(userId: string): Promise<(typeof roles.$inferSelect)[]> {
@@ -267,8 +271,14 @@ export class PermissionsRepository {
 
   /**
    * `resource_permissions.role_id` has `ON DELETE no action`
-   * (`resource_permissions_role_id_roles_id_fk`). A role-scoped resource grant is meaningless
-   * once its role is gone - deletes every resource_permissions row referencing this role.
+   * (`resource_permissions_role_id_roles_id_fk`) and, like `permission_audit_log.role_id`, IS
+   * nullable - so these rows could theoretically be detached (nulled) instead of deleted.
+   * They are deleted instead because a `resource_permissions` row with BOTH `user_id` and
+   * `role_id` null would become permanently unreachable via
+   * `getUserResourcePermissions`'s query shape (an `OR` over `eq(userId, ...)` and
+   * `eq(roleId, ...)` clauses - neither ever matches a doubly-null row): a role-scoped grant
+   * with its role gone is meaningless, so it is deleted outright rather than left as
+   * unreachable orphaned data.
    */
   async clearResourcePermissionsForRole(roleId: string): Promise<void> {
     await db.delete(resourcePermissions).where(eq(resourcePermissions.roleId, roleId));
@@ -276,14 +286,63 @@ export class PermissionsRepository {
 
   /**
    * `permission_audit_log.role_id` has `ON DELETE no action`
-   * (`permission_audit_log_role_id_roles_id_fk`) but is nullable, unlike user_roles/
-   * resource_permissions. Detaches (nulls out) role_id instead of deleting rows, to preserve
-   * audit history for a role that has since been deleted.
+   * (`permission_audit_log_role_id_roles_id_fk`) and is nullable, like
+   * `resource_permissions.role_id` but unlike `user_roles.role_id` (NOT NULL). Detaches (nulls
+   * out) role_id instead of deleting rows, to preserve audit history for a role that has since
+   * been deleted - unlike `resource_permissions`, an audit-log row stays meaningfully
+   * queryable after `role_id` is nulled (it remains reachable by its own id/userId/
+   * performedBy), so nulling here does not create the same unreachable-orphan problem
+   * `resource_permissions` would have.
    */
   async detachPermissionAuditLogForRole(roleId: string): Promise<void> {
     await db
       .update(permissionAuditLog)
       .set({ roleId: null } as Partial<typeof permissionAuditLog.$inferInsert>)
       .where(eq(permissionAuditLog.roleId, roleId));
+  }
+
+  /**
+   * Atomically deletes a custom role together with every row that references it via an
+   * `ON DELETE no action` FK: clears `role_permissions`, `user_roles`, `resource_permissions`
+   * (all deleted - see the doc comments above for why each is deleted rather than nulled),
+   * detaches `permission_audit_log` (nulled, not deleted, to preserve audit history), then
+   * deletes the role itself. All 5 writes run inside a single Drizzle transaction on the
+   * production Postgres path so the role is never left half-detached - or, in the worst case,
+   * deleted while a dependent row still references it - if one of the writes fails.
+   *
+   * In dev mode (SQLite): drizzle's better-sqlite3 driver only supports synchronous
+   * transaction callbacks, while the node-postgres driver used in production requires an
+   * async one - the same callback cannot satisfy both dialects (see
+   * `OrganizationsRepository.createWithAdminMember` for the established precedent). The steps
+   * still run sequentially in this same order and a throw from any step still propagates
+   * without invoking the next one, so a mid-sequence failure still means `deleteRole` (the
+   * final step) never runs and the role itself is never deleted - real multi-statement
+   * atomicity for the OTHER, already-applied writes is only guaranteed on the production
+   * Postgres path.
+   */
+  async deleteRoleWithDependents(roleId: string): Promise<boolean> {
+    if (isDevMode) {
+      await db.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
+      await db.delete(userRoles).where(eq(userRoles.roleId, roleId));
+      await db.delete(resourcePermissions).where(eq(resourcePermissions.roleId, roleId));
+      await db
+        .update(permissionAuditLog)
+        .set({ roleId: null } as Partial<typeof permissionAuditLog.$inferInsert>)
+        .where(eq(permissionAuditLog.roleId, roleId));
+      const deleted = await db.delete(roles).where(eq(roles.id, roleId)).returning();
+      return deleted.length > 0;
+    }
+
+    return db.transaction(async (tx) => {
+      await tx.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
+      await tx.delete(userRoles).where(eq(userRoles.roleId, roleId));
+      await tx.delete(resourcePermissions).where(eq(resourcePermissions.roleId, roleId));
+      await tx
+        .update(permissionAuditLog)
+        .set({ roleId: null } as Partial<typeof permissionAuditLog.$inferInsert>)
+        .where(eq(permissionAuditLog.roleId, roleId));
+      const deleted = await tx.delete(roles).where(eq(roles.id, roleId)).returning();
+      return deleted.length > 0;
+    });
   }
 }
