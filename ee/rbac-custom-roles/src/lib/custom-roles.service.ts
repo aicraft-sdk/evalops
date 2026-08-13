@@ -46,6 +46,9 @@ export class CustomRolesService {
 
   async remove(organizationId: string, roleId: string) {
     await this.assertMutableCustomRole(organizationId, roleId);
+    // role_permissions.role_id has `ON DELETE no action` - clear attached permission rows
+    // first or deleteRole() throws an unhandled FK violation for any role with >=1 permission.
+    await this.permissionsRepository.replaceRolePermissions(roleId, []);
     return this.permissionsRepository.deleteRole(roleId);
   }
 

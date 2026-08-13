@@ -126,14 +126,17 @@ export class PermissionsService {
   }
 
   /**
-   * Check if user has system admin role
+   * Check if user has system admin role.
+   *
+   * Must check the actual `isSystemRole` flag, not a case-insensitive substring match on
+   * the role name - a custom role's `name` is user-supplied (CreateCustomRoleDto has no
+   * reserved-word check), so a narrowly-scoped custom role named e.g. "Data Admin" or
+   * "Super Admin" must NOT satisfy this check just because its name contains "admin"/
+   * "superuser". Only a role the system itself marked `isSystemRole: true` grants
+   * unconditional access.
    */
   private isSystemAdmin(userRolesList: Role[]): boolean {
-    return userRolesList.some(
-      (role) =>
-        role.name.toLowerCase().includes('admin') ||
-        role.name.toLowerCase().includes('superuser'),
-    );
+    return userRolesList.some((role) => role.isSystemRole === true);
   }
 
   /**

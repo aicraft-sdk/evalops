@@ -60,6 +60,10 @@ const orgBAdminEmail = 'org-b-admin@example.com';
 // org-scoping scenarios below depend on.
 const roleChangeTargetId = randomUUID();
 const roleChangeTargetEmail = 'role-change-target@example.com';
+// A real, non-privileged authenticated user (UserRole.VIEWER) in org-A, used to prove
+// RbacGuard + @Roles(UserRole.ADMIN) actually rejects non-admins on the custom-roles routes.
+const orgANonAdminId = randomUUID();
+const orgANonAdminEmail = 'org-a-viewer@example.com';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Database = require('better-sqlite3');
@@ -123,6 +127,12 @@ rawDb
      VALUES (?, ?, ?, ?, ?, 'viewer', 'org-A', 1, ?, ?)`,
   )
   .run(roleChangeTargetId, roleChangeTargetEmail, 'unused', 'Role', 'ChangeTarget', nowIso, nowIso);
+rawDb
+  .prepare(
+    `INSERT INTO users (id, email, password_hash, first_name, last_name, role, organization_id, is_active, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 'viewer', 'org-A', 1, ?, ?)`,
+  )
+  .run(orgANonAdminId, orgANonAdminEmail, 'unused', 'Org A', 'Viewer', nowIso, nowIso);
 rawDb.close();
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -282,6 +292,20 @@ describe('ee/rbac-custom-roles entitlement + system-role protection + org-scopin
       expect(res.body.upsell).toBe(true);
       expect(res.body.feature).toBe('rbac-custom-roles');
       expect(fakeRepo.createRole).not.toHaveBeenCalled();
+    });
+
+    it('GET /api/admin/custom-roles 403s for a non-ADMIN authenticated user (RbacGuard + @Roles(UserRole.ADMIN) enforcement)', async () => {
+      const token = mintToken(moduleRef, orgANonAdminId);
+
+      const res = await request(app.getHttpServer())
+        .get('/api/admin/custom-roles')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+      // Distinguishes this from EntitlementGuard's upsell 403 - this is RbacGuard's
+      // role-check rejection, which runs BEFORE EntitlementGuard in the guard chain.
+      expect(res.body.upsell).toBeUndefined();
+      expect(fakeRepo.listCustomRolesByOrg).not.toHaveBeenCalled();
     });
 
     it('POST /admin/users/:id/role (pre-existing, separate UserRole system) still works unaffected', async () => {
