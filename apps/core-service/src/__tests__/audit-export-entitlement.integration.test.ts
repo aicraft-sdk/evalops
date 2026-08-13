@@ -42,23 +42,11 @@ const { Test } = require('@nestjs/testing');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const request = require('supertest');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { ConfigModule } = require('@nestjs/config');
+const { AuditRepository } = require('@evalops/shared-db');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { PassportModule } = require('@nestjs/passport');
+const { signLicenseEnvelope } = require('@evalops/licensing');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { APP_GUARD } = require('@nestjs/core');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { SharedDbModule, AuditRepository } = require('@evalops/shared-db');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { JwtAuthGuard } = require('@evalops/shared-auth');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { LicenseModule, signLicenseEnvelope } = require('@evalops/licensing');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { CoreAnalyticsModule } = require('@evalops/core-analytics');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { AuditExportModule } = require('@evalops/ee-audit-export');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { JwtStrategy } = require('../app/jwt.strategy');
+const { auditExportTestAppModuleMetadata } = require('./support/audit-export-test-app.imports');
 
 import type { INestApplication } from '@nestjs/common';
 import type { TestingModule } from '@nestjs/testing';
@@ -130,17 +118,9 @@ function buildMockAuditRepository() {
 }
 
 async function bootApp(mockAuditRepository: ReturnType<typeof buildMockAuditRepository>): Promise<INestApplication> {
-  const moduleRef: TestingModule = await Test.createTestingModule({
-    imports: [
-      ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
-      PassportModule,
-      SharedDbModule,
-      LicenseModule.forRoot({ publicKeyPem: testPublicKeyPem }),
-      CoreAnalyticsModule,
-      AuditExportModule,
-    ],
-    providers: [JwtStrategy, { provide: APP_GUARD, useClass: JwtAuthGuard }],
-  })
+  const moduleRef: TestingModule = await Test.createTestingModule(
+    auditExportTestAppModuleMetadata(testPublicKeyPem),
+  )
     .overrideProvider(AuditRepository)
     .useValue(mockAuditRepository)
     .compile();
