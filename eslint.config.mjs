@@ -104,4 +104,39 @@ export default [
       'no-console': 'off',
     },
   },
+  {
+    // Compensating control for @nx/enforce-module-boundaries' scope:enterprise constraint
+    // (see Task 2.3 above): that rule only inspects static import/import() AST nodes, so a
+    // require()/eval() call naming an ee/* path or an @evalops/ee-* package is invisible to
+    // it. This flags the obvious/easy case as a coarse net — it is NOT a full solution to
+    // arbitrary obfuscation (dynamically built strings, indirect eval, etc). See ee/README.md
+    // "Known limitation" section for the accepted-risk framing.
+    // NOTE: Nx's inferred lint target runs `eslint .` with `cwd` set to each project's own
+    // directory (see `nx show project <name> --json`), so `files` glob patterns here are
+    // matched relative to that project directory, NOT the workspace root — an
+    // `apps/**`/`libs/**`-prefixed pattern would silently never match under `nx lint <project>`.
+    files: ['src/**/*.ts', 'src/**/*.tsx'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "CallExpression[callee.name='require'] > Literal[value=/\\bee\\x2f|^@evalops\\x2fee-/]",
+          message:
+            "require() of an ee/* (Enterprise) module bypasses @nx/enforce-module-boundaries' scope:enterprise check, which only inspects static import AST nodes. See ee/README.md.",
+        },
+        {
+          selector:
+            "CallExpression[callee.callee.name='eval'] > Literal[value=/\\bee\\x2f|^@evalops\\x2fee-/]",
+          message:
+            "eval('require')(...) of an ee/* (Enterprise) module bypasses @nx/enforce-module-boundaries' scope:enterprise check, which only inspects static import AST nodes. See ee/README.md.",
+        },
+        {
+          selector: "ImportExpression > Literal[value=/\\bee\\x2f|^@evalops\\x2fee-/]",
+          message:
+            "Dynamic import() of an ee/* (Enterprise) module with a literal path bypasses @nx/enforce-module-boundaries' scope:enterprise check. See ee/README.md.",
+        },
+      ],
+    },
+  },
 ];
