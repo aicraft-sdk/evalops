@@ -56,7 +56,7 @@ EvalOps is an Nx monorepo built as four NestJS microservices plus a React fronte
 | `libs/sdk`           | Client SDK for trace event ingestion from agents                                                 |
 | `libs/evaluators`    | `ExactEvaluator`, `RuleEvaluator`, `Aggregator` — pure TypeScript evaluator logic                |
 | `libs/agent-md`      | Parser for the AgentMD YAML format                                                               |
-| `libs/licensing`     | Offline Ed25519-signed license/entitlement engine for the Enterprise tier; gates the `ee/sso` Microsoft Entra SSO login routes in `auth-service` — see `docs/ARCHITECTURE.md` |
+| `libs/licensing`     | Offline Ed25519-signed license/entitlement engine for the Enterprise tier; gates the `ee/sso` Microsoft Entra SSO login routes in `auth-service` and the `ee/audit-export` CSV export route in `core-service` — see `docs/ARCHITECTURE.md` |
 
 ---
 
@@ -170,7 +170,7 @@ All routes go through the API Gateway on port 3000.
 | `/api/core/*`        | core-service        | `GET /api/core/prompts`, `POST /api/core/agents`, `GET /api/core/eval-specs`    |
 | `/api/evaluation/*`  | evaluation-service  | `POST /api/evaluation/runs`, `POST /api/evaluation/ingestion/events`, `POST/PUT/DELETE /api/evaluation/policies` (org_admin/admin), `GET/POST /api/evaluation/golden-sets` (+ `:id/examples`, `:id/calibration-runs`) |
 | `/api/integration/*` | core-service        | `GET /api/integration/artifacts/:runId/:file`, `POST /api/integration/webhooks` |
-| `/api/analytics/*`   | core-service        | `GET /api/analytics/dashboard`, `GET /api/analytics/audit-trail`                |
+| `/api/analytics/*`   | core-service        | `GET /api/analytics/dashboard`, `GET /api/analytics/audit-trail`, `GET /api/analytics/audit-trail/export` (Enterprise-gated) |
 
 > `integration-service` and `analytics-service` have been fully decommissioned and removed from
 > the repo. Their functionality was relocated into `libs/core-integration` and `libs/core-analytics`,

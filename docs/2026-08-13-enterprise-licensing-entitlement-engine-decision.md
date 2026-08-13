@@ -65,6 +65,11 @@ lapsed-license weekend.
   `docs/plans/2026-08-12-enterprise-tier-phase1-plan.md` will wire `LicenseModule`/
   `EntitlementGuard`/`@RequiresEntitlement()` into other services (custom RBAC roles, audit
   export, PR decoration), at which point those routes become genuinely license-gated too.
+  **Update:** a subsequent phase wired `LicenseModule`/`EntitlementGuard` into `core-service`
+  and gated a new `GET /api/audit-trail/export` route behind `@RequiresEntitlement
+  ('audit-export')` — the second prediction fulfilled; see
+  `docs/2026-08-13-audit-export-entitlement-gating-decision.md`. The existing free `GET
+  /api/audit-trail` view remains unaffected.
 - **Contributors:** A new `EnterpriseFeature` union (`'sso' | 'rbac-custom-roles' |
   'audit-export' | 'pr-decoration'`) is now the single source of truth for what counts as an
   Enterprise feature; any future Enterprise-gated capability should extend this union rather

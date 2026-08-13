@@ -114,7 +114,14 @@ Integration (`libs/core-integration`):
 Analytics (`libs/core-analytics`):
 - **Dashboard** — aggregated metrics: total runs, pass rate, avg cost, p95 latency
 - **Cost analytics** — per-provider, per-model token cost breakdown over time
-- **Audit trail** — append-only log of every mutation across the platform
+- **Audit trail** — append-only log of every mutation across the platform. `GET
+  /api/audit-trail` (`AuditController`, free tier, unchanged) returns the paginated view. `GET
+  /api/audit-trail/export` (new, `ee/audit-export`'s `AuditExportController`) streams a CSV of
+  the same org-scoped audit entries, gated by `EntitlementGuard`/`@RequiresEntitlement
+  ('audit-export')` — the second Enterprise-gated route to go live, after SSO (see "Enterprise
+  Directory" below and `docs/2026-08-13-audit-export-entitlement-gating-decision.md`). CSV
+  fields are escaped against formula/CSV-injection (leading `=`/`+`/`-`/`@`/tab/CR characters)
+  and the `?limit` query param is validated and capped at 5000 via `AuditExportQueryDto`.
 
 ---
 
@@ -276,7 +283,11 @@ license:sign`) issues dev/test license envelopes via `signLicenseEnvelope()`. As
 SSO routes (`ee/sso`) with `EntitlementGuard`/`@RequiresEntitlement('sso')` — the first
 real route/feature gating by this library (see "Auth Service" above and
 `docs/2026-08-13-sso-relocation-and-entitlement-gating-decision.md`); no free-tier route or
-behavior is affected.
+behavior is affected. `apps/core-service` now also imports `LicenseModule.forRoot()` and gates
+the new `GET /api/audit-trail/export` route (`ee/audit-export`) with the same
+`EntitlementGuard`/`@RequiresEntitlement('audit-export')` pattern — the second Enterprise-gated
+route to go live; the existing free `GET /api/audit-trail` view is unchanged (see "Integration
+and Analytics" above and `docs/2026-08-13-audit-export-entitlement-gating-decision.md`).
 
 ---
 
@@ -307,6 +318,17 @@ app: it holds the Microsoft Entra SSO connector (`MicrosoftAuthController`,
 `AuthService` directly, so `ee/sso` has no compile-time dependency on `apps/auth-service`
 internals; `AuthModule` binds `{ provide: SSO_USER_PROVISIONER, useExisting: AuthService }`. See
 `docs/2026-08-13-sso-relocation-and-entitlement-gating-decision.md`.
+
+`ee/audit-export` (`@evalops/ee-audit-export`) is the second `ee/*` library imported by a
+composition-root app: `AuditExportController`/`AuditExportService`, wired into `core-service`'s
+`AppModule` behind `EntitlementGuard`/`@RequiresEntitlement('audit-export')`, expose `GET
+/api/audit-trail/export`. It builds a CSV of the same org-scoped audit entries the free `GET
+/api/audit-trail` view (`AuditController`, `libs/core-analytics`) already returns —
+`organizationId` is read only from `@CurrentUser()`'s verified JWT claim, never from a client-
+suppliable param, mirroring `AuditController`'s org-scoping. CSV field values are escaped
+against formula/CSV-injection before being written, and the `?limit` query param is validated
+and capped at 5000 via `AuditExportQueryDto`. See
+`docs/2026-08-13-audit-export-entitlement-gating-decision.md`.
 
 This is a lint-time, static-AST boundary, not a runtime sandbox: `@nx/enforce-module-boundaries`
 only inspects `import`/`import()` nodes, so a `require()`/`eval()` call naming an `ee/*` path
