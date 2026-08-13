@@ -1,0 +1,24 @@
+{
+  "name": "ee-rbac-custom-roles",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "ee/rbac-custom-roles/src",
+  "projectType": "library",
+  "tags": ["scope:enterprise", "type:lib", "domain:rbac"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/ee/rbac-custom-roles",
+        "main": "ee/rbac-custom-roles/src/index.ts",
+        "tsConfig": "ee/rbac-custom-roles/tsconfig.lib.json",
+        "assets": ["ee/rbac-custom-roles/*.md"]
+      }
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "options": { "jestConfig": "ee/rbac-custom-roles/jest.config.cts" }
+    }
+  }
+}

@@ -30,7 +30,8 @@
       "@evalops/core-analytics": ["libs/core-analytics/src/index.ts"],
       "@evalops/licensing": ["libs/licensing/src/index.ts"],
       "@evalops/ee-sso": ["ee/sso/src/index.ts"],
-      "@evalops/ee-audit-export": ["ee/audit-export/src/index.ts"]
+      "@evalops/ee-audit-export": ["ee/audit-export/src/index.ts"],
+      "@evalops/ee-rbac-custom-roles": ["ee/rbac-custom-roles/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]
