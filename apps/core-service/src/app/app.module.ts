@@ -23,6 +23,8 @@ import {
 } from '@evalops/shared-common';
 import { CoreIntegrationModule } from '@evalops/core-integration';
 import { CoreAnalyticsModule } from '@evalops/core-analytics';
+import { LicenseModule } from '@evalops/licensing';
+import { AuditExportModule } from '@evalops/ee-audit-export';
 
 @Module({
   imports: [
@@ -50,6 +52,8 @@ import { CoreAnalyticsModule } from '@evalops/core-analytics';
     AgentsModule,
     CoreIntegrationModule,
     CoreAnalyticsModule,
+    LicenseModule.forRoot(),
+    AuditExportModule,
   ],
   controllers: [AppController, HealthController],
   providers: [
