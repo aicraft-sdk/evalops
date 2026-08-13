@@ -7,6 +7,7 @@ import {
   LoggingExceptionFilter,
 } from '@evalops/shared-common';
 import { SharedDbModule } from '@evalops/shared-db';
+import { LicenseModule } from '@evalops/licensing';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { HealthController } from './health/health.controller';
@@ -24,6 +25,7 @@ import { TokensModule } from './tokens/tokens.module';
       envFilePath: ['.env.local', '.env'],
     }),
     SharedDbModule,
+    LicenseModule.forRoot(),
     AuthModule,
     UsersModule,
     OrganizationsModule,
