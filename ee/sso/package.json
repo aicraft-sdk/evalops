@@ -1,0 +1,15 @@
+{
+  "name": "@evalops/ee-sso",
+  "version": "0.0.1",
+  "private": true,
+  "type": "commonjs",
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "dependencies": {
+    "@azure/msal-node": "^2.16.2",
+    "@nestjs/common": "^11.1.9",
+    "@nestjs/config": "^4.0.2",
+    "@nestjs/core": "^11.1.9",
+    "tslib": "^2.3.0"
+  }
+}

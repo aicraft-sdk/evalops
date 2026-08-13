@@ -28,7 +28,8 @@
       "@evalops/shared-db/dialect-utils": ["libs/shared-db/src/lib/dialect-utils.ts"],
       "@evalops/core-integration": ["libs/core-integration/src/index.ts"],
       "@evalops/core-analytics": ["libs/core-analytics/src/index.ts"],
-      "@evalops/licensing": ["libs/licensing/src/index.ts"]
+      "@evalops/licensing": ["libs/licensing/src/index.ts"],
+      "@evalops/ee-sso": ["ee/sso/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]
