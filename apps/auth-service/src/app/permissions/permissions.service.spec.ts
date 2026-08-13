@@ -68,4 +68,46 @@ describe('PermissionsService.hasPermission - isSystemAdmin bypass protection', (
       service.hasPermission({ userId: 'user-2', resourceType: 'organization', action: 'admin' }),
     ).resolves.toBe(true);
   });
+
+  it('does not grant unconditional admin access to a seeded default role that is isSystemRole:true but not the real Administrator (priority < 100)', async () => {
+    // initializeDefaultRoles() seeds 4 roles as isSystemRole:true - only the real
+    // Administrator role (priority:100) should bypass hasPermission(). "Data Scientist"
+    // (priority:50) is isSystemRole:true (built-in, mutation-protected) but was only ever
+    // granted read/write/execute - it must NOT satisfy an action:'admin' check.
+    const dataScientistRole: Role = {
+      id: 'role-3',
+      name: 'Data Scientist',
+      description: 'Can create and run evaluations, manage datasets',
+      organizationId: 'org-1',
+      isSystemRole: true,
+      priority: 50,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const permissionsRepository = {
+      getUserRoles: jest.fn().mockResolvedValue([dataScientistRole]),
+      getUserPermissions: jest.fn().mockResolvedValue([]),
+      getUserResourcePermissions: jest.fn().mockResolvedValue([]),
+      getRolePermissions: jest.fn().mockResolvedValue([
+        { id: 'perm-2', resourceType: 'run', action: 'read' },
+        { id: 'perm-3', resourceType: 'run', action: 'write' },
+        { id: 'perm-4', resourceType: 'run', action: 'execute' },
+      ]),
+    } as unknown as PermissionsRepository;
+
+    const usersRepository = {} as UsersRepository;
+    const service = new PermissionsService(permissionsRepository, usersRepository);
+
+    // The granted permissions still work normally.
+    await expect(
+      service.hasPermission({ userId: 'user-3', resourceType: 'run', action: 'read' }),
+    ).resolves.toBe(true);
+
+    // CRITICAL: isSystemRole:true alone must not grant an unconditional admin bypass -
+    // priority must also be >= 100 (reserved for the real built-in Administrator role).
+    await expect(
+      service.hasPermission({ userId: 'user-3', resourceType: 'organization', action: 'admin' }),
+    ).resolves.toBe(false);
+  });
 });

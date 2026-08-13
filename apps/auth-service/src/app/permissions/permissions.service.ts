@@ -134,9 +134,19 @@ export class PermissionsService {
    * "Super Admin" must NOT satisfy this check just because its name contains "admin"/
    * "superuser". Only a role the system itself marked `isSystemRole: true` grants
    * unconditional access.
+   *
+   * `isSystemRole` alone is NOT sufficient: it means "built-in, not org-created" (a
+   * mutation-protection flag), not "has admin access" - `initializeDefaultRoles()` seeds
+   * 4 roles as `isSystemRole: true` (Administrator, Data Scientist, ML Engineer, Analyst),
+   * only one of which is actually meant to be an unconditional admin. `priority >= 100` is
+   * the existing convention reserving priority 100 for the real built-in Administrator role
+   * (see `ee/rbac-custom-roles/src/lib/custom-roles.dto.ts`'s `@Max(99)` comment), so both
+   * conditions together are required to grant the bypass.
    */
   private isSystemAdmin(userRolesList: Role[]): boolean {
-    return userRolesList.some((role) => role.isSystemRole === true);
+    return userRolesList.some(
+      (role) => role.isSystemRole === true && role.priority >= 100,
+    );
   }
 
   /**
