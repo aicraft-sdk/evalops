@@ -17,6 +17,10 @@ export default [
           allow: ['^.*/eslint(\\.base)?\\.config\\.[cm]?[jt]s$'],
           depConstraints: [
             {
+              sourceTag: 'scope:shared',
+              onlyDependOnLibsWithTags: ['scope:shared'],
+            },
+            {
               sourceTag: 'scope:core-integration',
               onlyDependOnLibsWithTags: ['scope:shared'],
             },
@@ -26,6 +30,15 @@ export default [
             },
             {
               sourceTag: 'scope:core-domain',
+              onlyDependOnLibsWithTags: [
+                'scope:shared',
+                'scope:core-integration',
+                'scope:core-analytics',
+                'scope:enterprise',
+              ],
+            },
+            {
+              sourceTag: 'scope:enterprise',
               onlyDependOnLibsWithTags: [
                 'scope:shared',
                 'scope:core-integration',
