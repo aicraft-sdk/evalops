@@ -6,10 +6,12 @@
   "main": "./src/index.js",
   "types": "./src/index.d.ts",
   "dependencies": {
-    "@azure/msal-node": "^2.16.2",
+    "@azure/msal-node": "^3.7.3",
+    "@evalops/licensing": "0.0.1",
+    "@evalops/shared-auth": "0.0.1",
     "@nestjs/common": "^11.1.9",
     "@nestjs/config": "^4.0.2",
-    "@nestjs/core": "^11.1.9",
+    "express": "^4.21.2",
     "tslib": "^2.3.0"
   }
 }
