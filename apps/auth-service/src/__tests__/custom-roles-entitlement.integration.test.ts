@@ -218,7 +218,7 @@ function buildFakePermissionsRepository(seed: FakeRole[]) {
       store.set(id, updated);
       return Promise.resolve(updated);
     }),
-    deleteRole: jest.fn((id: string) => {
+    deleteRoleWithDependents: jest.fn((id: string) => {
       const existed = store.has(id);
       store.delete(id);
       return Promise.resolve(existed);
@@ -342,11 +342,19 @@ describe('ee/rbac-custom-roles entitlement + system-role protection + org-scopin
       isSystemRole: false,
       priority: 0,
     };
+    const customRoleOrgADeletable: FakeRole = {
+      id: 'custom-role-org-a-deletable',
+      name: 'Org A Deletable Role',
+      description: null,
+      organizationId: 'org-A',
+      isSystemRole: false,
+      priority: 0,
+    };
 
     beforeAll(async () => {
       priorLicenseKey = process.env['EVALOPS_LICENSE_KEY'];
       process.env['EVALOPS_LICENSE_KEY'] = signEntitledLicense(['rbac-custom-roles']);
-      fakeRepo = buildFakePermissionsRepository([systemRoleOrgA, customRoleOrgB]);
+      fakeRepo = buildFakePermissionsRepository([systemRoleOrgA, customRoleOrgB, customRoleOrgADeletable]);
       ({ app, moduleRef } = await bootApp(fakeRepo));
     });
 
@@ -397,7 +405,7 @@ describe('ee/rbac-custom-roles entitlement + system-role protection + org-scopin
 
       expect(res.status).toBe(403);
       expect(res.body.upsell).toBeUndefined();
-      expect(fakeRepo.deleteRole).not.toHaveBeenCalled();
+      expect(fakeRepo.deleteRoleWithDependents).not.toHaveBeenCalled();
     });
 
     it('org-scoping: org A admin cannot PATCH a role belonging to org B', async () => {
@@ -420,7 +428,7 @@ describe('ee/rbac-custom-roles entitlement + system-role protection + org-scopin
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(403);
-      expect(fakeRepo.deleteRole).not.toHaveBeenCalled();
+      expect(fakeRepo.deleteRoleWithDependents).not.toHaveBeenCalled();
     });
 
     it('org-scoping: a newly-created role by org A is never visible in org B\'s list', async () => {
@@ -438,6 +446,24 @@ describe('ee/rbac-custom-roles entitlement + system-role protection + org-scopin
 
       expect(orgBList.status).toBe(200);
       expect(orgBList.body.find((r: FakeRole) => r.name === 'Org A Only Role')).toBeUndefined();
+    });
+
+    it('DELETE /api/admin/custom-roles/:id succeeds for a mutable (non-system) custom role in the caller\'s own org', async () => {
+      const token = mintToken(moduleRef, orgAAdminId);
+
+      const res = await request(app.getHttpServer())
+        .delete(`/api/admin/custom-roles/${customRoleOrgADeletable.id}`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBeGreaterThanOrEqual(200);
+      expect(res.status).toBeLessThan(300);
+      // The controller's `remove()` returns the raw boolean `deleteRoleWithDependents`
+      // resolves to - Nest/Express serializes a bare boolean return value as
+      // `text/html` body text "true" (not JSON `true`), so `res.text` (not `res.body`)
+      // is the correct assertion target here.
+      expect(res.text).toBe('true');
+      expect(fakeRepo.deleteRoleWithDependents).toHaveBeenCalledWith(customRoleOrgADeletable.id);
+      expect(fakeRepo.deleteRoleWithDependents).toHaveBeenCalledTimes(1);
     });
   });
 });
