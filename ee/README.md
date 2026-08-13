@@ -42,3 +42,40 @@ static source analysis alone) catch arbitrary obfuscation: a template literal WI
 (`const r = require; r('ee/sso')`), or a `Function`-constructor equivalent
 (`Function('return require("ee/sso")')()`). Do not treat a clean `no-restricted-syntax` pass as
 proof that no OSS code reaches `ee/*` at runtime.
+
+## Known limitation: `audit-export`'s rate limit is count-based, not concurrency-based
+
+`GET /api/audit-trail/export` (`ee/audit-export`) is protected by
+`@RateLimit({ limit: 5, ttl: 60 })` (commit `68fd2fd`), which closes the original
+fully-unbounded-request DoS: `AuditRepository.findEnhancedByOrg` fires one extra DB query per
+row (N+1), so 5000-row requests (the `@Max(5000)` cap on `?limit`) each hold one connection from
+the shared, default-max-10 `pg` pool for many sequential queries. Five requests per user per 60
+seconds is a real, meaningful reduction from the prior unbounded state.
+
+It does not close a *multi-account* variant: `POST /auth/register` has no rate limit of its own,
+and Enterprise entitlement (`EntitlementGuard`/`EntitlementService.hasFeature()`) is
+deployment-wide, not per-org, so any org's valid license entitles every account on the
+deployment, including cheaply self-registered ones. An attacker can register 3 accounts and fire
+5 concurrent export requests from each (3 x 5 = 15 concurrent requests) — under the per-user
+limit on every single account, but 15 > the pool's default max of 10 connections, still
+approaching/exceeding the connection pool.
+
+This is a known, accepted residual risk, not an oversight: it was identified during a
+DoS-hardening pass and deliberately not fixed further, because the root causes (open
+registration, deployment-wide entitlement, fixed pool size, and the underlying N+1 query
+pattern) are repo-wide gaps, not specific to `audit-export`, and are out of scope for a
+single-endpoint fix. A dedicated future hardening pass is required, covering: registration
+throttling, concurrency-aware (not just count-based) rate limiting, and/or DB pool sizing. See
+`docs/2026-08-13-audit-export-entitlement-gating-decision.md` for the full history of what was
+tried and the exact math behind this residual risk.
+
+Two related, accepted observability gaps in the shared `RateLimitGuard`
+(`libs/shared-auth/src/lib/guards/rate-limit.guard.ts`), found during the same pass and left
+undocumented until now:
+- The guard's Redis-unavailable fail-open branch (`if (!this.redis) return true;`) logs nothing,
+  so a Redis outage silently disables rate limiting across every `@RateLimit`-protected route in
+  the repo with no operational signal.
+- A `429` rejection (`count > options.limit`) is thrown with no logging, so there is currently no
+  record of rate-limit rejections for monitoring or abuse detection.
+Both are MEDIUM-severity, accepted, documented gaps for a future hardening pass — not blocking
+for this phase.

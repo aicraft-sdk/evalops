@@ -79,3 +79,77 @@ discover in production.
   audit-trail entry, `libs/licensing` section, "Enterprise Directory" section), `README.md`
   (`libs/licensing` Shared Libraries row, API Overview table),
   `docs/2026-08-13-enterprise-licensing-entitlement-engine-decision.md` (Impact section).
+
+## Update: DoS-hardening chase on the export endpoint, and the accepted residual risk
+
+After this feature shipped, a doubt-verify pass and a follow-up re-hunt found the endpoint's
+resource-exhaustion protection insufficient in two successive rounds. Both fixes were applied;
+the third-round gap they surfaced is being accepted as a documented residual risk rather than
+chased further, per an explicit user decision.
+
+**Round 1 — `@Max(5000)` limit cap alone was insufficient.** `AuditExportQueryDto`'s
+`?limit` cap (`1`-`5000`, `class-validator`) bounds a single request's result size, but
+`AuditRepository.findEnhancedByOrg` fires one extra DB query per row (N+1). At `limit=5000`,
+a single request can hold one connection from the shared `pg` pool (default `max: 10`, unset in
+`libs/shared-db/src/lib/db.ts`) for up to 5001 sequential queries. As few as ~10 concurrent
+requests — from a single user, or spread across a few — could exhaust the entire platform's
+connection pool, denying DB access to every org, not just the requester's own. The cap alone did
+not address concurrency.
+
+**Round 2 — per-user rate limiting closed the single-account case, but not a multi-account
+variant.** Commit `68fd2fd` applied the existing `RateLimitGuard`/`@RateLimit` convention
+(mirrors `organizations.controller.ts`) to the export route: `@RateLimit({ limit: 5, ttl: 60 })`,
+keyed per-user via `request.user.id`. This is a real, meaningful improvement over the prior
+fully-unbounded state — a single account can no longer fire unlimited concurrent/rapid export
+requests. A follow-up re-hunt found this insufficient against a multi-account variant:
+`POST /auth/register` (`apps/auth-service/src/app/auth/auth.controller.ts`) carries no
+`@RateLimit` of its own and is open to anyone, and Enterprise entitlement
+(`EntitlementGuard`/`EntitlementService.hasFeature()`) is deployment-wide, not per-org — one
+valid license on the deployment entitles every account on it, including ones registered seconds
+ago. The exact math: an attacker registers 3 accounts (cheap, unrate-limited) and fires 5
+concurrent export requests from each — 3 x 5 = 15 concurrent requests, each individually under
+the per-user limit of 5, but 15 exceeds the pool's default 10-connection max. The same
+resource-exhaustion outcome as Round 1 remains reachable, just requiring a small amount of
+account-creation cost instead of none.
+
+The same re-hunt also found 2 MEDIUM-severity observability gaps in the shared `RateLimitGuard`
+(`libs/shared-auth/src/lib/guards/rate-limit.guard.ts`), not specific to this endpoint: its
+Redis-unavailable fail-open branch (`if (!this.redis) return true;`) logs nothing, so a Redis
+outage silently disables rate limiting repo-wide with no operational signal; and a `429`
+rejection is thrown with no logging, so there is no record of rate-limit rejections for
+monitoring or abuse detection. An unhandled Redis client error in this guard could also cause an
+unlogged multi-second hang on the request path.
+
+**Decision: stop here, keep the Round-2 fix as-is, document the remaining gap as accepted
+residual risk.** The user explicitly decided not to pursue a Round 3 fix in this phase. Rationale:
+- The remaining gap is systemic, not local to `audit-export` — it requires fixing open
+  registration, deployment-wide (not per-org) entitlement scoping, and/or DB pool sizing, all of
+  which are repo-wide concerns well beyond this single endpoint's scope.
+- The Round-2 fix already converts an unbounded, zero-cost DoS into one that requires
+  registering multiple accounts and coordinating concurrent requests — a real increase in
+  attacker cost and a meaningful reduction in risk, even though it does not close the gap
+  entirely.
+- Continuing to chase this specific endpoint risks local-optimizing a symptom of a broader,
+  unaddressed architectural gap (open registration + deployment-wide entitlement + fixed pool
+  size) instead of fixing it once, correctly, in a dedicated pass.
+
+**What a future hardening pass needs to address**, to fully close this class of risk:
+1. Registration throttling (rate-limit or otherwise gate `POST /auth/register`, e.g. per-IP or
+   with CAPTCHA/email verification), so cheap multi-account creation is no longer free.
+2. Concurrency-aware rate limiting (bound *simultaneous in-flight* requests per user/org, not
+   just requests-per-time-window), so N accounts racing concurrently cannot each stay under a
+   per-account ceiling while collectively exceeding the pool.
+3. Per-org (not deployment-wide) entitlement scoping, so a self-registered account cannot ride an
+   unrelated org's Enterprise license.
+4. DB connection pool sizing/isolation review (e.g. a dedicated, bounded pool for
+   expensive/export-style queries, or fixing the underlying N+1 in
+   `AuditRepository.findEnhancedByOrg` so a single request no longer holds a connection across
+   thousands of sequential queries) — this closes the root cause rather than only the request
+   rate.
+5. Logging for both `RateLimitGuard` observability gaps above (fail-open branch, 429 rejections),
+   so the interim state is at least observable while the systemic fix is pending.
+
+No code changed as part of this update — `ee/audit-export`'s Round-2 rate-limiting fix (commit
+`68fd2fd`) is unmodified. This section is a documentation-only accepted-risk record. See also
+`ee/README.md`'s "Known limitation: `audit-export`'s rate limit is count-based, not
+concurrency-based" section for the user-facing summary.
