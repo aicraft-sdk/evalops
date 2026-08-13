@@ -1,0 +1,1 @@
+export const LICENSE_PUBLIC_KEY = Symbol('LICENSE_PUBLIC_KEY');
