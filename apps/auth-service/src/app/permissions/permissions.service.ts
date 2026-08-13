@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import {
   PermissionsRepository,
   UsersRepository,
-  permissions,
   roles,
   userRoles,
   rolePermissions,
@@ -440,22 +439,10 @@ export class PermissionsService {
     resourceType: ResourceType,
     action: PermissionAction,
   ): Promise<Permission> {
-    let permission = await this.permissionsRepository.findPermissionByTypeAndAction(
+    return this.permissionsRepository.getOrCreatePermission(
       resourceType,
       action,
-    ) as Permission | undefined;
-
-    if (!permission) {
-      permission = await this.permissionsRepository.createPermission({
-        name: `${resourceType}.${action}`,
-        resourceType,
-        action,
-        description: `${action} access to ${resourceType} resources`,
-        isSystemPermission: true,
-      } as typeof permissions.$inferInsert) as Permission;
-    }
-
-    return permission;
+    ) as Promise<Permission>;
   }
 
   /**

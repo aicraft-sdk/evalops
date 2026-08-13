@@ -197,4 +197,62 @@ export class PermissionsRepository {
       .returning();
     return log;
   }
+
+  /**
+   * Promoted from `PermissionsService.getOrCreatePermission` (Phase 5, Task 5.1 — pure
+   * delegation, no behavior change). Also the shared lookup used by the new
+   * `ee/rbac-custom-roles` custom-role CRUD feature.
+   */
+  async getOrCreatePermission(
+    resourceType: string,
+    action: string,
+  ): Promise<typeof permissions.$inferSelect> {
+    const existing = await this.findPermissionByTypeAndAction(resourceType, action);
+    if (existing) return existing;
+    return this.createPermission({
+      name: `${resourceType}.${action}`,
+      resourceType,
+      action,
+      description: `${action} access to ${resourceType} resources`,
+      isSystemPermission: true,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as typeof permissions.$inferInsert);
+  }
+
+  async updateRole(
+    id: string,
+    updates: Partial<Pick<typeof roles.$inferSelect, 'name' | 'description' | 'priority'>>,
+  ): Promise<typeof roles.$inferSelect | undefined> {
+    const [updated] = await db
+      .update(roles)
+      .set({ ...updates, updatedAt: new Date() } as Partial<typeof roles.$inferInsert>)
+      .where(eq(roles.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteRole(id: string): Promise<boolean> {
+    const deleted = await db.delete(roles).where(eq(roles.id, id)).returning();
+    return deleted.length > 0;
+  }
+
+  async findRoleById(id: string): Promise<typeof roles.$inferSelect | undefined> {
+    const [role] = await db.select().from(roles).where(eq(roles.id, id)).limit(1);
+    return role;
+  }
+
+  async listCustomRolesByOrg(organizationId: string): Promise<(typeof roles.$inferSelect)[]> {
+    return db
+      .select()
+      .from(roles)
+      .where(and(eq(roles.organizationId, organizationId), eq(roles.isSystemRole, false)));
+  }
+
+  async replaceRolePermissions(roleId: string, permissionIds: string[]): Promise<void> {
+    await db.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
+    if (permissionIds.length === 0) return;
+    await db
+      .insert(rolePermissions)
+      .values(permissionIds.map((permissionId) => ({ roleId, permissionId })));
+  }
 }
