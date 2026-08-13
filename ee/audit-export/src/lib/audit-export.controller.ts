@@ -1,8 +1,9 @@
-import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, Res, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
 import { Response } from 'express';
 import { JwtAuthGuard, CurrentUser } from '@evalops/shared-auth';
 import { EntitlementGuard, RequiresEntitlement } from '@evalops/licensing';
 import { AuditExportService } from './audit-export.service';
+import { AuditExportQueryDto } from './audit-export.dto';
 
 /**
  * `organizationId` is read only from `@CurrentUser()` (the verified JWT claim set by
@@ -18,14 +19,15 @@ export class AuditExportController {
   constructor(private readonly auditExportService: AuditExportService) {}
 
   @Get()
+  @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
   async export(
     @CurrentUser() user: { organizationId: string },
-    @Query('limit') limit: string | undefined,
+    @Query() query: AuditExportQueryDto,
     @Res() res: Response,
   ) {
     const csv = await this.auditExportService.buildCsv(
       user.organizationId,
-      limit ? parseInt(limit, 10) : 1000,
+      query.limit ?? 1000,
     );
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="audit-trail.csv"');

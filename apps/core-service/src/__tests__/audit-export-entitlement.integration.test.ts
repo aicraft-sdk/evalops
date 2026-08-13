@@ -246,6 +246,53 @@ describe('audit-export entitlement + org-scoping + CSV injection (integration, r
       expect(mockAuditRepository.findEnhancedByOrg).toHaveBeenCalledWith('org-A', 1000);
     });
 
+    it('rejects an out-of-range ?limit with a validated 400, not a raw DB-error 500', async () => {
+      const token = signUserJwt('org-A');
+
+      const res = await request(app.getHttpServer())
+        .get('/api/audit-trail/export?limit=99999999')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(HttpStatus.BAD_REQUEST);
+
+      expect(res.body.statusCode).toBe(400);
+      expect(mockAuditRepository.findEnhancedByOrg).not.toHaveBeenCalled();
+    });
+
+    it('rejects a non-numeric ?limit with a validated 400', async () => {
+      const token = signUserJwt('org-A');
+
+      const res = await request(app.getHttpServer())
+        .get('/api/audit-trail/export?limit=not-a-number')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(HttpStatus.BAD_REQUEST);
+
+      expect(res.body.statusCode).toBe(400);
+      expect(mockAuditRepository.findEnhancedByOrg).not.toHaveBeenCalled();
+    });
+
+    it('rejects a negative ?limit with a validated 400', async () => {
+      const token = signUserJwt('org-A');
+
+      await request(app.getHttpServer())
+        .get('/api/audit-trail/export?limit=-5')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(HttpStatus.BAD_REQUEST);
+
+      expect(mockAuditRepository.findEnhancedByOrg).not.toHaveBeenCalled();
+    });
+
+    it('accepts a valid in-range ?limit and forwards it to AuditRepository.findEnhancedByOrg', async () => {
+      const token = signUserJwt('org-A');
+
+      const res = await request(app.getHttpServer())
+        .get('/api/audit-trail/export?limit=250')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(HttpStatus.OK);
+
+      expect(res.headers['content-type']).toContain('text/csv');
+      expect(mockAuditRepository.findEnhancedByOrg).toHaveBeenCalledWith('org-A', 250);
+    });
+
     it('CSV formula-injection characters in a real audit-trail field are escaped end-to-end in the HTTP response body', async () => {
       mockAuditRepository.findEnhancedByOrg.mockResolvedValueOnce([
         {
