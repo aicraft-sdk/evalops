@@ -127,6 +127,13 @@ export default [
     // directory (see `nx show project <name> --json`), so `files` glob patterns here are
     // matched relative to that project directory, NOT the workspace root — an
     // `apps/**`/`libs/**`-prefixed pattern would silently never match under `nx lint <project>`.
+    //
+    // Each Literal-node selector below has a TemplateLiteral counterpart matching a
+    // zero-interpolation template literal (quasis.length === 1 / expressions.length === 0 —
+    // i.e. functionally a plain string, not real obfuscation, e.g. require(`ee/sso`)). This
+    // closes the template-literal bypass found in review while intentionally NOT attempting to
+    // catch template literals WITH interpolation (e.g. require(`ee/${x}`)) — that remains a
+    // genuinely open gap, documented in ee/README.md.
     files: ['src/**/*.ts', 'src/**/*.tsx'],
     rules: {
       'no-restricted-syntax': [
@@ -139,12 +146,30 @@ export default [
         },
         {
           selector:
+            "CallExpression[callee.name='require'] > TemplateLiteral[expressions.length=0][quasis.0.value.cooked=/\\bee\\x2f|^@evalops\\x2fee-/]",
+          message:
+            "require() of an ee/* (Enterprise) module bypasses @nx/enforce-module-boundaries' scope:enterprise check, which only inspects static import AST nodes. See ee/README.md.",
+        },
+        {
+          selector:
             "CallExpression[callee.callee.name='eval'] > Literal[value=/\\bee\\x2f|^@evalops\\x2fee-/]",
           message:
             "eval('require')(...) of an ee/* (Enterprise) module bypasses @nx/enforce-module-boundaries' scope:enterprise check, which only inspects static import AST nodes. See ee/README.md.",
         },
         {
+          selector:
+            "CallExpression[callee.callee.name='eval'] > TemplateLiteral[expressions.length=0][quasis.0.value.cooked=/\\bee\\x2f|^@evalops\\x2fee-/]",
+          message:
+            "eval('require')(...) of an ee/* (Enterprise) module bypasses @nx/enforce-module-boundaries' scope:enterprise check, which only inspects static import AST nodes. See ee/README.md.",
+        },
+        {
           selector: "ImportExpression > Literal[value=/\\bee\\x2f|^@evalops\\x2fee-/]",
+          message:
+            "Dynamic import() of an ee/* (Enterprise) module with a literal path bypasses @nx/enforce-module-boundaries' scope:enterprise check. See ee/README.md.",
+        },
+        {
+          selector:
+            "ImportExpression > TemplateLiteral[expressions.length=0][quasis.0.value.cooked=/\\bee\\x2f|^@evalops\\x2fee-/]",
           message:
             "Dynamic import() of an ee/* (Enterprise) module with a literal path bypasses @nx/enforce-module-boundaries' scope:enterprise check. See ee/README.md.",
         },

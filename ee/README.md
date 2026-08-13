@@ -33,8 +33,12 @@ with a documented, accepted gap — not a runtime enforcement boundary. The real
 malicious or careless `require()`/`eval()`/dynamic-`import()` call could cross is: (1) the
 `EntitlementGuard` runtime check that gates every `ee/*` feature behind a valid license, and
 (2) code review. A coarse compensating lint rule (`no-restricted-syntax` in `eslint.config.mjs`)
-flags the obvious/easy case — a `require()`/`eval()` call whose literal string argument names an
-`ee/*` path or `@evalops/ee-*` package — but it does not (and cannot, via static source analysis
-alone) catch arbitrary obfuscation (e.g. a dynamically constructed string, indirect `eval`, or a
-`Function`-constructor equivalent). Do not treat a clean `no-restricted-syntax` pass as proof that
-no OSS code reaches `ee/*` at runtime.
+flags the obvious/easy case — a `require()`/`eval()`/dynamic-`import()` call whose argument is
+either a plain string literal (`require('ee/sso')`) or a zero-interpolation template literal
+(`` require(`ee/sso`) `` — syntactically just as "obvious" as a plain string, not real
+obfuscation) naming an `ee/*` path or `@evalops/ee-*` package — but it does not (and cannot, via
+static source analysis alone) catch arbitrary obfuscation: a template literal WITH interpolation
+(`` require(`ee/${moduleName}`) ``), an indirectly-referenced `eval`/`require` via a variable
+(`const r = require; r('ee/sso')`), or a `Function`-constructor equivalent
+(`Function('return require("ee/sso")')()`). Do not treat a clean `no-restricted-syntax` pass as
+proof that no OSS code reaches `ee/*` at runtime.
