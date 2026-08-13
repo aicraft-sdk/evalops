@@ -7,9 +7,11 @@
  * entirely still left all 8 of those tests passing. This test targets the OTHER (production)
  * branch and would fail if a future edit swapped any `tx.*` call back to `db.*`.
  *
- * Real-Postgres rollback/atomicity proof is explicitly out of scope here (deferred to Phase 7)
- * — this only proves the production branch is exercised and every write goes through the `tx`
- * handed into the `db.transaction(...)` callback, via a mocked `db` module.
+ * Real-Postgres rollback/atomicity proof is explicitly out of scope here and is not currently
+ * scheduled in any phase of this plan (Phase 7 covers license-gating end-to-end proof for
+ * sso/audit-export/pr-decoration only, not role-deletion transaction rollback) — this only
+ * proves the production branch is exercised and every write goes through the `tx` handed into
+ * the `db.transaction(...)` callback, via a mocked `db` module.
  *
  * `isDevMode` is read once at module load from `process.env['EVALOPS_DEV_MODE']`, so this file
  * forces that env var to a falsy value and dynamically `require()`s the repository AFTER
