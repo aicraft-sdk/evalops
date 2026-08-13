@@ -3,3 +3,4 @@ export * from './lib/license.module';
 export * from './lib/entitlement.service';
 export * from './lib/decorators/requires-entitlement.decorator';
 export * from './lib/guards/entitlement.guard';
+export * from './lib/sign-license.util';

@@ -31,6 +31,7 @@
     "setup:secrets": "bash scripts/generate-secrets.sh",
     "quick-start": "bash scripts/quick-start.sh",
     "evalops": "node_modules/.bin/tsx apps/cli/src/main.ts",
+    "license:sign": "node_modules/.bin/tsx --tsconfig tsconfig.base.json scripts/licensing/sign-license.ts",
     "local-lint": "node scripts/agents-md-lint.js",
     "self-eval": "npm run evalops -- eval run \"EvalOps Self-Evals\" --watch"
   },
