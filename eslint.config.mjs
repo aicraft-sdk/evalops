@@ -46,6 +46,18 @@ export default [
               ],
             },
             {
+              sourceTag: 'scope:frontend',
+              onlyDependOnLibsWithTags: ['scope:shared'],
+            },
+            {
+              sourceTag: 'scope:cli',
+              onlyDependOnLibsWithTags: ['scope:shared'],
+            },
+            {
+              sourceTag: 'scope:api-gateway',
+              onlyDependOnLibsWithTags: ['scope:shared'],
+            },
+            {
               sourceTag: '*',
               onlyDependOnLibsWithTags: ['*'],
             },

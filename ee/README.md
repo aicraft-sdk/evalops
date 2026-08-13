@@ -6,9 +6,16 @@ runtime by `@evalops/licensing`'s `EntitlementGuard` and is structurally excluda
 from the OSS build: no `scope:shared`/`scope:core-analytics`/`scope:core-integration`
 library may import from here (enforced by `eslint.config.mjs`'s
 `@nx/enforce-module-boundaries` `depConstraints` — see Phase 2 of
-`docs/plans/2026-08-12-enterprise-tier-phase1-plan.md`). Only apps
-(`auth-service`, `core-service`, `evaluation-service`) may import `ee/*` libraries,
-and only behind an `EntitlementGuard`-protected route.
+`docs/plans/2026-08-12-enterprise-tier-phase1-plan.md`). Only the intended composition
+roots — `auth-service`, `core-service` (`scope:core-domain`), and `evaluation-service`
+(all currently `tags: []`, matched only by the permissive wildcard `depConstraints`
+entry) — may import `ee/*` libraries, and only behind an `EntitlementGuard`-protected
+route. `apps/frontend` (`scope:frontend`), `apps/cli` (`scope:cli`), and
+`apps/api-gateway` (`scope:api-gateway`) each carry an explicit restrictive
+`depConstraints` entry (`onlyDependOnLibsWithTags: ['scope:shared']`, no
+`scope:enterprise`) that structurally forbids them from importing `ee/*` — this
+matters most for `apps/frontend`, a Vite browser bundle where an accidental `ee/*`
+import would ship proprietary code into the public frontend bundle.
 
 ## Known limitation: this is a lint-time structural boundary, not a runtime sandbox
 
