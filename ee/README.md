@@ -69,13 +69,20 @@ throttling, concurrency-aware (not just count-based) rate limiting, and/or DB po
 `docs/2026-08-13-audit-export-entitlement-gating-decision.md` for the full history of what was
 tried and the exact math behind this residual risk.
 
-Two related, accepted observability gaps in the shared `RateLimitGuard`
+Three related, accepted observability/robustness gaps in the shared `RateLimitGuard`
 (`libs/shared-auth/src/lib/guards/rate-limit.guard.ts`), found during the same pass and left
 undocumented until now:
 - The guard's Redis-unavailable fail-open branch (`if (!this.redis) return true;`) logs nothing,
   so a Redis outage silently disables rate limiting across every `@RateLimit`-protected route in
-  the repo with no operational signal.
+  the repo with no operational signal. MEDIUM-severity.
 - A `429` rejection (`count > options.limit`) is thrown with no logging, so there is currently no
-  record of rate-limit rejections for monitoring or abuse detection.
-Both are MEDIUM-severity, accepted, documented gaps for a future hardening pass — not blocking
-for this phase.
+  record of rate-limit rejections for monitoring or abuse detection. MEDIUM-severity.
+- The guard has no `try`/`catch` around its Redis calls (`this.redis.incr(key)` /
+  `.expire(...)`), and the underlying `ioredis` client has no `commandTimeout` configured. If
+  Redis is reachable but slow/degraded (as opposed to cleanly absent, which the first bullet
+  above covers), a request can hang for a meaningful multi-second period retrying the Redis
+  command before erroring, rather than failing open or closed quickly. HIGH-severity — an
+  availability/robustness gap, distinct from the two logging gaps above, not just a logging
+  omission.
+All three are accepted, documented gaps for a future hardening pass — not blocking for this
+phase.

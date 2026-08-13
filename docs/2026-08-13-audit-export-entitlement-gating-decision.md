@@ -112,13 +112,17 @@ the per-user limit of 5, but 15 exceeds the pool's default 10-connection max. Th
 resource-exhaustion outcome as Round 1 remains reachable, just requiring a small amount of
 account-creation cost instead of none.
 
-The same re-hunt also found 2 MEDIUM-severity observability gaps in the shared `RateLimitGuard`
-(`libs/shared-auth/src/lib/guards/rate-limit.guard.ts`), not specific to this endpoint: its
-Redis-unavailable fail-open branch (`if (!this.redis) return true;`) logs nothing, so a Redis
-outage silently disables rate limiting repo-wide with no operational signal; and a `429`
-rejection is thrown with no logging, so there is no record of rate-limit rejections for
-monitoring or abuse detection. An unhandled Redis client error in this guard could also cause an
-unlogged multi-second hang on the request path.
+The same re-hunt also found 3 observability/robustness gaps in the shared `RateLimitGuard`
+(`libs/shared-auth/src/lib/guards/rate-limit.guard.ts`), not specific to this endpoint:
+- MEDIUM: its Redis-unavailable fail-open branch (`if (!this.redis) return true;`) logs nothing,
+  so a Redis outage silently disables rate limiting repo-wide with no operational signal.
+- MEDIUM: a `429` rejection is thrown with no logging, so there is no record of rate-limit
+  rejections for monitoring or abuse detection.
+- HIGH: the guard has no `try`/`catch` around its Redis calls and the `ioredis` client has no
+  `commandTimeout` configured, so an unhandled Redis client error (Redis reachable but
+  slow/degraded, distinct from cleanly absent) can cause an unlogged multi-second hang on the
+  request path rather than a fast, clean fail-open or fail-closed response — an
+  availability/robustness gap, not just a missing log line.
 
 **Decision: stop here, keep the Round-2 fix as-is, document the remaining gap as accepted
 residual risk.** The user explicitly decided not to pursue a Round 3 fix in this phase. Rationale:
@@ -146,8 +150,12 @@ residual risk.** The user explicitly decided not to pursue a Round 3 fix in this
    `AuditRepository.findEnhancedByOrg` so a single request no longer holds a connection across
    thousands of sequential queries) — this closes the root cause rather than only the request
    rate.
-5. Logging for both `RateLimitGuard` observability gaps above (fail-open branch, 429 rejections),
-   so the interim state is at least observable while the systemic fix is pending.
+5. Logging for both `RateLimitGuard` MEDIUM-severity observability gaps above (fail-open branch,
+   429 rejections), so the interim state is at least observable while the systemic fix is
+   pending.
+6. `try`/`catch` + a `commandTimeout` around `RateLimitGuard`'s Redis calls, so a degraded (not
+   just absent) Redis backend fails fast and cleanly instead of hanging the request for several
+   seconds — closes the HIGH-severity gap above.
 
 No code changed as part of this update — `ee/audit-export`'s Round-2 rate-limiting fix (commit
 `68fd2fd`) is unmodified. This section is a documentation-only accepted-risk record. See also
