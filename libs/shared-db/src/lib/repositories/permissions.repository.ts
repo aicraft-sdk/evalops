@@ -302,6 +302,163 @@ export class PermissionsRepository {
   }
 
   /**
+   * Atomically updates a role's `name`/`description`/`priority` and, when `permissionIds` is
+   * given, replaces its full permission set (`DELETE FROM role_permissions` immediately followed
+   * by an `INSERT`) — both writes run inside a single Drizzle transaction on the production
+   * Postgres path (same `isDevMode`-branch structure as `deleteRoleWithDependents` above), so a
+   * mid-sequence failure (a DB error on the INSERT, or a concurrent `remove()` on the same role
+   * committing in the gap between the DELETE and INSERT) rolls back the whole write instead of
+   * leaving an EXISTING role's permissions silently wiped to zero. `permissionIds` is omitted
+   * entirely (not `[]`) when the caller did not ask to change permissions — matches
+   * `CustomRolesService.update()`'s existing "only touch permissions if `dto.permissions` was
+   * provided" contract; passing `[]` explicitly still clears all permissions (the pre-existing
+   * `replaceRolePermissions` no-permissions-left behavior).
+   *
+   * In dev mode (SQLite): drizzle's better-sqlite3 driver only supports synchronous transaction
+   * callbacks, while the node-postgres driver used in production requires an async one — see
+   * `OrganizationsRepository.createWithAdminMember` / `deleteRoleWithDependents` above for the
+   * established precedent. The two writes still run sequentially in this same order and a throw
+   * from the first (updateRole) still prevents the second (replaceRolePermissions) from ever
+   * running; real atomicity across BOTH writes together is only guaranteed on the production
+   * Postgres path.
+   */
+  async updateRoleWithPermissions(
+    id: string,
+    updates: Partial<Pick<typeof roles.$inferSelect, 'name' | 'description' | 'priority'>>,
+    permissionIds?: string[],
+  ): Promise<typeof roles.$inferSelect | undefined> {
+    if (isDevMode) {
+      const [updated] = await db
+        .update(roles)
+        .set({ ...updates, updatedAt: new Date() } as Partial<typeof roles.$inferInsert>)
+        .where(eq(roles.id, id))
+        .returning();
+      if (permissionIds) {
+        await db.delete(rolePermissions).where(eq(rolePermissions.roleId, id));
+        if (permissionIds.length > 0) {
+          await db
+            .insert(rolePermissions)
+            .values(permissionIds.map((permissionId) => ({ roleId: id, permissionId })));
+        }
+      }
+      return updated;
+    }
+
+    return db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(roles)
+        .set({ ...updates, updatedAt: new Date() } as Partial<typeof roles.$inferInsert>)
+        .where(eq(roles.id, id))
+        .returning();
+      if (permissionIds) {
+        await tx.delete(rolePermissions).where(eq(rolePermissions.roleId, id));
+        if (permissionIds.length > 0) {
+          await tx
+            .insert(rolePermissions)
+            .values(permissionIds.map((permissionId) => ({ roleId: id, permissionId })));
+        }
+      }
+      return updated;
+    });
+  }
+
+  /**
+   * Atomically creates a role, resolves/creates every `{resourceType, action}` permission spec
+   * (the same lookup-or-create logic as `getOrCreatePermission`, inlined per-branch below so each
+   * lookup+create pair uses the SAME transaction-scoped client as the role/role-permission
+   * writes), and assigns the resulting permission ids to the new role via `role_permissions` —
+   * all inside a single Drizzle transaction on the production Postgres path (same
+   * `isDevMode`-branch structure as `deleteRoleWithDependents`/`updateRoleWithPermissions`
+   * above). This is a milder version of the gap `updateRoleWithPermissions` closes — a
+   * mid-sequence failure here previously left an ORPHAN zero-permission role rather than wiping
+   * an existing one — fixed for consistency (same root cause: unwrapped multi-statement writes).
+   *
+   * In dev mode (SQLite): same caveat as the other transactional methods above — the writes run
+   * sequentially, not wrapped in `db.transaction()`, so real atomicity is only guaranteed on the
+   * production Postgres path.
+   */
+  async createRoleWithPermissions(
+    data: typeof roles.$inferInsert,
+    permissionSpecs: { resourceType: string; action: string }[],
+  ): Promise<typeof roles.$inferSelect> {
+    if (isDevMode) {
+      const [role] = await db.insert(roles).values(data).returning();
+      const permissionIds: string[] = [];
+      for (const spec of permissionSpecs) {
+        const [existing] = await db
+          .select()
+          .from(permissions)
+          .where(
+            and(
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              eq(permissions.resourceType, spec.resourceType as any),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              eq(permissions.action, spec.action as any),
+            ),
+          )
+          .limit(1);
+        const [created] = existing
+          ? [existing]
+          : await db
+              .insert(permissions)
+              .values({
+                name: `${spec.resourceType}.${spec.action}`,
+                resourceType: spec.resourceType,
+                action: spec.action,
+                description: `${spec.action} access to ${spec.resourceType} resources`,
+                isSystemPermission: true,
+              } as typeof permissions.$inferInsert)
+              .returning();
+        permissionIds.push(created.id);
+      }
+      if (permissionIds.length > 0) {
+        await db
+          .insert(rolePermissions)
+          .values(permissionIds.map((permissionId) => ({ roleId: role.id, permissionId })));
+      }
+      return role;
+    }
+
+    return db.transaction(async (tx) => {
+      const [role] = await tx.insert(roles).values(data).returning();
+      const permissionIds: string[] = [];
+      for (const spec of permissionSpecs) {
+        const [existing] = await tx
+          .select()
+          .from(permissions)
+          .where(
+            and(
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              eq(permissions.resourceType, spec.resourceType as any),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              eq(permissions.action, spec.action as any),
+            ),
+          )
+          .limit(1);
+        const [created] = existing
+          ? [existing]
+          : await tx
+              .insert(permissions)
+              .values({
+                name: `${spec.resourceType}.${spec.action}`,
+                resourceType: spec.resourceType,
+                action: spec.action,
+                description: `${spec.action} access to ${spec.resourceType} resources`,
+                isSystemPermission: true,
+              } as typeof permissions.$inferInsert)
+              .returning();
+        permissionIds.push(created.id);
+      }
+      if (permissionIds.length > 0) {
+        await tx
+          .insert(rolePermissions)
+          .values(permissionIds.map((permissionId) => ({ roleId: role.id, permissionId })));
+      }
+      return role;
+    });
+  }
+
+  /**
    * Atomically deletes a custom role together with every row that references it via an
    * `ON DELETE no action` FK: clears `role_permissions`, `user_roles`, `resource_permissions`
    * (all deleted - see the doc comments above for why each is deleted rather than nulled),

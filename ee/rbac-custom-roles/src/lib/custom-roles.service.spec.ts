@@ -77,6 +77,17 @@ rawDb.exec(`
   BEGIN
     SELECT RAISE(ABORT, 'simulated mid-transaction failure clearing resource_permissions');
   END;
+  -- Simulates a mid-sequence failure inside updateRoleWithPermissions'
+  -- replaceRolePermissions step - the DELETE FROM role_permissions half of the
+  -- unwrapped "DELETE then INSERT" pair that could previously wipe an EXISTING
+  -- role's permissions to zero with no rollback. Scoped to one poisoned
+  -- role_id only, same technique as poison_resource_permissions_delete above.
+  CREATE TRIGGER poison_role_permissions_delete
+  BEFORE DELETE ON role_permissions
+  WHEN OLD.role_id = 'role-mid-update-failure'
+  BEGIN
+    SELECT RAISE(ABORT, 'simulated mid-sequence failure clearing role_permissions');
+  END;
 `);
 // rawDb stays open for the lifetime of this file - used both to seed fixture
 // rows and to independently verify real DB state after each repository call
@@ -164,15 +175,63 @@ describe('CustomRolesService', () => {
     await expect(service.remove('org-1', 'r1')).rejects.toThrow(ForbiddenException);
   });
 
-  it('creates a custom role with isSystemRole explicitly false', async () => {
+  it('creates a custom role by delegating the entire createRole + getOrCreatePermission + replaceRolePermissions write sequence to a single transactional repository call', async () => {
     const repo = {
-      createRole: jest.fn().mockResolvedValue({ id: 'r2' }),
-      getOrCreatePermission: jest.fn().mockResolvedValue({ id: 'perm-1' }),
-      replaceRolePermissions: jest.fn(),
+      createRoleWithPermissions: jest.fn().mockResolvedValue({ id: 'r2' }),
+      // Legacy per-step methods intentionally omitted here: create() must not call any of them
+      // directly now that createRoleWithPermissions owns the whole write sequence inside one
+      // transaction - calling any of them would throw "not a function" and fail this test.
     };
     const service = new CustomRolesService(repo as never);
-    await service.create('org-1', { name: 'Auditor', permissions: [{ resourceType: 'run', action: 'read' }] });
-    expect(repo.createRole).toHaveBeenCalledWith(expect.objectContaining({ isSystemRole: false, organizationId: 'org-1' }));
+
+    const result = await service.create('org-1', {
+      name: 'Auditor',
+      permissions: [{ resourceType: 'run', action: 'read' }],
+    });
+
+    expect(result).toEqual({ id: 'r2' });
+    expect(repo.createRoleWithPermissions).toHaveBeenCalledWith(
+      expect.objectContaining({ isSystemRole: false, organizationId: 'org-1', name: 'Auditor' }),
+      [{ resourceType: 'run', action: 'read' }],
+    );
+    expect(repo.createRoleWithPermissions).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates a role by delegating the updateRole + replaceRolePermissions write sequence to a single transactional repository call', async () => {
+    const repo = {
+      findRoleById: jest.fn().mockResolvedValue({ id: 'r1', isSystemRole: false, organizationId: 'org-1' }),
+      getOrCreatePermission: jest.fn().mockResolvedValue({ id: 'perm-1' }),
+      updateRoleWithPermissions: jest.fn().mockResolvedValue({ id: 'r1', name: 'Renamed' }),
+      // Legacy updateRole/replaceRolePermissions intentionally omitted: update() must not call
+      // either directly now that updateRoleWithPermissions owns both writes inside one
+      // transaction - calling either would throw "not a function" and fail this test.
+    };
+    const service = new CustomRolesService(repo as never);
+
+    const result = await service.update('org-1', 'r1', {
+      name: 'Renamed',
+      permissions: [{ resourceType: 'run', action: 'read' }],
+    });
+
+    expect(result).toEqual({ id: 'r1', name: 'Renamed' });
+    expect(repo.updateRoleWithPermissions).toHaveBeenCalledWith('r1', { name: 'Renamed', description: undefined }, [
+      'perm-1',
+    ]);
+    expect(repo.updateRoleWithPermissions).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates a role without touching permissions when dto.permissions is not provided', async () => {
+    const repo = {
+      findRoleById: jest.fn().mockResolvedValue({ id: 'r1', isSystemRole: false, organizationId: 'org-1' }),
+      getOrCreatePermission: jest.fn(),
+      updateRoleWithPermissions: jest.fn().mockResolvedValue({ id: 'r1', name: 'Renamed' }),
+    };
+    const service = new CustomRolesService(repo as never);
+
+    await service.update('org-1', 'r1', { name: 'Renamed' });
+
+    expect(repo.getOrCreatePermission).not.toHaveBeenCalled();
+    expect(repo.updateRoleWithPermissions).toHaveBeenCalledWith('r1', { name: 'Renamed', description: undefined }, undefined);
   });
 
   it('deletes a role by delegating the entire FK-dependent cleanup + delete sequence to a single transactional repository call', async () => {
@@ -240,6 +299,65 @@ describe('PermissionsRepository.deleteRoleWithDependents (dev-mode SQLite, real 
     const rows = rawDb.prepare('SELECT * FROM permission_audit_log WHERE id = ?').all('log-1');
     expect(rows).toHaveLength(1);
     expect(rows[0].role_id).toBeNull();
+  });
+});
+
+describe('PermissionsRepository.updateRoleWithPermissions (dev-mode SQLite, real DB, no mocks)', () => {
+  it("does not leave an EXISTING role's permissions silently wiped when the replace step fails mid-sequence", async () => {
+    const roleId = 'role-mid-update-failure';
+    seedRole(roleId);
+    seedRolePermission(roleId, 'rp-update-fail-1'); // matches the poison trigger's WHEN clause
+
+    const repo = new PermissionsRepository();
+
+    await expect(
+      repo.updateRoleWithPermissions(roleId, { name: 'Renamed' }, ['perm-new-1']),
+    ).rejects.toThrow('simulated mid-sequence failure clearing role_permissions');
+
+    // The failure happens inside the replace step's own DELETE (poisoned by the trigger
+    // above), which SQLite rolls back for that single statement even without an explicit
+    // transaction wrapper (RAISE(ABORT, ...) rolls back only the statement that raised it) -
+    // this pre-existing role_permissions row must still be present, not silently wiped to
+    // zero, and the INSERT half of the replace step must never have run.
+    const remaining = rawDb.prepare('SELECT * FROM role_permissions WHERE role_id = ?').all(roleId);
+    expect(remaining).toEqual([
+      expect.objectContaining({ id: 'rp-update-fail-1', role_id: roleId, permission_id: 'perm-rp-update-fail-1' }),
+    ]);
+  });
+
+  it("replaces an existing role's permissions and updates name/description on the happy path", async () => {
+    const roleId = 'role-update-happy-path';
+    seedRole(roleId);
+    seedRolePermission(roleId, 'rp-update-happy-1');
+
+    const repo = new PermissionsRepository();
+
+    const updated = await repo.updateRoleWithPermissions(
+      roleId,
+      { name: 'Renamed Role', description: 'new desc' },
+      ['perm-new-a', 'perm-new-b'],
+    );
+
+    expect(updated).toEqual(expect.objectContaining({ id: roleId, name: 'Renamed Role', description: 'new desc' }));
+    const rows: Array<{ permission_id: string }> = rawDb
+      .prepare('SELECT permission_id FROM role_permissions WHERE role_id = ? ORDER BY permission_id')
+      .all(roleId);
+    expect(rows.map((r) => r.permission_id)).toEqual(['perm-new-a', 'perm-new-b']);
+  });
+
+  it('leaves existing permissions untouched when permissionIds is not provided', async () => {
+    const roleId = 'role-update-no-permission-change';
+    seedRole(roleId);
+    seedRolePermission(roleId, 'rp-untouched-1');
+
+    const repo = new PermissionsRepository();
+
+    await repo.updateRoleWithPermissions(roleId, { name: 'Just Renamed' }, undefined);
+
+    const remaining = rawDb.prepare('SELECT * FROM role_permissions WHERE role_id = ?').all(roleId);
+    expect(remaining).toEqual([
+      expect.objectContaining({ id: 'rp-untouched-1', role_id: roleId, permission_id: 'perm-rp-untouched-1' }),
+    ]);
   });
 });
 

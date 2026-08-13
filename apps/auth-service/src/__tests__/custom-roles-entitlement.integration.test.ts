@@ -193,31 +193,41 @@ function buildFakePermissionsRepository(seed: FakeRole[]) {
         Array.from(store.values()).filter((r) => r.organizationId === organizationId && !r.isSystemRole),
       ),
     ),
-    createRole: jest.fn((data: Partial<FakeRole>) => {
-      const id = `role-${randomUUID()}`;
-      const role: FakeRole = {
-        id,
-        name: data.name ?? '',
-        description: data.description ?? null,
-        organizationId: data.organizationId ?? '',
-        isSystemRole: data.isSystemRole ?? false,
-        priority: data.priority ?? 0,
-      };
-      store.set(id, role);
-      return Promise.resolve(role);
-    }),
+    // createRole/getOrCreatePermission/replaceRolePermissions/updateRole (per-step) were
+    // replaced by createRoleWithPermissions/updateRoleWithPermissions (single transactional
+    // repository calls) as part of the Phase 5 final REM-FIX closing the same
+    // unwrapped-multi-statement-write gap deleteRoleWithDependents already closed for
+    // remove() — see CustomRolesService.create()/update(). getOrCreatePermission is kept
+    // because update() still resolves permission ids via a direct call to it (outside the
+    // transaction; see updateRoleWithPermissions' doc comment for why that's still safe).
+    createRoleWithPermissions: jest.fn(
+      (data: Partial<FakeRole>, _permissionSpecs: { resourceType: string; action: string }[]) => {
+        const id = `role-${randomUUID()}`;
+        const role: FakeRole = {
+          id,
+          name: data.name ?? '',
+          description: data.description ?? null,
+          organizationId: data.organizationId ?? '',
+          isSystemRole: data.isSystemRole ?? false,
+          priority: data.priority ?? 0,
+        };
+        store.set(id, role);
+        return Promise.resolve(role);
+      },
+    ),
     getOrCreatePermission: jest.fn((resourceType: string, action: string) =>
       Promise.resolve({ id: `perm-${resourceType}-${action}` }),
     ),
-    replaceRolePermissions: jest.fn(() => Promise.resolve()),
     findRoleById: jest.fn((id: string) => Promise.resolve(store.get(id))),
-    updateRole: jest.fn((id: string, updates: Partial<FakeRole>) => {
-      const existing = store.get(id);
-      if (!existing) return Promise.resolve(undefined);
-      const updated = { ...existing, ...updates };
-      store.set(id, updated);
-      return Promise.resolve(updated);
-    }),
+    updateRoleWithPermissions: jest.fn(
+      (id: string, updates: Partial<FakeRole>, _permissionIds?: string[]) => {
+        const existing = store.get(id);
+        if (!existing) return Promise.resolve(undefined);
+        const updated = { ...existing, ...updates };
+        store.set(id, updated);
+        return Promise.resolve(updated);
+      },
+    ),
     deleteRoleWithDependents: jest.fn((id: string) => {
       const existed = store.has(id);
       store.delete(id);
@@ -291,7 +301,7 @@ describe('ee/rbac-custom-roles entitlement + system-role protection + org-scopin
       expect(res.status).toBe(403);
       expect(res.body.upsell).toBe(true);
       expect(res.body.feature).toBe('rbac-custom-roles');
-      expect(fakeRepo.createRole).not.toHaveBeenCalled();
+      expect(fakeRepo.createRoleWithPermissions).not.toHaveBeenCalled();
     });
 
     it('GET /api/admin/custom-roles 403s for a non-ADMIN authenticated user (RbacGuard + @Roles(UserRole.ADMIN) enforcement)', async () => {
@@ -376,8 +386,9 @@ describe('ee/rbac-custom-roles entitlement + system-role protection + org-scopin
       expect(res.status).toBeLessThan(300);
       expect(res.body.isSystemRole).toBe(false);
       expect(res.body.organizationId).toBe('org-A');
-      expect(fakeRepo.createRole).toHaveBeenCalledWith(
+      expect(fakeRepo.createRoleWithPermissions).toHaveBeenCalledWith(
         expect.objectContaining({ isSystemRole: false, organizationId: 'org-A' }),
+        expect.any(Array),
       );
     });
 
@@ -393,7 +404,7 @@ describe('ee/rbac-custom-roles entitlement + system-role protection + org-scopin
       // Distinguishes this from the EntitlementGuard's upsell 403 above — this is the
       // service-layer system-role-protection invariant, not a commercial gate.
       expect(res.body.upsell).toBeUndefined();
-      expect(fakeRepo.updateRole).not.toHaveBeenCalled();
+      expect(fakeRepo.updateRoleWithPermissions).not.toHaveBeenCalled();
     });
 
     it('DELETE on a system role (isSystemRole:true) 403s even with a valid entitled license', async () => {
@@ -417,7 +428,7 @@ describe('ee/rbac-custom-roles entitlement + system-role protection + org-scopin
         .send({ name: 'Hijacked' });
 
       expect(res.status).toBe(403);
-      expect(fakeRepo.updateRole).not.toHaveBeenCalled();
+      expect(fakeRepo.updateRoleWithPermissions).not.toHaveBeenCalled();
     });
 
     it('org-scoping: org A admin cannot DELETE a role belonging to org B', async () => {
