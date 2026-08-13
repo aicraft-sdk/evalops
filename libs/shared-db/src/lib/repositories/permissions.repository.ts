@@ -255,4 +255,35 @@ export class PermissionsRepository {
       .insert(rolePermissions)
       .values(permissionIds.map((permissionId) => ({ roleId, permissionId })));
   }
+
+  /**
+   * `user_roles.role_id` has `ON DELETE no action` (`user_roles_role_id_roles_id_fk`) and
+   * `user_id`/`role_id` are both NOT NULL, so an assignment row cannot be usefully kept once
+   * its role is gone - deletes every user_roles row referencing this role.
+   */
+  async clearUserRolesForRole(roleId: string): Promise<void> {
+    await db.delete(userRoles).where(eq(userRoles.roleId, roleId));
+  }
+
+  /**
+   * `resource_permissions.role_id` has `ON DELETE no action`
+   * (`resource_permissions_role_id_roles_id_fk`). A role-scoped resource grant is meaningless
+   * once its role is gone - deletes every resource_permissions row referencing this role.
+   */
+  async clearResourcePermissionsForRole(roleId: string): Promise<void> {
+    await db.delete(resourcePermissions).where(eq(resourcePermissions.roleId, roleId));
+  }
+
+  /**
+   * `permission_audit_log.role_id` has `ON DELETE no action`
+   * (`permission_audit_log_role_id_roles_id_fk`) but is nullable, unlike user_roles/
+   * resource_permissions. Detaches (nulls out) role_id instead of deleting rows, to preserve
+   * audit history for a role that has since been deleted.
+   */
+  async detachPermissionAuditLogForRole(roleId: string): Promise<void> {
+    await db
+      .update(permissionAuditLog)
+      .set({ roleId: null } as Partial<typeof permissionAuditLog.$inferInsert>)
+      .where(eq(permissionAuditLog.roleId, roleId));
+  }
 }
