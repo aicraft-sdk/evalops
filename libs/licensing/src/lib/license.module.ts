@@ -1,4 +1,4 @@
-import { DynamicModule, Global, Module } from '@nestjs/common';
+import { DynamicModule, Global, Logger, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -14,9 +14,10 @@ export interface LicenseModuleOptions {
 @Global()
 @Module({})
 export class LicenseModule {
+  private static readonly logger = new Logger(LicenseModule.name);
+
   static forRoot(options: LicenseModuleOptions = {}): DynamicModule {
-    const publicKeyPem =
-      options.publicKeyPem ?? readFileSync(join(__dirname, 'keys/license-public-key.pem'), 'utf-8');
+    const publicKeyPem = options.publicKeyPem ?? LicenseModule.readCommittedPublicKey();
 
     return {
       module: LicenseModule,
@@ -28,5 +29,23 @@ export class LicenseModule {
       ],
       exports: [EntitlementService],
     };
+  }
+
+  /**
+   * Reads the committed public key, never throwing. A read failure here (e.g. corrupted
+   * install, restrictive filesystem permissions) must not crash app bootstrap — it collapses
+   * to an empty key, which makes every signature verification fail closed (LicenseVerifierService
+   * treats an invalid PEM as a verification failure, not a crash), matching the same fail-closed
+   * contract as every other license misconfiguration path.
+   */
+  private static readCommittedPublicKey(): string {
+    try {
+      return readFileSync(join(__dirname, 'keys/license-public-key.pem'), 'utf-8');
+    } catch (err) {
+      LicenseModule.logger.error(
+        `Failed to read the committed Enterprise license public key: ${err instanceof Error ? err.message : String(err)} — Enterprise license verification will fail closed.`,
+      );
+      return '';
+    }
   }
 }

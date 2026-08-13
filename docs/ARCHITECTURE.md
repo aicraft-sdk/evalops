@@ -250,6 +250,24 @@ tools:
 You are a helpful assistant...
 ```
 
+### `libs/licensing`
+
+Offline, signed license/entitlement engine for the Enterprise tier (open-core model — see
+`docs/2026-08-13-enterprise-licensing-entitlement-engine-decision.md`). `EntitlementService`
+verifies an `EVALOPS_LICENSE_KEY`-configured license envelope (Ed25519 signature, public key
+committed at `src/lib/keys/license-public-key.pem`) via `LicenseVerifierService`, and exposes a
+total (never-throwing) `hasFeature(feature: EnterpriseFeature)` check — features are
+`'sso' | 'rbac-custom-roles' | 'audit-export' | 'pr-decoration'`. Fails closed on any
+missing/malformed/expired license (`LicenseState.status`: `none | valid | expired_grace |
+expired | malformed`), with a 14-day `expired_grace` window before the entitlement fully lapses.
+`@RequiresEntitlement(feature)` + `EntitlementGuard` mirror `@Roles()`/`RbacGuard` from
+`libs/shared-auth`, for future route-level gating. `LicenseModule.forRoot()` registers the
+module (test-overridable public key). `scripts/licensing/sign-license.ts` (`npm run
+license:sign`) issues dev/test license envelopes via `signLicenseEnvelope()`. As of this phase
+the library exists standalone and is not yet imported by any app — no existing free-tier route
+or behavior is gated; route/feature gating starts in a later phase of the Enterprise Tier plan
+(`docs/plans/2026-08-12-enterprise-tier-phase1-plan.md`).
+
 ---
 
 ## Data Flow: Trace Ingestion
