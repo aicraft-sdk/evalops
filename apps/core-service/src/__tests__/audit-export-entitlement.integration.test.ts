@@ -199,7 +199,12 @@ describe('audit-export entitlement + org-scoping + CSV injection (integration, r
     });
 
     it('GET /api/audit-trail/export 200s and returns a real CSV body for an entitled license', async () => {
-      const token = signUserJwt('org-A');
+      // Each `it` below signs a distinct JWT `sub` so its request(s) don't share a
+      // rate-limit key (RateLimitGuard keys by user id + path, 5 req/60s) with any
+      // other `it` in this describe block — that shared counter belongs to
+      // audit-export-rate-limit.integration.test.ts, not this entitlement/scoping/
+      // CSV-escaping spec.
+      const token = signUserJwt('org-A', 'user-export-basic');
       const res = await request(app.getHttpServer())
         .get('/api/audit-trail/export')
         .set('Authorization', `Bearer ${token}`)
@@ -212,8 +217,8 @@ describe('audit-export entitlement + org-scoping + CSV injection (integration, r
     });
 
     it('org-scoping: a user authenticated as org A never receives org B\'s audit rows, and vice versa', async () => {
-      const orgAToken = signUserJwt('org-A');
-      const orgBToken = signUserJwt('org-B');
+      const orgAToken = signUserJwt('org-A', 'user-export-scope-a');
+      const orgBToken = signUserJwt('org-B', 'user-export-scope-b');
 
       const orgARes = await request(app.getHttpServer())
         .get('/api/audit-trail/export')
@@ -234,7 +239,7 @@ describe('audit-export entitlement + org-scoping + CSV injection (integration, r
     });
 
     it('org-scoping: a client-supplied organizationId query param cannot override the JWT-derived org', async () => {
-      const orgAToken = signUserJwt('org-A');
+      const orgAToken = signUserJwt('org-A', 'user-export-override');
 
       const res = await request(app.getHttpServer())
         .get('/api/audit-trail/export?organizationId=org-B')
@@ -247,7 +252,7 @@ describe('audit-export entitlement + org-scoping + CSV injection (integration, r
     });
 
     it('rejects an out-of-range ?limit with a validated 400, not a raw DB-error 500', async () => {
-      const token = signUserJwt('org-A');
+      const token = signUserJwt('org-A', 'user-export-badlimit-range');
 
       const res = await request(app.getHttpServer())
         .get('/api/audit-trail/export?limit=99999999')
@@ -259,7 +264,7 @@ describe('audit-export entitlement + org-scoping + CSV injection (integration, r
     });
 
     it('rejects a non-numeric ?limit with a validated 400', async () => {
-      const token = signUserJwt('org-A');
+      const token = signUserJwt('org-A', 'user-export-badlimit-nan');
 
       const res = await request(app.getHttpServer())
         .get('/api/audit-trail/export?limit=not-a-number')
@@ -271,7 +276,7 @@ describe('audit-export entitlement + org-scoping + CSV injection (integration, r
     });
 
     it('rejects a negative ?limit with a validated 400', async () => {
-      const token = signUserJwt('org-A');
+      const token = signUserJwt('org-A', 'user-export-badlimit-neg');
 
       await request(app.getHttpServer())
         .get('/api/audit-trail/export?limit=-5')
@@ -282,7 +287,7 @@ describe('audit-export entitlement + org-scoping + CSV injection (integration, r
     });
 
     it('accepts a valid in-range ?limit and forwards it to AuditRepository.findEnhancedByOrg', async () => {
-      const token = signUserJwt('org-A');
+      const token = signUserJwt('org-A', 'user-export-goodlimit');
 
       const res = await request(app.getHttpServer())
         .get('/api/audit-trail/export?limit=250')
@@ -309,7 +314,7 @@ describe('audit-export entitlement + org-scoping + CSV injection (integration, r
           userLastName: null,
         },
       ]);
-      const token = signUserJwt('org-A');
+      const token = signUserJwt('org-A', 'user-export-csv-injection');
 
       const res = await request(app.getHttpServer())
         .get('/api/audit-trail/export')
