@@ -270,6 +270,34 @@ or behavior is gated; route/feature gating starts in a later phase of the Enterp
 
 ---
 
+## Enterprise Directory (`ee/`)
+
+Proprietary Enterprise-tier code lives under `ee/`, licensed separately under `ee/LICENSE`
+(not open source, distinct from the root `LICENSE` FSL-1.1-MIT that governs the rest of the
+repository — see `docs/2026-08-13-fsl-relicensing-and-ee-directory-decision.md`). It is gated
+at runtime by `libs/licensing`'s `EntitlementGuard`.
+
+Structural exclusion from the OSS build is enforced by `@nx/enforce-module-boundaries`
+`depConstraints` in `eslint.config.mjs`: no `scope:shared`/`scope:core-integration`/
+`scope:core-analytics` library may import `scope:enterprise` (`ee/*`). `apps/frontend`
+(`scope:frontend`), `apps/cli` (`scope:cli`), and `apps/api-gateway` (`scope:api-gateway`)
+each carry an explicit `onlyDependOnLibsWithTags: ['scope:shared']` constraint with no
+`scope:enterprise`, structurally forbidding them from importing `ee/*` — most notably
+`apps/frontend`, a Vite browser bundle where an accidental `ee/*` import would ship
+proprietary code into the public frontend bundle. Only the composition-root apps
+(`auth-service`, `core-service`, `evaluation-service`) may import `ee/*`, and only behind
+an `EntitlementGuard`-protected route.
+
+This is a lint-time, static-AST boundary, not a runtime sandbox: `@nx/enforce-module-boundaries`
+only inspects `import`/`import()` nodes, so a `require()`/`eval()` call naming an `ee/*` path
+is invisible to it. A compensating `no-restricted-syntax` ESLint rule in `eslint.config.mjs`
+flags the obvious literal-string `require()`/`eval()`/dynamic-`import()` cases naming `ee/*` or
+`@evalops/ee-*`, but does not catch arbitrary obfuscation (dynamically constructed strings,
+indirect `eval`, etc.) — see `ee/README.md`'s "Known limitation" section for the accepted-risk
+framing. The real runtime boundary is `EntitlementGuard` plus code review, not the lint rule.
+
+---
+
 ## Data Flow: Trace Ingestion
 
 ```

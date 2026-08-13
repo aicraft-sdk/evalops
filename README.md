@@ -314,4 +314,6 @@ See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for step-by-step deployment instr
 
 ## License
 
-MIT
+The OSS core of this repository is licensed under the [Functional Source License, Version 1.1, MIT Future License](LICENSE) (FSL-1.1-MIT) — source-available, with a grant to the MIT license after a time-delayed conversion, subject to a "no competing use" limitation. `package.json`'s `license` field reflects this as `SEE LICENSE IN LICENSE`.
+
+Code under [`ee/`](ee/README.md) is proprietary Enterprise code, licensed separately under [`ee/LICENSE`](ee/LICENSE) (not FSL-1.1-MIT, not open source) and structurally excluded from the OSS build via Nx module-boundary constraints — see `docs/ARCHITECTURE.md`'s "Enterprise Directory" section.
