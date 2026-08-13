@@ -56,7 +56,7 @@ EvalOps is an Nx monorepo built as four NestJS microservices plus a React fronte
 | `libs/sdk`           | Client SDK for trace event ingestion from agents                                                 |
 | `libs/evaluators`    | `ExactEvaluator`, `RuleEvaluator`, `Aggregator` — pure TypeScript evaluator logic                |
 | `libs/agent-md`      | Parser for the AgentMD YAML format                                                               |
-| `libs/licensing`     | Offline Ed25519-signed license/entitlement engine for the Enterprise tier (not yet wired into any app — see `docs/ARCHITECTURE.md`) |
+| `libs/licensing`     | Offline Ed25519-signed license/entitlement engine for the Enterprise tier; gates the `ee/sso` Microsoft Entra SSO login routes in `auth-service` — see `docs/ARCHITECTURE.md` |
 
 ---
 

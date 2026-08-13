@@ -55,14 +55,16 @@ lapsed-license weekend.
 
 ## Impact
 
-- **End users / free-tier customers:** None yet. This phase ships no route or feature gating —
-  `libs/licensing` exists standalone and is not imported by any app. No free-tier behavior
-  changed.
+- **End users / free-tier customers:** None at the time this phase shipped — `libs/licensing`
+  existed standalone and was not imported by any app. **Update:** a later phase of this same
+  plan wired `LicenseModule`/`EntitlementGuard` into `auth-service` and gated the Microsoft Entra
+  SSO login routes behind `@RequiresEntitlement('sso')` — the prediction below has been
+  fulfilled; see `docs/2026-08-13-sso-relocation-and-entitlement-gating-decision.md` for that
+  decision. Free-tier login/JWT/PAT behavior remains unaffected.
 - **Future phases (this plan):** Later phases of
   `docs/plans/2026-08-12-enterprise-tier-phase1-plan.md` will wire `LicenseModule`/
-  `EntitlementGuard`/`@RequiresEntitlement()` into `auth-service` (SSO, custom RBAC roles) and
-  other services (audit export, PR decoration), at which point those routes become genuinely
-  license-gated for the first time.
+  `EntitlementGuard`/`@RequiresEntitlement()` into other services (custom RBAC roles, audit
+  export, PR decoration), at which point those routes become genuinely license-gated too.
 - **Contributors:** A new `EnterpriseFeature` union (`'sso' | 'rbac-custom-roles' |
   'audit-export' | 'pr-decoration'`) is now the single source of truth for what counts as an
   Enterprise feature; any future Enterprise-gated capability should extend this union rather

@@ -58,6 +58,14 @@ Owns all identity concerns. Exposes:
   organization's name (admin only, enforced by `RbacGuard`, validated by
   `UpdateOrganizationDto`)
 - `POST /api/auth/admin/*` — admin panel routes (admin only, enforced by `RbacGuard`)
+- `GET /api/auth/microsoft` / `GET /api/auth/microsoft/callback` — Microsoft Entra SSO login,
+  implemented in `ee/sso` (`@evalops/ee-sso`'s `MicrosoftAuthController`, wired into
+  `AuthModule`) and gated by `@RequiresEntitlement('sso')` + `EntitlementGuard`: with no valid
+  Enterprise license configured, both routes return `403` with an upsell body
+  (`{ upsell: true, feature: 'sso' }`) instead of reaching `MicrosoftAuthService` — the first
+  Enterprise-gated route to go live in this codebase (see
+  `docs/2026-08-13-sso-relocation-and-entitlement-gating-decision.md`). Free-tier login
+  (`/api/auth/login`, `/api/auth/user`) is unaffected regardless of license state.
 
 JWT payload shape:
 
@@ -263,10 +271,12 @@ expired | malformed`), with a 14-day `expired_grace` window before the entitleme
 `@RequiresEntitlement(feature)` + `EntitlementGuard` mirror `@Roles()`/`RbacGuard` from
 `libs/shared-auth`, for future route-level gating. `LicenseModule.forRoot()` registers the
 module (test-overridable public key). `scripts/licensing/sign-license.ts` (`npm run
-license:sign`) issues dev/test license envelopes via `signLicenseEnvelope()`. As of this phase
-the library exists standalone and is not yet imported by any app — no existing free-tier route
-or behavior is gated; route/feature gating starts in a later phase of the Enterprise Tier plan
-(`docs/plans/2026-08-12-enterprise-tier-phase1-plan.md`).
+license:sign`) issues dev/test license envelopes via `signLicenseEnvelope()`. As of this phase,
+`apps/auth-service` imports `LicenseModule.forRoot()` and gates the relocated Microsoft Entra
+SSO routes (`ee/sso`) with `EntitlementGuard`/`@RequiresEntitlement('sso')` — the first
+real route/feature gating by this library (see "Auth Service" above and
+`docs/2026-08-13-sso-relocation-and-entitlement-gating-decision.md`); no free-tier route or
+behavior is affected.
 
 ---
 
@@ -287,6 +297,16 @@ each carry an explicit `onlyDependOnLibsWithTags: ['scope:shared']` constraint w
 proprietary code into the public frontend bundle. Only the composition-root apps
 (`auth-service`, `core-service`, `evaluation-service`) may import `ee/*`, and only behind
 an `EntitlementGuard`-protected route.
+
+`ee/sso` (`@evalops/ee-sso`) is the first `ee/*` library actually imported by a composition-root
+app: it holds the Microsoft Entra SSO connector (`MicrosoftAuthController`,
+`MicrosoftAuthService`), relocated out of `apps/auth-service` and wired into `AuthModule` behind
+`EntitlementGuard`/`@RequiresEntitlement('sso')`. It depends on user-provisioning behavior
+(`findUserByEmail`/`createUserFromMicrosoft`/`updateUserFromMicrosoft`/`login`) via a
+`SSO_USER_PROVISIONER` DI-token interface (`SsoUserProvisioner`) rather than importing
+`AuthService` directly, so `ee/sso` has no compile-time dependency on `apps/auth-service`
+internals; `AuthModule` binds `{ provide: SSO_USER_PROVISIONER, useExisting: AuthService }`. See
+`docs/2026-08-13-sso-relocation-and-entitlement-gating-decision.md`.
 
 This is a lint-time, static-AST boundary, not a runtime sandbox: `@nx/enforce-module-boundaries`
 only inspects `import`/`import()` nodes, so a `require()`/`eval()` call naming an `ee/*` path
