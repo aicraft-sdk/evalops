@@ -69,7 +69,13 @@ lapsed-license weekend.
   and gated a new `GET /api/audit-trail/export` route behind `@RequiresEntitlement
   ('audit-export')` — the second prediction fulfilled; see
   `docs/2026-08-13-audit-export-entitlement-gating-decision.md`. The existing free `GET
-  /api/audit-trail` view remains unaffected.
+  /api/audit-trail` view remains unaffected. **Update:** a subsequent phase added the
+  `ee/rbac-custom-roles` library and gated new org-scoped custom-role CRUD routes
+  (`/api/auth/admin/custom-roles`) behind `@RequiresEntitlement('rbac-custom-roles')` — the
+  third prediction fulfilled; see
+  `docs/2026-08-13-custom-rbac-entitlement-gating-decision.md`. The existing free
+  `UserRole`-enum role assignment remains unaffected. Only `pr-decoration` of the four features in
+  the `EnterpriseFeature` union remains ungated as of this update.
 - **Contributors:** A new `EnterpriseFeature` union (`'sso' | 'rbac-custom-roles' |
   'audit-export' | 'pr-decoration'`) is now the single source of truth for what counts as an
   Enterprise feature; any future Enterprise-gated capability should extend this union rather

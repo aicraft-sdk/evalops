@@ -66,6 +66,16 @@ Owns all identity concerns. Exposes:
   Enterprise-gated route to go live in this codebase (see
   `docs/2026-08-13-sso-relocation-and-entitlement-gating-decision.md`). Free-tier login
   (`/api/auth/login`, `/api/auth/user`) is unaffected regardless of license state.
+- `GET|POST /api/auth/admin/custom-roles`, `PATCH|DELETE /api/auth/admin/custom-roles/:id` — CRUD
+  for org-scoped custom RBAC roles, implemented in `ee/rbac-custom-roles`
+  (`@evalops/ee-rbac-custom-roles`'s `CustomRolesController`, mounted inside the existing
+  `PermissionsModule`), enforced by `RbacGuard`/`@Roles(UserRole.ADMIN)` and gated by
+  `@RequiresEntitlement('rbac-custom-roles')` + `EntitlementGuard` — the third Enterprise-gated
+  route to go live (see `docs/2026-08-13-custom-rbac-entitlement-gating-decision.md`). A custom
+  role can never mutate or delete an `isSystemRole: true` built-in role; this invariant is
+  enforced unconditionally in `CustomRolesService`, independent of license state. The pre-existing
+  free `UserRole`-enum role assignment (`POST /admin/users/:id/role`, the 3 built-in system roles)
+  is unaffected.
 
 JWT payload shape:
 
@@ -288,6 +298,11 @@ the new `GET /api/audit-trail/export` route (`ee/audit-export`) with the same
 `EntitlementGuard`/`@RequiresEntitlement('audit-export')` pattern — the second Enterprise-gated
 route to go live; the existing free `GET /api/audit-trail` view is unchanged (see "Integration
 and Analytics" above and `docs/2026-08-13-audit-export-entitlement-gating-decision.md`).
+`apps/auth-service`'s existing `PermissionsModule` also now imports `CustomRolesModule`
+(`ee/rbac-custom-roles`), gating org-scoped custom RBAC role CRUD behind
+`EntitlementGuard`/`@RequiresEntitlement('rbac-custom-roles')` — the third Enterprise-gated
+route to go live; the existing free `UserRole`-enum role assignment is unchanged (see "Auth
+Service" above and `docs/2026-08-13-custom-rbac-entitlement-gating-decision.md`).
 
 ---
 
@@ -329,6 +344,21 @@ suppliable param, mirroring `AuditController`'s org-scoping. CSV field values ar
 against formula/CSV-injection before being written, and the `?limit` query param is validated
 and capped at 5000 via `AuditExportQueryDto`. See
 `docs/2026-08-13-audit-export-entitlement-gating-decision.md`.
+
+`ee/rbac-custom-roles` (`@evalops/ee-rbac-custom-roles`) is the third `ee/*` library imported by
+a composition-root app: `CustomRolesController`/`CustomRolesService`, mounted inside
+`auth-service`'s existing `PermissionsModule` behind
+`EntitlementGuard`/`@RequiresEntitlement('rbac-custom-roles')`, expose CRUD for org-scoped
+custom RBAC roles (`GET|POST /api/admin/custom-roles`, `PATCH|DELETE
+/api/admin/custom-roles/:id`). `organizationId` is read only from `@CurrentUser()`'s verified
+JWT claim, mirroring `ee/sso`/`ee/audit-export`'s org-scoping. A custom role can never mutate or
+delete a role with `isSystemRole: true`; that invariant is enforced unconditionally inside
+`CustomRolesService`, independent of license state. Shipping this feature also surfaced and fixed
+a pre-existing CRITICAL bug: `PermissionsService.isSystemAdmin()` previously granted unconditional
+admin access to any role whose *name* contained "admin"/"superuser", which this phase's own
+user-namable custom roles made directly exploitable; it now correctly requires
+`role.isSystemRole === true && role.priority >= 100`. See
+`docs/2026-08-13-custom-rbac-entitlement-gating-decision.md`.
 
 This is a lint-time, static-AST boundary, not a runtime sandbox: `@nx/enforce-module-boundaries`
 only inspects `import`/`import()` nodes, so a `require()`/`eval()` call naming an `ee/*` path

@@ -56,7 +56,7 @@ EvalOps is an Nx monorepo built as four NestJS microservices plus a React fronte
 | `libs/sdk`           | Client SDK for trace event ingestion from agents                                                 |
 | `libs/evaluators`    | `ExactEvaluator`, `RuleEvaluator`, `Aggregator` — pure TypeScript evaluator logic                |
 | `libs/agent-md`      | Parser for the AgentMD YAML format                                                               |
-| `libs/licensing`     | Offline Ed25519-signed license/entitlement engine for the Enterprise tier; gates the `ee/sso` Microsoft Entra SSO login routes in `auth-service` and the `ee/audit-export` CSV export route in `core-service` — see `docs/ARCHITECTURE.md` |
+| `libs/licensing`     | Offline Ed25519-signed license/entitlement engine for the Enterprise tier; gates the `ee/sso` Microsoft Entra SSO login routes in `auth-service`, the `ee/audit-export` CSV export route in `core-service`, and the `ee/rbac-custom-roles` custom RBAC role CRUD routes in `auth-service` — see `docs/ARCHITECTURE.md` |
 
 ---
 
@@ -166,7 +166,7 @@ All routes go through the API Gateway on port 3000.
 
 | Prefix               | Service             | Example endpoints                                                               |
 | -------------------- | ------------------- | ------------------------------------------------------------------------------- |
-| `/api/auth/*`        | auth-service        | `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/user`         |
+| `/api/auth/*`        | auth-service        | `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/user`, `GET/POST /api/auth/admin/custom-roles` (Enterprise-gated) |
 | `/api/core/*`        | core-service        | `GET /api/core/prompts`, `POST /api/core/agents`, `GET /api/core/eval-specs`    |
 | `/api/evaluation/*`  | evaluation-service  | `POST /api/evaluation/runs`, `POST /api/evaluation/ingestion/events`, `POST/PUT/DELETE /api/evaluation/policies` (org_admin/admin), `GET/POST /api/evaluation/golden-sets` (+ `:id/examples`, `:id/calibration-runs`) |
 | `/api/integration/*` | core-service        | `GET /api/integration/artifacts/:runId/:file`, `POST /api/integration/webhooks` |
