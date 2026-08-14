@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../dist/ee/pr-decoration",
+    "rootDir": "src",
+    "declaration": true,
+    "composite": true,
+    "types": ["node"],
+    "skipLibCheck": true,
+    "paths": {
+      "@evalops/shared-auth": ["dist/libs/shared-auth/src/index"],
+      "@evalops/licensing": ["dist/libs/licensing/src/index"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": [
+    "jest.config.ts",
+    "jest.config.cts",
+    "src/**/*.spec.ts",
+    "src/**/*.test.ts"
+  ]
+}

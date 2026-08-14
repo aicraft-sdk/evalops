@@ -19,6 +19,9 @@ import { MigrationModule } from './migration/migration.module';
 import { SandboxExecutionModule } from './sandbox-execution/sandbox-execution.module';
 import { GoldenSetsModule } from './golden-sets/golden-sets.module';
 import { JwtAuthGuard } from '@evalops/shared-auth';
+import { LicenseModule } from '@evalops/licensing';
+import { PrDecorationModule, RUN_LOOKUP } from '@evalops/ee-pr-decoration';
+import { RunsService } from './runs/runs.service';
 import {
   LoggingInterceptor,
   OrgContextInterceptor,
@@ -43,6 +46,7 @@ import { JwtStrategy } from './auth/jwt.strategy';
       inject: [ConfigService],
     }),
     SharedDbModule,
+    LicenseModule.forRoot(),
     RunsModule,
     EvaluationModule,
     PoliciesModule,
@@ -54,6 +58,7 @@ import { JwtStrategy } from './auth/jwt.strategy';
     MigrationModule,
     SandboxExecutionModule,
     GoldenSetsModule,
+    PrDecorationModule,
   ],
   controllers: [AppController, HealthController],
   providers: [
@@ -63,6 +68,7 @@ import { JwtStrategy } from './auth/jwt.strategy';
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
     { provide: APP_INTERCEPTOR, useClass: OrgContextInterceptor },
     { provide: APP_FILTER, useClass: LoggingExceptionFilter },
+    { provide: RUN_LOOKUP, useExisting: RunsService },
   ],
 })
 export class AppModule {}
