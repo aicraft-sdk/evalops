@@ -151,8 +151,35 @@ async function main() {
   const icon = decision === 'pass' ? '✅' : decision === 'warn' ? '⚠️' : '❌';
   console.log(`\n${icon} Suite ${decision.toUpperCase()} — pass rate: ${(passRate * 100).toFixed(1)}% (${passed}/${completedRuns.length})`);
 
+  await maybeDecorate(completedRuns);
+
   if (decision === 'fail' || (decision === 'warn' && FAIL_ON_WARN)) {
     process.exit(1);
+  }
+}
+
+// Best-effort, opt-in call to the Enterprise PR-decoration endpoint. Never throws out of
+// main() and never affects process.exit() — a 403 (no license) or any other failure is
+// logged and swallowed so the free CI gate above is completely unaffected.
+async function maybeDecorate(completedRuns) {
+  if (process.env.INPUT_ENABLE_PR_DECORATION !== 'true') return;
+  for (const run of completedRuns) {
+    try {
+      const res = await fetch(`${API_URL}/api/evaluation/pr-decoration`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ runId: run.id }),
+      });
+      if (res.status === 403) {
+        console.log('PR decoration is an Enterprise feature and no license is configured — skipping (non-fatal).');
+        return;
+      }
+      if (!res.ok) {
+        console.log(`PR decoration call failed non-fatally: HTTP ${res.status}`);
+      }
+    } catch (err) {
+      console.log(`PR decoration call failed non-fatally: ${err.message}`);
+    }
   }
 }
 
