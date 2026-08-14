@@ -25,12 +25,14 @@
  *
  * This test boots the REAL, unmodified `AppModule` — the exact module graph
  * `main.ts` passes to `NestFactory.create()` — proving the full production
- * wiring resolves and initializes. It never issues a database query (no
- * `OnModuleInit` hook exists anywhere in this module graph), so
- * `DATABASE_URL` only needs to be syntactically present for `pg.Pool`'s
- * constructor (which connects lazily, see `@evalops/shared-db`'s `db.ts`) —
- * no live Postgres server is required for this test to prove the DI graph
- * resolves.
+ * wiring resolves and initializes. `LicenseModule.forRoot()` does register an
+ * `OnModuleInit` hook (`EntitlementService.onModuleInit()`,
+ * `libs/licensing/src/lib/entitlement.service.ts`), but it only does a
+ * synchronous, try/catch-guarded local file read — no database query or
+ * network I/O — so `DATABASE_URL` only needs to be syntactically present for
+ * `pg.Pool`'s constructor (which connects lazily, see `@evalops/shared-db`'s
+ * `db.ts`) — no live Postgres server is required for this test to prove the
+ * DI graph resolves.
  *
  * `DATABASE_URL`/`JWT_SECRET`/`OPENAI_API_KEY` must be set BEFORE any
  * `require()` of `AppModule` (it transitively, statically imports
