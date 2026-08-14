@@ -149,17 +149,66 @@ export class PermissionsRepository {
       );
   }
 
+  /**
+   * `roles.isSystemRole` / `permissions.isSystemPermission` are declared as Postgres
+   * `boolean()` columns (see `schema/permissions.ts`), whose `mapToDriverValue` is an identity
+   * passthrough — correct for `node-postgres` (production), which binds JS booleans natively.
+   * In dev mode these same table objects run against a real `better-sqlite3` connection (see
+   * `db.ts`), which refuses to bind a raw JS `boolean`
+   * (`TypeError: SQLite3 can only bind numbers, strings, bigints, buffers, and null`) — this
+   * crashes on ANY write to either column, including the column's own client-side default value
+   * when the field is omitted entirely from `.values()` (Drizzle still injects `col.default` as
+   * a bound param in that case). Coerces to SQLite-native `0`/`1` ONLY in dev mode; on the
+   * production Postgres path this is a no-op identity passthrough, so `db.insert(...)` behavior
+   * there is unchanged. Always resolves a concrete value (never leaves the field `undefined`) so
+   * Drizzle never falls back to its own client-side boolean default injection.
+   */
+  private devModeBoolean(value: boolean | null | undefined, defaultValue: boolean): boolean {
+    const resolved = value ?? defaultValue;
+    if (!isDevMode) return resolved;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime value is SQLite-native 0/1, typed as `boolean` because callers assign this straight into a boolean-typed insert field
+    return (resolved ? 1 : 0) as any;
+  }
+
+  /**
+   * `@evalops/shared-db` is path-mapped straight to `.ts` source, so every consuming app
+   * recompiles `typeof roles.$inferInsert` / `typeof permissions.$inferInsert` under ITS OWN
+   * tsconfig — none of the 5 backend apps (including `auth-service`, which loads this file
+   * transitively through `ee/rbac-custom-roles`) enable `strictNullChecks`, and Drizzle's
+   * `$inferInsert` conditional types silently collapse to only the NOT-NULL/no-default columns
+   * in that mode (confirmed project pattern), dropping `isSystemRole`/`isSystemPermission`
+   * (both nullable, both have a column default) from the inferred type entirely in those apps
+   * even though a real caller's object may carry them. Reads via an index cast so this compiles
+   * identically everywhere, without changing any of this file's public method signatures.
+   */
+  private readOptionalBoolean(
+    source: typeof roles.$inferInsert | typeof permissions.$inferInsert,
+    key: 'isSystemRole' | 'isSystemPermission',
+  ): boolean | null | undefined {
+    return (source as unknown as Record<string, unknown>)[key] as boolean | null | undefined;
+  }
+
   async createRole(
     data: typeof roles.$inferInsert,
   ): Promise<typeof roles.$inferSelect> {
-    const [role] = await db.insert(roles).values(data).returning();
+    const insertData = {
+      ...data,
+      isSystemRole: this.devModeBoolean(this.readOptionalBoolean(data, 'isSystemRole'), false),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see readOptionalBoolean: $inferInsert collapses under non-strict consuming-app tsconfigs
+    } as any;
+    const [role] = await db.insert(roles).values(insertData).returning();
     return role;
   }
 
   async createPermission(
     data: typeof permissions.$inferInsert,
   ): Promise<typeof permissions.$inferSelect> {
-    const [perm] = await db.insert(permissions).values(data).returning();
+    const insertData = {
+      ...data,
+      isSystemPermission: this.devModeBoolean(this.readOptionalBoolean(data, 'isSystemPermission'), true),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see readOptionalBoolean: $inferInsert collapses under non-strict consuming-app tsconfigs
+    } as any;
+    const [perm] = await db.insert(permissions).values(insertData).returning();
     return perm;
   }
 
@@ -382,7 +431,12 @@ export class PermissionsRepository {
     permissionSpecs: { resourceType: string; action: string }[],
   ): Promise<typeof roles.$inferSelect> {
     if (isDevMode) {
-      const [role] = await db.insert(roles).values(data).returning();
+      const roleInsertData = {
+        ...data,
+        isSystemRole: this.devModeBoolean(this.readOptionalBoolean(data, 'isSystemRole'), false),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see readOptionalBoolean: $inferInsert collapses under non-strict consuming-app tsconfigs
+      } as any;
+      const [role] = await db.insert(roles).values(roleInsertData).returning();
       const permissionIds: string[] = [];
       for (const spec of permissionSpecs) {
         const [existing] = await db
@@ -406,7 +460,7 @@ export class PermissionsRepository {
                 resourceType: spec.resourceType,
                 action: spec.action,
                 description: `${spec.action} access to ${spec.resourceType} resources`,
-                isSystemPermission: true,
+                isSystemPermission: this.devModeBoolean(true, true),
               } as typeof permissions.$inferInsert)
               .returning();
         permissionIds.push(created.id);

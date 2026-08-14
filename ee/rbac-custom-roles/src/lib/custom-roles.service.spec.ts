@@ -29,6 +29,15 @@ rawDb.exec(`
     created_at TEXT,
     updated_at TEXT
   );
+  CREATE TABLE permissions (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    resource_type TEXT NOT NULL,
+    action TEXT NOT NULL,
+    description TEXT,
+    is_system_permission INTEGER DEFAULT 1,
+    created_at TEXT
+  );
   CREATE TABLE role_permissions (
     id TEXT PRIMARY KEY,
     role_id TEXT NOT NULL,
@@ -136,6 +145,15 @@ function seedResourcePermission(roleId: string, id: string) {
        VALUES (?, NULL, ?, 'dataset', 'res-1', 'read', 1, 'admin-1', ?)`,
     )
     .run(id, roleId, new Date().toISOString());
+}
+
+function seedPermission(id: string, resourceType: string, action: string) {
+  rawDb
+    .prepare(
+      `INSERT INTO permissions (id, name, resource_type, action, description, is_system_permission, created_at)
+       VALUES (?, ?, ?, ?, NULL, 1, ?)`,
+    )
+    .run(id, `${resourceType}.${action}`, resourceType, action, new Date().toISOString());
 }
 
 function seedAuditLog(roleId: string, id: string) {
@@ -358,6 +376,58 @@ describe('PermissionsRepository.updateRoleWithPermissions (dev-mode SQLite, real
     expect(remaining).toEqual([
       expect.objectContaining({ id: 'rp-untouched-1', role_id: roleId, permission_id: 'perm-rp-untouched-1' }),
     ]);
+  });
+});
+
+describe('PermissionsRepository.createRoleWithPermissions (dev-mode SQLite, real DB, no mocks)', () => {
+  it('creates a permission that does not exist yet and links it to the new role', async () => {
+    const repo = new PermissionsRepository();
+
+    const role = await repo.createRoleWithPermissions(
+      { name: 'Auditor', organizationId: 'org-1', isSystemRole: false },
+      [{ resourceType: 'run', action: 'read' }],
+    );
+
+    // `roles.isSystemRole` is a Postgres `boolean()` column whose `mapFromDriverValue` is an
+    // identity passthrough (correct for node-postgres in production). In dev-mode SQLite the
+    // repository coerces JS booleans to SQLite-native 0/1 before insert (see
+    // PermissionsRepository.devModeBoolean), and RETURNING hands back that same raw stored
+    // value - so the real, correct dev-mode return shape here is `isSystemRole: 0`, not `false`.
+    expect(role).toEqual(
+      expect.objectContaining({ name: 'Auditor', organizationId: 'org-1', isSystemRole: 0 }),
+    );
+
+    const permRows: Array<{ id: string; resource_type: string; action: string }> = rawDb
+      .prepare('SELECT id, resource_type, action FROM permissions WHERE resource_type = ? AND action = ?')
+      .all('run', 'read');
+    expect(permRows).toHaveLength(1);
+
+    const linkRows = rawDb
+      .prepare('SELECT permission_id FROM role_permissions WHERE role_id = ?')
+      .all(role.id);
+    expect(linkRows).toEqual([{ permission_id: permRows[0].id }]);
+  });
+
+  it('reuses an existing permission instead of creating a duplicate', async () => {
+    seedPermission('perm-existing-1', 'dataset', 'write');
+
+    const repo = new PermissionsRepository();
+
+    const role = await repo.createRoleWithPermissions(
+      { name: 'Data Writer', organizationId: 'org-1', isSystemRole: false },
+      [{ resourceType: 'dataset', action: 'write' }],
+    );
+
+    const permRows = rawDb
+      .prepare('SELECT id FROM permissions WHERE resource_type = ? AND action = ?')
+      .all('dataset', 'write');
+    // Reuse means no second row was created for the same (resourceType, action) pair.
+    expect(permRows).toEqual([{ id: 'perm-existing-1' }]);
+
+    const linkRows = rawDb
+      .prepare('SELECT permission_id FROM role_permissions WHERE role_id = ?')
+      .all(role.id);
+    expect(linkRows).toEqual([{ permission_id: 'perm-existing-1' }]);
   });
 });
 

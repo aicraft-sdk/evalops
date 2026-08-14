@@ -203,3 +203,144 @@ describe('PermissionsRepository.updateRoleWithPermissions / createRoleWithPermis
     expect(mockTx.select).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * Regression coverage for a real, previously-undiscovered dev-mode bug: `roles.isSystemRole` /
+ * `permissions.isSystemPermission` are declared as Postgres `boolean()` columns (see
+ * `schema/permissions.ts`), whose `mapToDriverValue` is an identity passthrough — correct for
+ * `node-postgres` (production), which binds JS booleans natively. Under `EVALOPS_DEV_MODE=1`
+ * these same table objects run against a real `better-sqlite3` connection (see `db.ts`), which
+ * refuses to bind a raw JS `boolean` (`TypeError: SQLite3 can only bind numbers, strings,
+ * bigints, buffers, and null`) — this crashed on ANY write to either column, including the
+ * column's own client-side default value when the field was omitted entirely from `.values()`.
+ * Confirmed live: `CustomRolesService.create()` (the only real caller of
+ * `createRoleWithPermissions`, which hardcodes `isSystemRole: false`) 500s on every call under a
+ * real `EVALOPS_DEV_MODE=1` self-hosted deployment before this fix.
+ *
+ * Each test below is self-contained (own temp SQLite file, own `jest.resetModules()` + deferred
+ * `require()`), mirroring this file's own established per-test isolation pattern for the
+ * production-branch describe blocks above — NOT the top-level-singleton pattern used by
+ * `custom-roles.service.spec.ts` / `organizations.repository.spec.ts`, since this file already
+ * mutates `EVALOPS_DEV_MODE`/the module registry per-test and mixing patterns would risk
+ * cross-test module-cache interference.
+ */
+describe('PermissionsRepository dev-mode boolean coercion (real DB, no mocks)', () => {
+  const originalDevMode = process.env['EVALOPS_DEV_MODE'];
+  const originalDevDbPath = process.env['EVALOPS_DEV_DB_PATH'];
+
+  afterEach(() => {
+    if (originalDevMode === undefined) {
+      delete process.env['EVALOPS_DEV_MODE'];
+    } else {
+      process.env['EVALOPS_DEV_MODE'] = originalDevMode;
+    }
+    if (originalDevDbPath === undefined) {
+      delete process.env['EVALOPS_DEV_DB_PATH'];
+    } else {
+      process.env['EVALOPS_DEV_DB_PATH'] = originalDevDbPath;
+    }
+    jest.resetModules();
+  });
+
+  function setUpDevModeSqlite(): { tmpDir: string; rawDb: import('better-sqlite3').Database } {
+    jest.resetModules();
+    // Earlier describe blocks in this file register `jest.doMock('../db', () => ({ db: mockDb
+    // }))` per-test; that mock-factory registration is NOT cleared by `jest.resetModules()`
+    // alone and otherwise leaks into these tests too. Force the REAL module explicitly so these
+    // tests exercise the genuine `better-sqlite3`-backed dev-mode `db`, not a stale mock.
+    jest.doMock('../db', () => jest.requireActual('../db'));
+    process.env['EVALOPS_DEV_MODE'] = '1';
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    const { mkdtempSync } = require('fs');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    const { tmpdir } = require('os');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    const { join } = require('path');
+    const tmpDir = mkdtempSync(join(tmpdir(), 'permissions-repo-devmode-bool-'));
+    process.env['EVALOPS_DEV_DB_PATH'] = join(tmpDir, 'test.db');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    const Database = require('better-sqlite3');
+    const rawDb = new Database(process.env['EVALOPS_DEV_DB_PATH']);
+    rawDb.exec(`
+      CREATE TABLE roles (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        organization_id TEXT NOT NULL,
+        is_system_role INTEGER DEFAULT 0,
+        priority INTEGER DEFAULT 0,
+        created_at TEXT,
+        updated_at TEXT
+      );
+      CREATE TABLE permissions (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        resource_type TEXT NOT NULL,
+        action TEXT NOT NULL,
+        description TEXT,
+        is_system_permission INTEGER DEFAULT 1,
+        created_at TEXT
+      );
+    `);
+    return { tmpDir, rawDb };
+  }
+
+  it('createRole() does not throw when isSystemRole is passed explicitly as a JS boolean', async () => {
+    const { tmpDir, rawDb } = setUpDevModeSqlite();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    const { PermissionsRepository } = require('./permissions.repository');
+    const repo = new PermissionsRepository();
+
+    const role = await repo.createRole({
+      name: 'Explicit Bool Role',
+      organizationId: 'org-1',
+      isSystemRole: false,
+    });
+
+    expect(role).toEqual(expect.objectContaining({ name: 'Explicit Bool Role', organizationId: 'org-1' }));
+    const rows = rawDb.prepare('SELECT is_system_role FROM roles WHERE id = ?').all(role.id);
+    expect(rows).toEqual([{ is_system_role: 0 }]);
+
+    rawDb.close();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    require('fs').rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('createRole() does not throw when isSystemRole is omitted (relies on the column default)', async () => {
+    const { tmpDir, rawDb } = setUpDevModeSqlite();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    const { PermissionsRepository } = require('./permissions.repository');
+    const repo = new PermissionsRepository();
+
+    const role = await repo.createRole({ name: 'Default Bool Role', organizationId: 'org-1' });
+
+    expect(role).toEqual(expect.objectContaining({ name: 'Default Bool Role', organizationId: 'org-1' }));
+    const rows = rawDb.prepare('SELECT is_system_role FROM roles WHERE id = ?').all(role.id);
+    expect(rows).toEqual([{ is_system_role: 0 }]);
+
+    rawDb.close();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    require('fs').rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('createPermission() does not throw when isSystemPermission is omitted (relies on the column default)', async () => {
+    const { tmpDir, rawDb } = setUpDevModeSqlite();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    const { PermissionsRepository } = require('./permissions.repository');
+    const repo = new PermissionsRepository();
+
+    const perm = await repo.createPermission({
+      name: 'run.read',
+      resourceType: 'run',
+      action: 'read',
+    });
+
+    expect(perm).toEqual(expect.objectContaining({ name: 'run.read', resourceType: 'run', action: 'read' }));
+    const rows = rawDb.prepare('SELECT is_system_permission FROM permissions WHERE id = ?').all(perm.id);
+    expect(rows).toEqual([{ is_system_permission: 1 }]);
+
+    rawDb.close();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    require('fs').rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
