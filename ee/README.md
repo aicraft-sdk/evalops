@@ -86,3 +86,31 @@ undocumented until now:
   omission.
 All three are accepted, documented gaps for a future hardening pass — not blocking for this
 phase.
+
+## Known limitation: `isSystemAdmin()` fails closed under dev-mode SQLite
+
+`PermissionsService.isSystemAdmin()` (`apps/auth-service/src/app/permissions/permissions.service.ts`)
+checks `role.isSystemRole === true && role.priority >= 100` to grant the unconditional
+Administrator bypass. `roles.isSystemRole` is a pg-core `boolean()` column; on production
+Postgres this round-trips as a real JS `true`/`false`, so the strict-equality check is correct
+there. Under `EVALOPS_DEV_MODE=1` (dev/CI-only SQLite, never a supported production deployment
+target), reads are never coerced back to a JS boolean — `better-sqlite3` returns the raw stored
+integer (`0`/`1`), so a real Administrator role reads back as `1`, and `1 === true` is `false`.
+
+The practical effect: under dev-mode SQLite only, `isSystemAdmin()`'s unconditional bypass never
+fires for anyone, including the real Administrator role — every permission check falls through to
+the normal role/resource-permission grant lookup instead. This **fails closed** (denies the
+bypass rather than granting it to the wrong roles, the opposite direction of every other finding
+in this phase's remediation chain) and has no effect on production Postgres, where the column
+round-trips correctly. Found during Phase 5's final doubt-verify/re-hunt pass while closing an
+unrelated dev-mode SQLite boolean-binding bug (see
+`docs/2026-08-13-custom-rbac-entitlement-gating-decision.md`'s "Dev-mode SQLite boolean binding"
+section) — pre-existing, not introduced by that fix, and left as an accepted, documented gap
+rather than fixed in this phase, since it is non-exploitable and dev-mode-only.
+
+A future pass touching this file should change the check to a truthy comparison
+(`role.isSystemRole && role.priority >= 100`), matching the dev-mode-safe pattern already used in
+`ee/rbac-custom-roles/src/lib/custom-roles.service.ts`'s `assertMutableCustomRole()` (`if
+(role.isSystemRole)`), plus a regression test exercising the real dev-mode SQLite read path (the
+existing `isSystemAdmin()` test suite uses hand-built mock `Role` objects with real JS booleans,
+so it does not exercise this gap).

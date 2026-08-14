@@ -134,3 +134,64 @@ at all, not an optional hardening pass.
   `libs/licensing` section, "Enterprise Directory" section), `README.md` (`libs/licensing`
   Shared Libraries row, API Overview table),
   `docs/2026-08-13-enterprise-licensing-entitlement-engine-decision.md` (Impact section).
+
+## Update: FK-exhaustiveness, transaction-atomicity, and dev-mode SQLite boolean binding
+
+After this feature shipped, three further remediation rounds (driven by doubt-verify/re-hunt,
+not the original build) hardened `CustomRolesService`'s write paths and fixed a real,
+previously-undiscovered dev-mode-only bug. All three are closed; a fourth, adjacent, fail-closed
+gap was found and is documented below as an accepted residual risk rather than fixed.
+
+**Round 1 — DELETE-FK exhaustiveness.** The original `remove()` fix only cleared
+`role_permissions` before `deleteRole()`. `roles.id` has 4 inbound FK constraints, all `ON DELETE
+no action`: `role_permissions` (handled), `user_roles`, `resource_permissions`,
+`permission_audit_log`. The latter 3 were unaddressed — deleting a role with rows in any of them
+would throw an unhandled Postgres FK-violation. Fixed by clearing/detaching all 4 tables before
+delete (`user_roles`/`resource_permissions` deleted since their grants are meaningless once the
+role is gone; `permission_audit_log.role_id` nulled instead of deleted, to preserve audit
+history).
+
+**Round 2 — write-sequence atomicity.** The 5-step clear/detach/delete sequence had no
+transaction wrapper — a mid-sequence failure could leave a role half-cleaned with no rollback.
+Fixed via `PermissionsRepository.deleteRoleWithDependents()`, wrapping all writes in a single
+`db.transaction()` on the production Postgres path (dev-mode SQLite keeps a documented,
+non-atomic-but-fail-fast sequential fallback, since `better-sqlite3` only supports synchronous
+transaction callbacks). The identical gap was then found and fixed in `update()`/`create()`
+(`updateRoleWithPermissions()`/`createRoleWithPermissions()`), which had the same unwrapped
+multi-statement-write pattern — `update()`'s gap was the more severe of the two, capable of
+silently wiping an *existing* role's permissions to zero on a mid-sequence failure.
+
+**Round 3 — dev-mode SQLite boolean binding.** While adding dev-mode test coverage for
+`createRoleWithPermissions`, discovered that `CustomRolesService.create()` (and the underlying
+`createRole()`/`createRoleWithPermissions()` repository methods) crash under
+`EVALOPS_DEV_MODE=1` with `TypeError: SQLite3 can only bind numbers, strings, bigints, buffers,
+and null`. Root cause: `roles.isSystemRole`/`permissions.isSystemPermission` are pg-core
+`boolean()` columns whose driver-value mapping is an identity passthrough — correct for
+`node-postgres` (production) but wrong for `better-sqlite3` (dev-mode), which rejects raw JS
+booleans as bind parameters. This is a real, previously-undiscovered production bug that
+predates this entire workflow (verified via a minimal repro isolated from any test changes); it
+is dev-mode(SQLite)-only, production Postgres is unaffected. Fixed via two coercion helpers on
+`PermissionsRepository` — `devModeBoolean()` for insert/update values, `devModeBooleanLiteral()`
+for `WHERE`-clause comparison literals (`eq()`/`ne()` share the identical bound-parameter
+serialization path as `.values()`/`.set()` in drizzle-orm, so both needed the same fix) — applied
+at every site in this file touching `isSystemRole`/`isSystemPermission`, including
+`listCustomRolesByOrg()`'s `eq(roles.isSystemRole, false)`, the read-path sibling that would
+otherwise have left `GET /api/admin/custom-roles` still 500ing under dev-mode SQLite after the
+write-path fix alone.
+
+**Known accepted residual risk: `isSystemAdmin()` fails closed under dev-mode SQLite.** The
+round-3 investigation surfaced one more instance of the same dev-mode/production boolean
+representation divergence, on the read/SELECT side rather than write/WHERE: `roles.isSystemRole`
+is never coerced back to a JS boolean when read out of dev-mode SQLite (`better-sqlite3` returns
+the raw `0`/`1`), so `PermissionsService.isSystemAdmin()`'s `role.isSystemRole === true` strict
+check silently and permanently evaluates `false` for every role under `EVALOPS_DEV_MODE=1` —
+including the real Administrator. This **fails closed** (denies the unconditional bypass rather
+than mis-granting it) and only affects dev/CI-only SQLite; production Postgres round-trips the
+column correctly and is unaffected. Deliberately left as a documented gap rather than fixed in
+this phase — see `ee/README.md`'s "Known limitation: `isSystemAdmin()` fails closed under
+dev-mode SQLite" section for the full detail and the suggested fix (a truthy check instead of
+strict equality) for whenever this file is next touched.
+
+No further code changes are needed for Phase 5's stated exit criteria as a result of this
+update — all three closed rounds were independently re-reviewed, re-hunted, and (where
+applicable) re-verified with fresh, non-cached test evidence before being accepted.
