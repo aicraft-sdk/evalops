@@ -108,6 +108,15 @@ The evaluation engine:
 - **Evaluation engine** — orchestrates evaluators (exact match, LLM judge, rule-based, RAG metrics, safety)
 - **Policy engine** — compares run scores to policy thresholds; emits pass/warn/fail verdicts. Policies are self-service: `GET /api/evaluation/policies` (any authenticated user), `POST /api/evaluation/policies/evaluate/:runId`, and `POST`/`PUT /api/evaluation/policies/:id`/`DELETE /api/evaluation/policies/:id` to create, update, and delete org-scoped policies (org_admin / admin only, enforced by `RbacGuard`) — no direct SQL seeding required
 - **Golden sets & calibration** — `GoldenSetsController` (any authenticated org member, via `JwtAuthGuard`): `GET`/`POST /api/evaluation/golden-sets`, `GET`/`POST /api/evaluation/golden-sets/:id/examples`, `GET`/`POST /api/evaluation/golden-sets/:id/calibration-runs`. Curates human-labeled example sets and runs `CalibrationService` to measure an LLM-judge evaluator's Cohen's-kappa agreement with human labels — see the `judge-cache.ts`/`golden-sets.ts` schema entries below and `docs/2026-08-12-calibration-methodology-and-kappa-safeguards-decision.md`
+- **PR decoration** — `POST /api/evaluation/pr-decoration` (new, `ee/pr-decoration`'s
+  `PrDecorationController`, co-located directly in `evaluation-service`'s `AppModule`) builds a
+  structured per-scenario decoration payload for a completed run, gated by
+  `EntitlementGuard`/`@RequiresEntitlement('pr-decoration')` — the fourth and final
+  Enterprise-gated route to go live (see "Enterprise Directory" below and
+  `docs/2026-08-14-pr-decoration-entitlement-gating-decision.md`). `.github/actions/evaluate-pr`
+  gained an opt-in `enable-pr-decoration` input (defaults `false`) that calls this endpoint
+  best-effort after the free pass/fail CI gate runs; the gate itself is unaffected by entitlement
+  state.
 
 ### Integration and Analytics (within Core Service)
 
@@ -303,6 +312,12 @@ and Analytics" above and `docs/2026-08-13-audit-export-entitlement-gating-decisi
 `EntitlementGuard`/`@RequiresEntitlement('rbac-custom-roles')` — the third Enterprise-gated
 route to go live; the existing free `UserRole`-enum role assignment is unchanged (see "Auth
 Service" above and `docs/2026-08-13-custom-rbac-entitlement-gating-decision.md`).
+`apps/evaluation-service` now also imports `LicenseModule.forRoot()` and gates the new `POST
+/api/evaluation/pr-decoration` route (`ee/pr-decoration`) with the same
+`EntitlementGuard`/`@RequiresEntitlement('pr-decoration')` pattern — the fourth and final
+Enterprise-gated route to go live, closing out the `EnterpriseFeature` union's originally-planned
+scope (see "Evaluation Service" above and
+`docs/2026-08-14-pr-decoration-entitlement-gating-decision.md`).
 
 ---
 
@@ -359,6 +374,22 @@ admin access to any role whose *name* contained "admin"/"superuser", which this 
 user-namable custom roles made directly exploitable; it now correctly requires
 `role.isSystemRole === true && role.priority >= 100`. See
 `docs/2026-08-13-custom-rbac-entitlement-gating-decision.md`.
+
+`ee/pr-decoration` (`@evalops/ee-pr-decoration`) is the fourth and final `ee/*` library imported
+by a composition-root app, completing the `EnterpriseFeature` union's originally-planned scope:
+`PrDecorationController`/`PrDecorationService` are declared directly inside
+`evaluation-service`'s `AppModule` (not a separate library-owned module) behind
+`EntitlementGuard`/`@RequiresEntitlement('pr-decoration')`, exposing `POST
+/api/evaluation/pr-decoration`. It looks up the target run via a `RUN_LOOKUP` DI-token
+(`RunLookup` structural interface), mirroring `ee/sso`'s `SSO_USER_PROVISIONER` pattern, so it
+has no compile-time dependency on `evaluation-service`'s concrete `RunsService`; `organizationId`
+is checked against `@CurrentUser()`'s verified JWT claim, mirroring the org-scoping convention
+from the other three `ee/*` libraries. `.github/actions/evaluate-pr` gained an opt-in
+`enable-pr-decoration` input (default `false`) that calls this endpoint best-effort after the
+free CI gate runs, never affecting the gate's own pass/fail outcome. Co-locating the
+controller/service directly in `AppModule` (rather than a separate `PrDecorationModule`) was
+required to fix a real DI-scoping boot crash found during this phase — see
+`docs/2026-08-14-pr-decoration-entitlement-gating-decision.md` for the full history.
 
 This is a lint-time, static-AST boundary, not a runtime sandbox: `@nx/enforce-module-boundaries`
 only inspects `import`/`import()` nodes, so a `require()`/`eval()` call naming an `ee/*` path

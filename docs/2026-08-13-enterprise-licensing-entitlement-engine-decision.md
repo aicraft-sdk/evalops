@@ -74,8 +74,14 @@ lapsed-license weekend.
   (`/api/auth/admin/custom-roles`) behind `@RequiresEntitlement('rbac-custom-roles')` — the
   third prediction fulfilled; see
   `docs/2026-08-13-custom-rbac-entitlement-gating-decision.md`. The existing free
-  `UserRole`-enum role assignment remains unaffected. Only `pr-decoration` of the four features in
-  the `EnterpriseFeature` union remains ungated as of this update.
+  `UserRole`-enum role assignment remains unaffected. **Update:** a subsequent phase added the
+  `ee/pr-decoration` library and gated a new `POST /api/evaluation/pr-decoration` route behind
+  `@RequiresEntitlement('pr-decoration')` — the fourth and final prediction fulfilled; see
+  `docs/2026-08-14-pr-decoration-entitlement-gating-decision.md`. The existing free CI gate in
+  `.github/actions/evaluate-pr` remains fully unaffected (the corresponding
+  `enable-pr-decoration` Action input is opt-in and defaults to `false`). All four features
+  originally predicted in the `EnterpriseFeature` union (`sso`, `rbac-custom-roles`,
+  `audit-export`, `pr-decoration`) are now genuinely gated in production code.
 - **Contributors:** A new `EnterpriseFeature` union (`'sso' | 'rbac-custom-roles' |
   'audit-export' | 'pr-decoration'`) is now the single source of truth for what counts as an
   Enterprise feature; any future Enterprise-gated capability should extend this union rather
