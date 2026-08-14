@@ -9,7 +9,6 @@
     "@evalops/licensing": "0.0.1",
     "@evalops/shared-auth": "0.0.1",
     "@nestjs/common": "^11.1.9",
-    "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "tslib": "^2.3.0"
   }

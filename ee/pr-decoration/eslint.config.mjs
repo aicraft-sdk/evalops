@@ -5,6 +5,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export default [
   ...baseConfig,
   {
+    files: ['**/*.json'],
     rules: {
       '@nx/dependency-checks': [
         'error',
@@ -18,6 +19,8 @@ export default [
     },
   },
   {
+    files: ['src/**/*.ts'],
+    ignores: ['**/*.spec.ts', '**/*.test.ts'],
     languageOptions: {
       parserOptions: {
         project: resolve(__dirname, 'tsconfig.lib.json'),

@@ -20,7 +20,7 @@ import { SandboxExecutionModule } from './sandbox-execution/sandbox-execution.mo
 import { GoldenSetsModule } from './golden-sets/golden-sets.module';
 import { JwtAuthGuard } from '@evalops/shared-auth';
 import { LicenseModule } from '@evalops/licensing';
-import { PrDecorationModule, RUN_LOOKUP } from '@evalops/ee-pr-decoration';
+import { PrDecorationController, PrDecorationService, RUN_LOOKUP } from '@evalops/ee-pr-decoration';
 import { RunsService } from './runs/runs.service';
 import {
   LoggingInterceptor,
@@ -58,9 +58,16 @@ import { JwtStrategy } from './auth/jwt.strategy';
     MigrationModule,
     SandboxExecutionModule,
     GoldenSetsModule,
-    PrDecorationModule,
   ],
-  controllers: [AppController, HealthController],
+  // PrDecorationController/PrDecorationService are declared directly here
+  // (not wrapped in the library's own `PrDecorationModule`) because NestJS
+  // scopes providers per-module: a `{ provide: RUN_LOOKUP, useExisting:
+  // RunsService }` binding is only resolvable by consumers declared in the
+  // SAME module as that binding — this mirrors how AuthModule wires
+  // `SSO_USER_PROVISIONER`/`MicrosoftAuthController`/`MicrosoftAuthService`
+  // directly into itself for the identical reason (see
+  // apps/auth-service/src/app/auth/auth.module.ts).
+  controllers: [AppController, HealthController, PrDecorationController],
   providers: [
     AppService,
     JwtStrategy,
@@ -68,6 +75,7 @@ import { JwtStrategy } from './auth/jwt.strategy';
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
     { provide: APP_INTERCEPTOR, useClass: OrgContextInterceptor },
     { provide: APP_FILTER, useClass: LoggingExceptionFilter },
+    PrDecorationService,
     { provide: RUN_LOOKUP, useExisting: RunsService },
   ],
 })
