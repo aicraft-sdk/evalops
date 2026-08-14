@@ -431,6 +431,21 @@ describe('PermissionsRepository.createRoleWithPermissions (dev-mode SQLite, real
   });
 });
 
+describe('PermissionsRepository.listCustomRolesByOrg (dev-mode SQLite, real DB, no mocks)', () => {
+  it('does not throw under EVALOPS_DEV_MODE=1 and returns only the custom role, excluding the system role', async () => {
+    seedRole('role-system-1', { organizationId: 'org-list-1', isSystemRole: 1 });
+    seedRole('role-custom-1', { organizationId: 'org-list-1', isSystemRole: 0 });
+
+    const repo = new PermissionsRepository();
+
+    const result = await repo.listCustomRolesByOrg('org-list-1');
+
+    expect(result).toEqual([
+      expect.objectContaining({ id: 'role-custom-1', organizationId: 'org-list-1', isSystemRole: 0 }),
+    ]);
+  });
+});
+
 afterAll(() => {
   rawDb.close();
   _resetSqliteDb();

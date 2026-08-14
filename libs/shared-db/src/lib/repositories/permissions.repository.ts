@@ -171,6 +171,22 @@ export class PermissionsRepository {
   }
 
   /**
+   * Sibling to `devModeBoolean`, for a boolean LITERAL used in a read-side comparison (e.g.
+   * `eq(roles.isSystemRole, <literal>)` in a `WHERE` clause) rather than a value being written
+   * via `.values()`/`.set()`. drizzle-orm's `eq()`/`ne()` comparison builders serialize their
+   * bound parameter through the exact same `Param.encoder.mapToDriverValue()` path as an
+   * insert/update column value, so a raw JS boolean literal in a `WHERE` clause crashes
+   * identically under `EVALOPS_DEV_MODE=1` (`TypeError: SQLite3 can only bind numbers, strings,
+   * bigints, buffers, and null` — see `devModeBoolean`'s doc comment above for the full root
+   * cause). No-op identity passthrough on the production Postgres path.
+   */
+  private devModeBooleanLiteral(value: boolean): boolean {
+    if (!isDevMode) return value;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime value is SQLite-native 0/1, typed as `boolean` because it feeds directly into `eq(roles.isSystemRole, ...)`
+    return (value ? 1 : 0) as any;
+  }
+
+  /**
    * `@evalops/shared-db` is path-mapped straight to `.ts` source, so every consuming app
    * recompiles `typeof roles.$inferInsert` / `typeof permissions.$inferInsert` under ITS OWN
    * tsconfig — none of the 5 backend apps (including `auth-service`, which loads this file
@@ -298,7 +314,12 @@ export class PermissionsRepository {
     return db
       .select()
       .from(roles)
-      .where(and(eq(roles.organizationId, organizationId), eq(roles.isSystemRole, false)));
+      .where(
+        and(
+          eq(roles.organizationId, organizationId),
+          eq(roles.isSystemRole, this.devModeBooleanLiteral(false)),
+        ),
+      );
   }
 
   async replaceRolePermissions(roleId: string, permissionIds: string[]): Promise<void> {
