@@ -62,8 +62,15 @@ async function getSuiteIdByName(name) {
 async function pollRun(runId, timeoutMs = 600_000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    const run = await request('GET', `/api/evaluation/runs/${runId}`);
-    if (run.status === 'completed' || run.status === 'failed') return run;
+    try {
+      const run = await request('GET', `/api/evaluation/runs/${runId}`);
+      if (run.status === 'completed' || run.status === 'failed') return run;
+    } catch (err) {
+      // Non-fatal: a single slow/failed poll (timeout, transient network blip, etc.) should
+      // not abort the whole run - retry on the next iteration within the outer timeoutMs
+      // budget, matching maybeDecorate()'s existing non-fatal logging style.
+      console.log(`Poll for run ${runId} failed non-fatally: ${err.message}`);
+    }
     await new Promise(r => setTimeout(r, 3000));
   }
   throw new Error(`Run ${runId} timed out after ${timeoutMs / 1000}s`);

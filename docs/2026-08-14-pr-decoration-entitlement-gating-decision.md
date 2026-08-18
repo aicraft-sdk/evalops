@@ -149,9 +149,10 @@ project history, not carried forward as an open gap.
 After this feature shipped, a doubt-verify pass on Phase 6 as a whole found — unrelated to
 PR-decoration itself — that `.github/actions/evaluate-pr/run.js`'s HTTP calls (the free-tier CI
 gate's own suite-execution/polling logic, not the new gated endpoint) had no request timeout at
-all, risking multi-minute-to-unbounded CI stalls against a hanging server. Three remediation
-rounds followed; the third introduced a regression later corrected by a fourth. All four are
-closed; a residual risk surfaced by the final round is accepted rather than chased further.
+all, risking multi-minute-to-unbounded CI stalls against a hanging server. Five remediation
+rounds followed; the third introduced a regression later corrected by a fourth, and a fifth found
+and fixed an unhandled-propagation gap the second round's own verification had missed. All five
+are closed; a residual risk surfaced along the way is accepted rather than chased further.
 
 **Round 1 — `maybeDecorate()`'s fetch had no timeout.** The new opt-in PR-decoration call itself
 could hang for Node/undici's implicit ~5-minute default against an unresponsive server, before its
@@ -165,8 +166,14 @@ call in the script, including `pollRun()`'s per-poll status GET.** A single hung
 consume up to ~5 minutes before `pollRun()`'s own `while (Date.now() - start < timeoutMs)` check
 ever re-evaluated, silently letting real elapsed time exceed the `timeoutMs` the eventual timeout
 error message claims. Fixed identically: `signal: AbortSignal.timeout(10_000)` added to
-`request()`'s single shared `fetch()` call, verified against a real hanging server for both the
-general case and specifically `pollRun()`'s contract.
+`request()`'s single shared `fetch()` call, verified against a real hanging server for the general
+case and for `pollRun()`'s genuinely-hung-forever/outer-`timeoutMs` contract specifically.
+**Correction (added in Round 5 below): this verification did not cover, and this round did not
+actually fix, the case where a single poll is merely slow rather than permanently hung** —
+`pollRun()`'s per-poll `request()` call had no `try/catch` of its own, so once `AbortSignal.timeout`
+started firing on individual polls (as a direct consequence of this round's own change), a lone
+transient-slow response would throw straight out of `pollRun()`'s `while` loop instead of being
+retried within it. That gap went unnoticed through Rounds 2–4 and is what Round 5 found and fixed.
 
 **Round 3 — Round 2's blanket 10s cap regressed `POST .../suites/:suiteId/run`.** That endpoint is
 architecturally synchronous server-side (`runSuite()` awaits every scenario's real LLM execution
@@ -183,6 +190,29 @@ correct for the fast metadata GETs: suite/scenario list, `pollRun()`'s poll GET)
 pre-fix code false-aborts against an 18s-delayed server; the fixed code completes successfully
 against the same server at ~18s elapsed; the fast-GET paths remain correctly bounded at ~10s
 against a genuinely hung server.
+
+**Round 5 — a 5th doubt-verify pass found `pollRun()` itself had no `try/catch` around its
+per-poll `request()` call, so Round 2's new `AbortSignal.timeout` on that same call could now
+throw straight out of `pollRun()`'s `while` loop and propagate uncaught through `main()` to
+`main().catch()`, hard-failing the whole CI run on a single transient slow poll response — even
+though the run might have completed healthily well within the outer 600s polling budget the
+`while` loop exists specifically to tolerate. Reproduced directly against the pre-fix code: an
+11s-then-healthy fake poll response caused `pollRun()` to throw `The operation was aborted due to
+timeout` and exit 1 at ~10s elapsed, never reaching the run's actual completion one second later.
+Fixed by wrapping the per-poll `request()` call in `pollRun()`'s loop in its own `try/catch`: a
+caught error is logged non-fatally (`Poll for run ${runId} failed non-fatally: ${err.message}`,
+matching `maybeDecorate()`'s existing non-fatal-logging style) and the loop continues to its next
+iteration (respecting the existing 3000ms inter-poll delay and the outer `timeoutMs` budget)
+instead of throwing. The loop's final `throw new Error(...)` timed-out case is unchanged — if
+polling genuinely never succeeds within `timeoutMs`, that still surfaces as a real, hard failure.
+Verified via two real reproductions against the fixed code: (1) the same 11s-then-healthy fake
+server now logs one non-fatal poll failure and completes successfully (exit 0, ~13s elapsed,
+previously exit 1); (2) a genuinely-hung-forever fake server (never responds to any poll), driven
+through a test-only copy of `run.js` with `pollRun()`'s call site's `timeoutMs` scaled down to
+4000ms (the shipped file's real 600,000ms default is unchanged), still throws the expected
+`Run run-1 timed out after 4s` and exits 1 at ~13s elapsed rather than looping forever — proving
+the outer budget genuinely still governs total wait time even though a single poll's own
+`request()` timeout (10s default) is independent of and can exceed `pollRun()`'s outer budget.
 
 **Accepted residual risk: `RUN_TIMEOUT_MS = 600_000` is a plausible, not rigorously-proven,
 budget.** A final re-hunt independently re-derived the real worst-case duration rather than
