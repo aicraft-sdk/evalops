@@ -36,6 +36,7 @@ async function request(method, urlPath, body) {
     method,
     headers: authHeaders(),
     body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(10_000),
   });
   if (!resp.ok) {
     const text = await resp.text().catch(() => '');
