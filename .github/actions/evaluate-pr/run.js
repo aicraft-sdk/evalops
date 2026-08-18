@@ -30,13 +30,20 @@ function authHeaders() {
   throw new Error('Set EVALOPS_API_KEY or EVALOPS_SERVICE_TOKEN');
 }
 
-async function request(method, urlPath, body) {
+// Suite execution is synchronous server-side (every scenario's real LLM call/turn is awaited
+// before the run responds) - AIProviderService.withResilience alone defaults to a 30s timeout
+// with up to 3 retries, so a multi-scenario/multi-turn suite can legitimately take minutes.
+// Match pollRun()'s existing 600_000ms suite-execution budget assumption rather than the short
+// hang-guard used for simple metadata GETs.
+const RUN_TIMEOUT_MS = 600_000;
+
+async function request(method, urlPath, body, timeoutMs = 10_000) {
   const url = `${API_URL}${urlPath}`;
   const resp = await fetch(url, {
     method,
     headers: authHeaders(),
     body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!resp.ok) {
     const text = await resp.text().catch(() => '');
@@ -104,7 +111,7 @@ async function main() {
 
   const { runs: initialRuns } = await request('POST', `/api/evaluation/simulations/suites/${suiteId}/run`, {
     commitSha: COMMIT_SHA || undefined,
-  });
+  }, RUN_TIMEOUT_MS);
 
   const completedRuns = [];
   for (const r of initialRuns) {
