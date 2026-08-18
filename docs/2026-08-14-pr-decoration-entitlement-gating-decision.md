@@ -143,3 +143,78 @@ project history, not carried forward as an open gap.
   Shared Libraries row, API Overview table), `docs/CLI_GUIDE.md` (`evaluate-pr` composite action
   example), `docs/2026-08-13-enterprise-licensing-entitlement-engine-decision.md` (Impact
   section, closing out the `EnterpriseFeature` union's four predicted features).
+
+## Update: `evaluate-pr`'s fetch-timeout hardening, and an accepted residual risk on the run-execution budget
+
+After this feature shipped, a doubt-verify pass on Phase 6 as a whole found — unrelated to
+PR-decoration itself — that `.github/actions/evaluate-pr/run.js`'s HTTP calls (the free-tier CI
+gate's own suite-execution/polling logic, not the new gated endpoint) had no request timeout at
+all, risking multi-minute-to-unbounded CI stalls against a hanging server. Three remediation
+rounds followed; the third introduced a regression later corrected by a fourth. All four are
+closed; a residual risk surfaced by the final round is accepted rather than chased further.
+
+**Round 1 — `maybeDecorate()`'s fetch had no timeout.** The new opt-in PR-decoration call itself
+could hang for Node/undici's implicit ~5-minute default against an unresponsive server, before its
+already-non-fatal `catch` block would log and move on — technically never affecting the CI gate's
+exit code, but not meaningfully "non-blocking" in practice. Fixed by adding `signal:
+AbortSignal.timeout(10_000)` to its `fetch()` call, verified against a real hanging local server
+(pre-fix: hung past a 20s hard kill; post-fix: aborts and logs non-fatally at ~10.09s).
+
+**Round 2 — the same gap existed in `request()`, the shared helper backing nearly every other
+call in the script, including `pollRun()`'s per-poll status GET.** A single hung poll could itself
+consume up to ~5 minutes before `pollRun()`'s own `while (Date.now() - start < timeoutMs)` check
+ever re-evaluated, silently letting real elapsed time exceed the `timeoutMs` the eventual timeout
+error message claims. Fixed identically: `signal: AbortSignal.timeout(10_000)` added to
+`request()`'s single shared `fetch()` call, verified against a real hanging server for both the
+general case and specifically `pollRun()`'s contract.
+
+**Round 3 — Round 2's blanket 10s cap regressed `POST .../suites/:suiteId/run`.** That endpoint is
+architecturally synchronous server-side (`runSuite()` awaits every scenario's real LLM execution
+before responding), and `AIProviderService.withResilience` alone defaults to a 30s timeout with up
+to 3 retries — a single healthy call can legitimately take well over 10s. The blanket cap would
+false-positive-fail healthy CI runs on any non-trivial suite. Caught by re-review before merging,
+with a live reproduction proving the false-positive (an 18s-delayed-but-healthy server: old code
+aborted at ~11s, correct behavior would have been to wait).
+
+**Round 4 — fix: give `request()` a per-call `timeoutMs` parameter.** Default `10_000` (unchanged,
+correct for the fast metadata GETs: suite/scenario list, `pollRun()`'s poll GET). The `POST
+.../run` call site now passes a dedicated `RUN_TIMEOUT_MS = 600_000` (10 minutes), matching
+`pollRun()`'s own pre-existing budget assumption. Verified via a real reproduction: the actual
+pre-fix code false-aborts against an 18s-delayed server; the fixed code completes successfully
+against the same server at ~18s elapsed; the fast-GET paths remain correctly bounded at ~10s
+against a genuinely hung server.
+
+**Accepted residual risk: `RUN_TIMEOUT_MS = 600_000` is a plausible, not rigorously-proven,
+budget.** A final re-hunt independently re-derived the real worst-case duration rather than
+trusting that `pollRun()`'s pre-existing 600s default had itself been correctly sized:
+`withResilience`'s actual retry/backoff math (2 timed-out 30s attempts + backoff + a 3rd
+successful-but-slow 30s attempt) puts a single AI call's worst-case success time at roughly 93s,
+not the ~30s the round-3 fix's own reasoning assumed — and neither turns-per-scenario nor
+scenarios-per-suite has any system-enforced cap. A realistic large suite (or a suite that hits
+transient retries — exactly the condition `withResilience` exists to tolerate) can legitimately
+exceed 600s, causing a false-negative CI failure for a suite that would have passed given more
+time. This does not regress anything — it is strictly better than the pre-Round-1 state, where
+every non-trivial suite POST was already guaranteed to fail against the (even shorter) blanket
+10s cap — but `RUN_TIMEOUT_MS`'s specific value remains an inherited, not independently-verified,
+assumption.
+
+**Decision: accept as documented residual risk, do not chase further in this phase.** Per user
+decision. Rationale:
+- The properly correct fix is architectural, not a timeout-value tweak: make `POST .../run`
+  return immediately (run IDs only) and let the already-designed-for-this `pollRun()` loop own the
+  full wait, rather than holding one synchronous HTTP call open for up to 10 minutes. That is a
+  meaningfully larger change than a REM-FIX cycle should attempt, and is unrelated to anything
+  Phase 6 (or this whole Enterprise Tier plan) set out to build — this whole timeout sub-chain was
+  discovered incidentally while hunting an unrelated bug class, not part of the original plan
+  scope.
+- The same re-hunt also found a related, pre-existing, not-newly-introduced gap: `runSuite()` has
+  no server-side cancellation wired to the client's abort signal, so a client-side timeout leaves
+  the server executing the suite to completion regardless. Raising the client-side budget from 10s
+  to 600s makes this pre-existing gap more likely to actually manifest (more suites now run long
+  enough to hit it) but does not introduce it.
+- No further code change was made as part of this update — the current, corrected `run.js` shipped
+  as-is. A future dedicated pass should: (1) make suite execution genuinely asynchronous
+  (return-immediately + poll), closing this class of budget-guessing entirely; (2) add explicit,
+  system-enforced caps on turns-per-scenario and scenarios-per-suite if unbounded suite size is
+  not actually an intended capability; (3) wire server-side request cancellation so an abandoned
+  client doesn't leave orphaned work running.
