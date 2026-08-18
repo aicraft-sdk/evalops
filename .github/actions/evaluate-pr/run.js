@@ -169,6 +169,7 @@ async function maybeDecorate(completedRuns) {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({ runId: run.id }),
+        signal: AbortSignal.timeout(10_000),
       });
       if (res.status === 403) {
         console.log('PR decoration is an Enterprise feature and no license is configured — skipping (non-fatal).');
