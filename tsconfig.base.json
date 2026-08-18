@@ -27,7 +27,12 @@
       "@evalops/shared-db/sqlite-schema": ["libs/shared-db/src/lib/schema/sqlite-index.ts"],
       "@evalops/shared-db/dialect-utils": ["libs/shared-db/src/lib/dialect-utils.ts"],
       "@evalops/core-integration": ["libs/core-integration/src/index.ts"],
-      "@evalops/core-analytics": ["libs/core-analytics/src/index.ts"]
+      "@evalops/core-analytics": ["libs/core-analytics/src/index.ts"],
+      "@evalops/licensing": ["libs/licensing/src/index.ts"],
+      "@evalops/ee-sso": ["ee/sso/src/index.ts"],
+      "@evalops/ee-audit-export": ["ee/audit-export/src/index.ts"],
+      "@evalops/ee-rbac-custom-roles": ["ee/rbac-custom-roles/src/index.ts"],
+      "@evalops/ee-pr-decoration": ["ee/pr-decoration/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]

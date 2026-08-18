@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import {
   PermissionsRepository,
   UsersRepository,
-  permissions,
   roles,
   userRoles,
   rolePermissions,
@@ -127,13 +126,26 @@ export class PermissionsService {
   }
 
   /**
-   * Check if user has system admin role
+   * Check if user has system admin role.
+   *
+   * Must check the actual `isSystemRole` flag, not a case-insensitive substring match on
+   * the role name - a custom role's `name` is user-supplied (CreateCustomRoleDto has no
+   * reserved-word check), so a narrowly-scoped custom role named e.g. "Data Admin" or
+   * "Super Admin" must NOT satisfy this check just because its name contains "admin"/
+   * "superuser". Only a role the system itself marked `isSystemRole: true` grants
+   * unconditional access.
+   *
+   * `isSystemRole` alone is NOT sufficient: it means "built-in, not org-created" (a
+   * mutation-protection flag), not "has admin access" - `initializeDefaultRoles()` seeds
+   * 4 roles as `isSystemRole: true` (Administrator, Data Scientist, ML Engineer, Analyst),
+   * only one of which is actually meant to be an unconditional admin. `priority >= 100` is
+   * the existing convention reserving priority 100 for the real built-in Administrator role
+   * (see `ee/rbac-custom-roles/src/lib/custom-roles.dto.ts`'s `@Max(99)` comment), so both
+   * conditions together are required to grant the bypass.
    */
   private isSystemAdmin(userRolesList: Role[]): boolean {
     return userRolesList.some(
-      (role) =>
-        role.name.toLowerCase().includes('admin') ||
-        role.name.toLowerCase().includes('superuser'),
+      (role) => role.isSystemRole === true && role.priority >= 100,
     );
   }
 
@@ -440,22 +452,10 @@ export class PermissionsService {
     resourceType: ResourceType,
     action: PermissionAction,
   ): Promise<Permission> {
-    let permission = await this.permissionsRepository.findPermissionByTypeAndAction(
+    return this.permissionsRepository.getOrCreatePermission(
       resourceType,
       action,
-    ) as Permission | undefined;
-
-    if (!permission) {
-      permission = await this.permissionsRepository.createPermission({
-        name: `${resourceType}.${action}`,
-        resourceType,
-        action,
-        description: `${action} access to ${resourceType} resources`,
-        isSystemPermission: true,
-      } as typeof permissions.$inferInsert) as Permission;
-    }
-
-    return permission;
+    ) as Promise<Permission>;
   }
 
   /**

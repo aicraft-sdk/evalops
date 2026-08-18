@@ -6,6 +6,7 @@ import https from 'https';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 const API_KEY = process.env.EVALOPS_API_KEY;
 const SERVICE_TOKEN = process.env.EVALOPS_SERVICE_TOKEN;
@@ -30,16 +31,37 @@ function authHeaders() {
   throw new Error('Set EVALOPS_API_KEY or EVALOPS_SERVICE_TOKEN');
 }
 
-async function request(method, urlPath, body) {
+// Suite execution is synchronous server-side (every scenario's real LLM call/turn is awaited
+// before the run responds) - AIProviderService.withResilience alone defaults to a 30s timeout
+// with up to 3 retries, so a multi-scenario/multi-turn suite can legitimately take minutes.
+// Match pollRun()'s existing 600_000ms suite-execution budget assumption rather than the short
+// hang-guard used for simple metadata GETs.
+const RUN_TIMEOUT_MS = 600_000;
+
+// Thrown only for a real HTTP 4xx/5xx response (the server answered, just with an error status).
+// Distinguishes this permanent-failure case from AbortSignal.timeout firing (DOMException) or a
+// network-level failure (e.g. TypeError: fetch failed) - both of which remain plain, non-
+// HttpStatusError throws and stay in the "transient, safe to retry" category.
+class HttpStatusError extends Error {
+  constructor(status, method, url, bodyText) {
+    super(`${method} ${url} → HTTP ${status}: ${bodyText}`);
+    this.name = 'HttpStatusError';
+    this.status = status;
+    this.body = bodyText;
+  }
+}
+
+async function request(method, urlPath, body, timeoutMs = 10_000) {
   const url = `${API_URL}${urlPath}`;
   const resp = await fetch(url, {
     method,
     headers: authHeaders(),
     body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!resp.ok) {
     const text = await resp.text().catch(() => '');
-    throw new Error(`${method} ${url} → HTTP ${resp.status}: ${text}`);
+    throw new HttpStatusError(resp.status, method, url, text);
   }
   return resp.json();
 }
@@ -54,8 +76,21 @@ async function getSuiteIdByName(name) {
 async function pollRun(runId, timeoutMs = 600_000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    const run = await request('GET', `/api/evaluation/runs/${runId}`);
-    if (run.status === 'completed' || run.status === 'failed') return run;
+    try {
+      const run = await request('GET', `/api/evaluation/runs/${runId}`);
+      if (run.status === 'completed' || run.status === 'failed') return run;
+    } catch (err) {
+      if (err instanceof HttpStatusError) {
+        // The server responded with a real HTTP 4xx/5xx (e.g. a bad run ID -> 404, or
+        // expired/invalid auth -> 401/403). This is a permanent failure, not a transient
+        // blip - fail fast instead of silently retrying for the full outer timeoutMs budget.
+        throw err;
+      }
+      // Non-fatal: a single slow/failed poll (timeout, transient network blip, etc.) should
+      // not abort the whole run - retry on the next iteration within the outer timeoutMs
+      // budget, matching maybeDecorate()'s existing non-fatal logging style.
+      console.log(`Poll for run ${runId} failed non-fatally: ${err.message}`);
+    }
     await new Promise(r => setTimeout(r, 3000));
   }
   throw new Error(`Run ${runId} timed out after ${timeoutMs / 1000}s`);
@@ -103,7 +138,7 @@ async function main() {
 
   const { runs: initialRuns } = await request('POST', `/api/evaluation/simulations/suites/${suiteId}/run`, {
     commitSha: COMMIT_SHA || undefined,
-  });
+  }, RUN_TIMEOUT_MS);
 
   const completedRuns = [];
   for (const r of initialRuns) {
@@ -151,12 +186,46 @@ async function main() {
   const icon = decision === 'pass' ? '✅' : decision === 'warn' ? '⚠️' : '❌';
   console.log(`\n${icon} Suite ${decision.toUpperCase()} — pass rate: ${(passRate * 100).toFixed(1)}% (${passed}/${completedRuns.length})`);
 
+  await maybeDecorate(completedRuns);
+
   if (decision === 'fail' || (decision === 'warn' && FAIL_ON_WARN)) {
     process.exit(1);
   }
 }
 
-main().catch(err => {
-  console.error('Error:', err.message);
-  process.exit(1);
-});
+// Best-effort, opt-in call to the Enterprise PR-decoration endpoint. Never throws out of
+// main() and never affects process.exit() — a 403 (no license) or any other failure is
+// logged and swallowed so the free CI gate above is completely unaffected.
+async function maybeDecorate(completedRuns) {
+  if (process.env.INPUT_ENABLE_PR_DECORATION !== 'true') return;
+  for (const run of completedRuns) {
+    try {
+      const res = await fetch(`${API_URL}/api/evaluation/pr-decoration`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ runId: run.id }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (res.status === 403) {
+        console.log('PR decoration is an Enterprise feature and no license is configured — skipping (non-fatal).');
+        return;
+      }
+      if (!res.ok) {
+        console.log(`PR decoration call failed non-fatally: HTTP ${res.status}`);
+      }
+    } catch (err) {
+      console.log(`PR decoration call failed non-fatally: ${err.message}`);
+    }
+  }
+}
+
+// Only auto-run when executed directly (`node run.js` / the composite action's `run:` step),
+// not when imported as a module by run.test.js.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch(err => {
+    console.error('Error:', err.message);
+    process.exit(1);
+  });
+}
+
+export { request, pollRun, HttpStatusError };

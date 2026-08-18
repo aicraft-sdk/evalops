@@ -1,17 +1,20 @@
-import { Controller, Get, Query, Res } from '@nestjs/common';
+import { Controller, Get, Inject, Query, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { MicrosoftAuthService } from './microsoft-auth.service';
 import { Public } from '@evalops/shared-auth';
-import { AuthService } from '../auth.service';
+import { EntitlementGuard, RequiresEntitlement } from '@evalops/licensing';
+import { SSO_USER_PROVISIONER, SsoUserProvisioner } from '../sso-user-provisioner.interface';
 
 @Controller('auth/microsoft')
 export class MicrosoftAuthController {
   constructor(
     private microsoftAuthService: MicrosoftAuthService,
-    private authService: AuthService
+    @Inject(SSO_USER_PROVISIONER) private userProvisioner: SsoUserProvisioner
   ) {}
 
   @Public()
+  @UseGuards(EntitlementGuard)
+  @RequiresEntitlement('sso')
   @Get()
   async login(@Res() res: Response) {
     if (!this.microsoftAuthService.isConfigured()) {
@@ -31,6 +34,8 @@ export class MicrosoftAuthController {
   }
 
   @Public()
+  @UseGuards(EntitlementGuard)
+  @RequiresEntitlement('sso')
   @Get('callback')
   async callback(
     @Query('code') code: string,
@@ -49,29 +54,29 @@ export class MicrosoftAuthController {
       const entraUser = tokenResponse.user;
 
       // Find or create user by email
-      let user = await this.authService.findUserByEmail(
+      let user = await this.userProvisioner.findUserByEmail(
         entraUser.email || entraUser.upn
       );
 
       if (!user) {
         // Create new user from Microsoft account
-        user = await this.authService.createUserFromMicrosoft(entraUser);
+        user = await this.userProvisioner.createUserFromMicrosoft(entraUser);
       } else {
         // Update existing user with Microsoft account info
-        user = await this.authService.updateUserFromMicrosoft(
+        user = await this.userProvisioner.updateUserFromMicrosoft(
           user.id,
           entraUser
         );
       }
 
       // Generate JWT token
-      const jwtToken = await this.authService.login(user);
+      const jwtToken = await this.userProvisioner.login(user);
 
       // Set JWT token as HTTP-only cookie
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4200';
+      const frontendUrl = process.env['FRONTEND_URL'] || 'http://localhost:4200';
       res.cookie('access_token', jwtToken.access_token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: process.env['NODE_ENV'] === 'production',
         sameSite: 'lax',
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
       });
@@ -79,7 +84,7 @@ export class MicrosoftAuthController {
       // Redirect to frontend with success
       return res.redirect(`${frontendUrl}/auth/callback?success=true`);
     } catch (error) {
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4200';
+      const frontendUrl = process.env['FRONTEND_URL'] || 'http://localhost:4200';
       const message = error instanceof Error ? error.message : 'Unknown error';
       return res.redirect(
         `${frontendUrl}/auth/callback?error=${encodeURIComponent(message)}`

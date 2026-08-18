@@ -1,0 +1,24 @@
+{
+  "name": "licensing",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/licensing/src",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:lib", "domain:licensing"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/licensing",
+        "main": "libs/licensing/src/index.ts",
+        "tsConfig": "libs/licensing/tsconfig.lib.json",
+        "assets": ["libs/licensing/*.md", "libs/licensing/src/lib/keys/*.pem"]
+      }
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "options": { "jestConfig": "libs/licensing/jest.config.cts" }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+EvalOps Enterprise License (DRAFT — PENDING LEGAL REVIEW)
+
+[CHECKPOINT]: This is a placeholder. Final legal text requires business/legal sign-off
+before any public release or tag. Do not treat this text as binding.
+
+Copyright [YEAR] [LICENSOR NAME]. All rights reserved.
+
+The code in this directory ("Enterprise Code") is NOT open source and is NOT covered
+by the FSL-1.1-MIT license that governs the rest of this repository (see the root
+LICENSE file). Enterprise Code may only be used, reproduced, or distributed by a
+party holding a valid EvalOps Enterprise License Agreement covering the org named in
+that agreement's license file, and only for internal self-hosted use — no
+redistribution, no resale, no offering the Enterprise Code (or a derivative of it) as
+a hosted or managed service to third parties.

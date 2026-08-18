@@ -13,15 +13,19 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, HttpStatus } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
-import * as request from 'supertest';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from '../app/auth/auth.controller';
 import { AuthService } from '../app/auth/auth.service';
 import { JwtStrategy } from '../app/auth/strategies/jwt.strategy';
-import { JwtAuthGuard } from '@evalops/shared-auth';
+import { LocalStrategy } from '../app/auth/strategies/local.strategy';
 import { ConfigService } from '@nestjs/config';
+
+// @types/supertest v6's namespace export has no call signature under this repo's tsconfig;
+// require() sidesteps it — matches the same pre-existing workaround used in
+// admin-rbac.e2e.spec.ts.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const request = require('supertest');
 
 const TEST_JWT_SECRET = 'test-secret-for-integration-tests-only';
 
@@ -55,6 +59,7 @@ describe('Auth Service (integration)', () => {
       providers: [
         { provide: AuthService, useValue: mockAuthService },
         JwtStrategy,
+        LocalStrategy,
         {
           provide: ConfigService,
           useValue: {
@@ -64,7 +69,6 @@ describe('Auth Service (integration)', () => {
             }),
           },
         },
-        { provide: APP_GUARD, useClass: JwtAuthGuard },
       ],
     }).compile();
 

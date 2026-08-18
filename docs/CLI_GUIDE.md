@@ -376,9 +376,14 @@ For the full PR comment + JUnit artifact experience, use the bundled composite a
     api-key: ${{ secrets.EVALOPS_API_KEY }}
     api-url: ${{ secrets.EVALOPS_API_URL }}
     fail-on-warn: "true"
+    enable-pr-decoration: "true"
 ```
 
 This posts a verdict comment directly on the PR and uploads JUnit results as a workflow artifact.
+`enable-pr-decoration` is optional (defaults to `false`) and calls an Enterprise-gated
+PR-decoration endpoint after the gate runs — it requires a valid EvalOps Enterprise license on
+the target server and is silently, non-fatally skipped otherwise; the pass/fail gate above is
+unaffected either way.
 
 ---
 

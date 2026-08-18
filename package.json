@@ -2,7 +2,7 @@
   "name": "evalops",
   "version": "1.0.0",
   "type": "module",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "scripts": {
     "dev": "nx run-many --target=serve --projects=frontend,api-gateway,auth-service,core-service,evaluation-service --parallel",
     "dev:frontend": "nx serve frontend",
@@ -31,6 +31,7 @@
     "setup:secrets": "bash scripts/generate-secrets.sh",
     "quick-start": "bash scripts/quick-start.sh",
     "evalops": "node_modules/.bin/tsx apps/cli/src/main.ts",
+    "license:sign": "node_modules/.bin/tsx --tsconfig tsconfig.base.json scripts/licensing/sign-license.ts",
     "local-lint": "node scripts/agents-md-lint.js",
     "self-eval": "npm run evalops -- eval run \"EvalOps Self-Evals\" --watch"
   },

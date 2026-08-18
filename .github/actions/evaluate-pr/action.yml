@@ -26,6 +26,10 @@ inputs:
     description: "Directory to write JUnit XML and JSON summary"
     required: false
     default: "test-results"
+  enable-pr-decoration:
+    description: "Call the Enterprise PR-decoration endpoint after the gate runs (requires a valid EvalOps Enterprise license on the target server; silently skipped if not entitled)"
+    required: false
+    default: "false"
 
 outputs:
   decision:
@@ -57,6 +61,7 @@ runs:
         INPUT_ORG_ID: ${{ inputs.org-id }}
         INPUT_FAIL_ON_WARN: ${{ inputs.fail-on-warn }}
         INPUT_OUTPUT_DIR: ${{ inputs.output-dir }}
+        INPUT_ENABLE_PR_DECORATION: ${{ inputs.enable-pr-decoration }}
         GITHUB_OUTPUT: ${{ env.GITHUB_OUTPUT }}
       run: ${{ github.action_path }}/run.js
 

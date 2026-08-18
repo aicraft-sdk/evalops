@@ -58,6 +58,24 @@ Owns all identity concerns. Exposes:
   organization's name (admin only, enforced by `RbacGuard`, validated by
   `UpdateOrganizationDto`)
 - `POST /api/auth/admin/*` — admin panel routes (admin only, enforced by `RbacGuard`)
+- `GET /api/auth/microsoft` / `GET /api/auth/microsoft/callback` — Microsoft Entra SSO login,
+  implemented in `ee/sso` (`@evalops/ee-sso`'s `MicrosoftAuthController`, wired into
+  `AuthModule`) and gated by `@RequiresEntitlement('sso')` + `EntitlementGuard`: with no valid
+  Enterprise license configured, both routes return `403` with an upsell body
+  (`{ upsell: true, feature: 'sso' }`) instead of reaching `MicrosoftAuthService` — the first
+  Enterprise-gated route to go live in this codebase (see
+  `docs/2026-08-13-sso-relocation-and-entitlement-gating-decision.md`). Free-tier login
+  (`/api/auth/login`, `/api/auth/user`) is unaffected regardless of license state.
+- `GET|POST /api/auth/admin/custom-roles`, `PATCH|DELETE /api/auth/admin/custom-roles/:id` — CRUD
+  for org-scoped custom RBAC roles, implemented in `ee/rbac-custom-roles`
+  (`@evalops/ee-rbac-custom-roles`'s `CustomRolesController`, mounted inside the existing
+  `PermissionsModule`), enforced by `RbacGuard`/`@Roles(UserRole.ADMIN)` and gated by
+  `@RequiresEntitlement('rbac-custom-roles')` + `EntitlementGuard` — the third Enterprise-gated
+  route to go live (see `docs/2026-08-13-custom-rbac-entitlement-gating-decision.md`). A custom
+  role can never mutate or delete an `isSystemRole: true` built-in role; this invariant is
+  enforced unconditionally in `CustomRolesService`, independent of license state. The pre-existing
+  free `UserRole`-enum role assignment (`POST /admin/users/:id/role`, the 3 built-in system roles)
+  is unaffected.
 
 JWT payload shape:
 
@@ -90,6 +108,15 @@ The evaluation engine:
 - **Evaluation engine** — orchestrates evaluators (exact match, LLM judge, rule-based, RAG metrics, safety)
 - **Policy engine** — compares run scores to policy thresholds; emits pass/warn/fail verdicts. Policies are self-service: `GET /api/evaluation/policies` (any authenticated user), `POST /api/evaluation/policies/evaluate/:runId`, and `POST`/`PUT /api/evaluation/policies/:id`/`DELETE /api/evaluation/policies/:id` to create, update, and delete org-scoped policies (org_admin / admin only, enforced by `RbacGuard`) — no direct SQL seeding required
 - **Golden sets & calibration** — `GoldenSetsController` (any authenticated org member, via `JwtAuthGuard`): `GET`/`POST /api/evaluation/golden-sets`, `GET`/`POST /api/evaluation/golden-sets/:id/examples`, `GET`/`POST /api/evaluation/golden-sets/:id/calibration-runs`. Curates human-labeled example sets and runs `CalibrationService` to measure an LLM-judge evaluator's Cohen's-kappa agreement with human labels — see the `judge-cache.ts`/`golden-sets.ts` schema entries below and `docs/2026-08-12-calibration-methodology-and-kappa-safeguards-decision.md`
+- **PR decoration** — `POST /api/evaluation/pr-decoration` (new, `ee/pr-decoration`'s
+  `PrDecorationController`, co-located directly in `evaluation-service`'s `AppModule`) builds a
+  structured per-scenario decoration payload for a completed run, gated by
+  `EntitlementGuard`/`@RequiresEntitlement('pr-decoration')` — the fourth and final
+  Enterprise-gated route to go live (see "Enterprise Directory" below and
+  `docs/2026-08-14-pr-decoration-entitlement-gating-decision.md`). `.github/actions/evaluate-pr`
+  gained an opt-in `enable-pr-decoration` input (defaults `false`) that calls this endpoint
+  best-effort after the free pass/fail CI gate runs; the gate itself is unaffected by entitlement
+  state.
 
 ### Integration and Analytics (within Core Service)
 
@@ -106,7 +133,14 @@ Integration (`libs/core-integration`):
 Analytics (`libs/core-analytics`):
 - **Dashboard** — aggregated metrics: total runs, pass rate, avg cost, p95 latency
 - **Cost analytics** — per-provider, per-model token cost breakdown over time
-- **Audit trail** — append-only log of every mutation across the platform
+- **Audit trail** — append-only log of every mutation across the platform. `GET
+  /api/audit-trail` (`AuditController`, free tier, unchanged) returns the paginated view. `GET
+  /api/audit-trail/export` (new, `ee/audit-export`'s `AuditExportController`) streams a CSV of
+  the same org-scoped audit entries, gated by `EntitlementGuard`/`@RequiresEntitlement
+  ('audit-export')` — the second Enterprise-gated route to go live, after SSO (see "Enterprise
+  Directory" below and `docs/2026-08-13-audit-export-entitlement-gating-decision.md`). CSV
+  fields are escaped against formula/CSV-injection (leading `=`/`+`/`-`/`@`/tab/CR characters)
+  and the `?limit` query param is validated and capped at 5000 via `AuditExportQueryDto`.
 
 ---
 
@@ -249,6 +283,121 @@ tools:
 
 You are a helpful assistant...
 ```
+
+### `libs/licensing`
+
+Offline, signed license/entitlement engine for the Enterprise tier (open-core model — see
+`docs/2026-08-13-enterprise-licensing-entitlement-engine-decision.md`). `EntitlementService`
+verifies an `EVALOPS_LICENSE_KEY`-configured license envelope (Ed25519 signature, public key
+committed at `src/lib/keys/license-public-key.pem`) via `LicenseVerifierService`, and exposes a
+total (never-throwing) `hasFeature(feature: EnterpriseFeature)` check — features are
+`'sso' | 'rbac-custom-roles' | 'audit-export' | 'pr-decoration'`. Fails closed on any
+missing/malformed/expired license (`LicenseState.status`: `none | valid | expired_grace |
+expired | malformed`), with a 14-day `expired_grace` window before the entitlement fully lapses.
+`@RequiresEntitlement(feature)` + `EntitlementGuard` mirror `@Roles()`/`RbacGuard` from
+`libs/shared-auth`, for future route-level gating. `LicenseModule.forRoot()` registers the
+module (test-overridable public key). `scripts/licensing/sign-license.ts` (`npm run
+license:sign`) issues dev/test license envelopes via `signLicenseEnvelope()`. As of this phase,
+`apps/auth-service` imports `LicenseModule.forRoot()` and gates the relocated Microsoft Entra
+SSO routes (`ee/sso`) with `EntitlementGuard`/`@RequiresEntitlement('sso')` — the first
+real route/feature gating by this library (see "Auth Service" above and
+`docs/2026-08-13-sso-relocation-and-entitlement-gating-decision.md`); no free-tier route or
+behavior is affected. `apps/core-service` now also imports `LicenseModule.forRoot()` and gates
+the new `GET /api/audit-trail/export` route (`ee/audit-export`) with the same
+`EntitlementGuard`/`@RequiresEntitlement('audit-export')` pattern — the second Enterprise-gated
+route to go live; the existing free `GET /api/audit-trail` view is unchanged (see "Integration
+and Analytics" above and `docs/2026-08-13-audit-export-entitlement-gating-decision.md`).
+`apps/auth-service`'s existing `PermissionsModule` also now imports `CustomRolesModule`
+(`ee/rbac-custom-roles`), gating org-scoped custom RBAC role CRUD behind
+`EntitlementGuard`/`@RequiresEntitlement('rbac-custom-roles')` — the third Enterprise-gated
+route to go live; the existing free `UserRole`-enum role assignment is unchanged (see "Auth
+Service" above and `docs/2026-08-13-custom-rbac-entitlement-gating-decision.md`).
+`apps/evaluation-service` now also imports `LicenseModule.forRoot()` and gates the new `POST
+/api/evaluation/pr-decoration` route (`ee/pr-decoration`) with the same
+`EntitlementGuard`/`@RequiresEntitlement('pr-decoration')` pattern — the fourth and final
+Enterprise-gated route to go live, closing out the `EnterpriseFeature` union's originally-planned
+scope (see "Evaluation Service" above and
+`docs/2026-08-14-pr-decoration-entitlement-gating-decision.md`).
+
+---
+
+## Enterprise Directory (`ee/`)
+
+Proprietary Enterprise-tier code lives under `ee/`, licensed separately under `ee/LICENSE`
+(not open source, distinct from the root `LICENSE` FSL-1.1-MIT that governs the rest of the
+repository — see `docs/2026-08-13-fsl-relicensing-and-ee-directory-decision.md`). It is gated
+at runtime by `libs/licensing`'s `EntitlementGuard`.
+
+Structural exclusion from the OSS build is enforced by `@nx/enforce-module-boundaries`
+`depConstraints` in `eslint.config.mjs`: no `scope:shared`/`scope:core-integration`/
+`scope:core-analytics` library may import `scope:enterprise` (`ee/*`). `apps/frontend`
+(`scope:frontend`), `apps/cli` (`scope:cli`), and `apps/api-gateway` (`scope:api-gateway`)
+each carry an explicit `onlyDependOnLibsWithTags: ['scope:shared']` constraint with no
+`scope:enterprise`, structurally forbidding them from importing `ee/*` — most notably
+`apps/frontend`, a Vite browser bundle where an accidental `ee/*` import would ship
+proprietary code into the public frontend bundle. Only the composition-root apps
+(`auth-service`, `core-service`, `evaluation-service`) may import `ee/*`, and only behind
+an `EntitlementGuard`-protected route.
+
+`ee/sso` (`@evalops/ee-sso`) is the first `ee/*` library actually imported by a composition-root
+app: it holds the Microsoft Entra SSO connector (`MicrosoftAuthController`,
+`MicrosoftAuthService`), relocated out of `apps/auth-service` and wired into `AuthModule` behind
+`EntitlementGuard`/`@RequiresEntitlement('sso')`. It depends on user-provisioning behavior
+(`findUserByEmail`/`createUserFromMicrosoft`/`updateUserFromMicrosoft`/`login`) via a
+`SSO_USER_PROVISIONER` DI-token interface (`SsoUserProvisioner`) rather than importing
+`AuthService` directly, so `ee/sso` has no compile-time dependency on `apps/auth-service`
+internals; `AuthModule` binds `{ provide: SSO_USER_PROVISIONER, useExisting: AuthService }`. See
+`docs/2026-08-13-sso-relocation-and-entitlement-gating-decision.md`.
+
+`ee/audit-export` (`@evalops/ee-audit-export`) is the second `ee/*` library imported by a
+composition-root app: `AuditExportController`/`AuditExportService`, wired into `core-service`'s
+`AppModule` behind `EntitlementGuard`/`@RequiresEntitlement('audit-export')`, expose `GET
+/api/audit-trail/export`. It builds a CSV of the same org-scoped audit entries the free `GET
+/api/audit-trail` view (`AuditController`, `libs/core-analytics`) already returns —
+`organizationId` is read only from `@CurrentUser()`'s verified JWT claim, never from a client-
+suppliable param, mirroring `AuditController`'s org-scoping. CSV field values are escaped
+against formula/CSV-injection before being written, and the `?limit` query param is validated
+and capped at 5000 via `AuditExportQueryDto`. See
+`docs/2026-08-13-audit-export-entitlement-gating-decision.md`.
+
+`ee/rbac-custom-roles` (`@evalops/ee-rbac-custom-roles`) is the third `ee/*` library imported by
+a composition-root app: `CustomRolesController`/`CustomRolesService`, mounted inside
+`auth-service`'s existing `PermissionsModule` behind
+`EntitlementGuard`/`@RequiresEntitlement('rbac-custom-roles')`, expose CRUD for org-scoped
+custom RBAC roles (`GET|POST /api/admin/custom-roles`, `PATCH|DELETE
+/api/admin/custom-roles/:id`). `organizationId` is read only from `@CurrentUser()`'s verified
+JWT claim, mirroring `ee/sso`/`ee/audit-export`'s org-scoping. A custom role can never mutate or
+delete a role with `isSystemRole: true`; that invariant is enforced unconditionally inside
+`CustomRolesService`, independent of license state. Shipping this feature also surfaced and fixed
+a pre-existing CRITICAL bug: `PermissionsService.isSystemAdmin()` previously granted unconditional
+admin access to any role whose *name* contained "admin"/"superuser", which this phase's own
+user-namable custom roles made directly exploitable; it now correctly requires
+`role.isSystemRole === true && role.priority >= 100`. See
+`docs/2026-08-13-custom-rbac-entitlement-gating-decision.md`.
+
+`ee/pr-decoration` (`@evalops/ee-pr-decoration`) is the fourth and final `ee/*` library imported
+by a composition-root app, completing the `EnterpriseFeature` union's originally-planned scope:
+`PrDecorationController`/`PrDecorationService` are declared directly inside
+`evaluation-service`'s `AppModule` (not a separate library-owned module) behind
+`EntitlementGuard`/`@RequiresEntitlement('pr-decoration')`, exposing `POST
+/api/evaluation/pr-decoration`. It looks up the target run via a `RUN_LOOKUP` DI-token
+(`RunLookup` structural interface), mirroring `ee/sso`'s `SSO_USER_PROVISIONER` pattern, so it
+has no compile-time dependency on `evaluation-service`'s concrete `RunsService`; `organizationId`
+is checked against `@CurrentUser()`'s verified JWT claim, mirroring the org-scoping convention
+from the other three `ee/*` libraries. `.github/actions/evaluate-pr` gained an opt-in
+`enable-pr-decoration` input (default `false`) that calls this endpoint best-effort after the
+free CI gate runs, never affecting the gate's own pass/fail outcome. Co-locating the
+controller/service directly in `AppModule` (rather than a separate `PrDecorationModule`) was
+required to fix a real DI-scoping boot crash found during this phase — see
+`docs/2026-08-14-pr-decoration-entitlement-gating-decision.md` for the full history.
+
+This is a lint-time, static-AST boundary, not a runtime sandbox: `@nx/enforce-module-boundaries`
+only inspects `import`/`import()` nodes, so a `require()`/`eval()` call naming an `ee/*` path
+is invisible to it. A compensating `no-restricted-syntax` ESLint rule in `eslint.config.mjs`
+flags the obvious literal-string `require()`/`eval()`/dynamic-`import()` cases naming `ee/*` or
+`@evalops/ee-*`, but does not catch arbitrary obfuscation (dynamically constructed strings,
+indirect `eval`, etc.) — see `ee/README.md`'s "Known limitation" section for the accepted-risk
+framing. The real runtime boundary is `EntitlementGuard` plus code review, not the lint rule.
 
 ---
 

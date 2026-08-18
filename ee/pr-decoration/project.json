@@ -1,0 +1,24 @@
+{
+  "name": "ee-pr-decoration",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "ee/pr-decoration/src",
+  "projectType": "library",
+  "tags": ["scope:enterprise", "type:lib", "domain:pr-decoration"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/ee/pr-decoration",
+        "main": "ee/pr-decoration/src/index.ts",
+        "tsConfig": "ee/pr-decoration/tsconfig.lib.json",
+        "assets": ["ee/pr-decoration/*.md"]
+      }
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "options": { "jestConfig": "ee/pr-decoration/jest.config.cts" }
+    }
+  }
+}

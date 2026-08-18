@@ -1,0 +1,69 @@
+# Functional Source License, Version 1.1, MIT Future License
+
+## Abbreviation
+
+FSL-1.1-MIT
+
+## Notice
+
+Copyright 2026 [LICENSOR NAME] <!-- [CHECKPOINT]: fill in the correct legal entity name before release -->
+
+## Terms
+
+The Licensor hereby grants you the right to copy, modify, create derivative
+works, publicly perform, publicly display and/or sell the Software, subject
+to the limitations and conditions below.
+
+### Limitations
+
+You may not use the Software for or in connection with, or make available to
+any third party for or in connection with, a Competing Use. A Competing Use
+means making the Software available to third parties in a manner that
+substitutes for the Software, provides the same or substantially similar
+functionality as the Software, allows third parties to avoid purchasing a
+license to the Software, or is otherwise competitive with the Software.
+
+Competing Uses include, without limitation, hosting or offering the Software
+as a service, or embedding the Software or otherwise offering a modified
+version of the Software into or with a product or service you provide to
+third parties, where such product or service competes with a paid product
+or service offered by the Licensor that uses or incorporates the Software.
+
+You may make competing uses of the Software after the Change Date specified
+below (see "Grant of Future License"). If your use of the Software does not
+meet the definition of a Competing Use either currently or after the Change
+Date, you are not subject to this restriction.
+
+### Conditions
+
+If you make any use of the Software, you must preserve, in the source code
+of any derivative works you create as well as in any related documentation,
+all copyright, patent, trademark, and attribution notices from the source
+form of this Software that are provided to you.
+
+If you distribute the Software, you must make the source form of the
+Software available to any recipient (which may be satisfied by including
+this License and a link to the Licensor's public source repository), and you
+must license any derivative work you distribute under the same terms of this
+License, including this Limitations section.
+
+### Warranty and Liability
+
+THE SOFTWARE IS PROVIDED "AS IS," WITHOUT WARRANTY OF ANY KIND. THE LICENSOR
+WILL NOT BE LIABLE TO YOU FOR ANY DAMAGES ARISING OUT OF OR RELATED TO USE OR
+DISTRIBUTION OF THE SOFTWARE UNDER THIS LICENSE.
+
+## Grant of Future License
+
+The Licensor hereby grants you the right to use the Software under the terms
+of the MIT license as published by the Open Source Initiative, effective on
+the second anniversary of the date the Software is published, or if
+undefined, the date the Software is initially made available under this
+License.
+
+`[CHECKPOINT]`: this file ships as structurally-correct FSL-1.1-MIT placeholder
+text (per the official https://fsl.software/FSL-1.1-MIT.template.md template,
+fill-in fields only). The `[LICENSOR NAME]` legal entity name and any Change
+Date anchor beyond the standard 2-year MIT-conversion term are business/legal
+decisions requiring sign-off before public release or tag — do not treat this
+file as final binding legal text until that checkpoint is cleared.
