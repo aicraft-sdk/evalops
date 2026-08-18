@@ -248,3 +248,48 @@ decision. Rationale:
   system-enforced caps on turns-per-scenario and scenarios-per-suite if unbounded suite size is
   not actually an intended capability; (3) wire server-side request cancellation so an abandoned
   client doesn't leave orphaned work running.
+
+**Round 6 (final) — `pollRun()`'s catch block couldn't distinguish a transient failure from a
+real HTTP error, so a genuinely broken run silently retried for the full 10-minute budget instead
+of failing on the first poll.** Round 5's fix wrapped `pollRun()`'s per-poll `request()` call in a
+`try/catch` that logs and retries on ANY caught error, but `request()`'s two throw paths —
+`AbortSignal.timeout` firing (transient) vs. the `if (!resp.ok) { throw new Error(...) }` branch
+firing on a real 4xx/5xx (permanent) — were both plain, untyped `Error` objects, indistinguishable
+in the catch block. A bad run ID (404) or expired/invalid auth (401/403) therefore retried silently
+every 3s for the full `timeoutMs` (600,000ms in production) before eventually surfacing only the
+generic `Run ${runId} timed out after 600s` message, discarding the actionable HTTP error entirely.
+Both a re-review and a re-hunt independently reproduced this live against a real fake HTTP server.
+Fixed by adding a `class HttpStatusError extends Error` (carrying `status` and the already-captured
+response body text) thrown only by `request()`'s `!resp.ok` branch; `pollRun()`'s catch block now
+checks `err instanceof HttpStatusError` and re-throws immediately (fail-fast) for that case, while
+every other error type (native `AbortSignal.timeout`/`DOMException`, network-level failures like
+`TypeError: fetch failed`) keeps the existing non-fatal-log-and-retry behavior unchanged. The
+outer genuinely-hung-forever contract (`while (Date.now() - start < timeoutMs)` and the final
+`throw new Error(...timed out after...)`) was not touched by this change.
+
+This round also closed the actual root cause of the sub-chain's length: all five prior rounds were
+verified only by ad-hoc manual reproduction against a throwaway or test-only copy of `run.js`,
+each covering exactly one failure shape and leaving an adjacent one uncovered. A real, persisted
+automated test file (`.github/actions/evaluate-pr/run.test.js`, Node's built-in `node:test` module
+— no new dependency, no established alternative convention exists for testing a plain composite-
+action script outside the Nx project graph) now exercises `pollRun()` directly against a real
+`http.Server`, covering both contracts together in the same suite: (a) tolerates one transient
+network-level failure (`req.socket.destroy()` before any response) then succeeds — proving Round
+5's behavior still holds; (b) fails fast (~3ms, not the full budget) on a real, fast HTTP 404 for
+every poll, asserting the thrown error `instanceof HttpStatusError` with `status === 404` — proving
+this round's fix. Run via `node --test .github/actions/evaluate-pr/run.test.js` (no `package.json`
+was added in `.github/actions/evaluate-pr/` to avoid Nx auto-detecting a stray project from a bare
+`package.json` with no `nx`/`type` awareness of the composite action's own ESM resolution; a
+documented `node --test` invocation was judged the safer, equally-idiomatic option the task
+explicitly allowed). Making `pollRun()`/`request()`/`HttpStatusError` importable also required
+guarding `run.js`'s previously-unconditional bottom-of-file `main().catch(...)` auto-invocation
+behind an `if (process.argv[1] === fileURLToPath(import.meta.url))` "is this the entry module"
+check — otherwise merely importing the file for testing would itself run `main()` and call
+`process.exit()`. Verified this glue change is behavior-preserving for the real composite-action
+invocation path (`node run.js` with no env vars still exits 1 with the original error message).
+
+**Decision: this closes the fetch-timeout sub-chain.** Six rounds total (5 timeout-hardening +
+this HTTP-status-vs-transient distinction), each verified with a real HTTP server reproduction
+against the actual shipped code rather than assumption. The separately-documented
+`RUN_TIMEOUT_MS = 600_000` budget-sizing residual risk above is a different, still-accepted issue,
+unrelated to this fix, and remains open as documented.

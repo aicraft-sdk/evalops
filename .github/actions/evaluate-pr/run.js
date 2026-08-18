@@ -6,6 +6,7 @@ import https from 'https';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 const API_KEY = process.env.EVALOPS_API_KEY;
 const SERVICE_TOKEN = process.env.EVALOPS_SERVICE_TOKEN;
@@ -37,6 +38,19 @@ function authHeaders() {
 // hang-guard used for simple metadata GETs.
 const RUN_TIMEOUT_MS = 600_000;
 
+// Thrown only for a real HTTP 4xx/5xx response (the server answered, just with an error status).
+// Distinguishes this permanent-failure case from AbortSignal.timeout firing (DOMException) or a
+// network-level failure (e.g. TypeError: fetch failed) - both of which remain plain, non-
+// HttpStatusError throws and stay in the "transient, safe to retry" category.
+class HttpStatusError extends Error {
+  constructor(status, method, url, bodyText) {
+    super(`${method} ${url} → HTTP ${status}: ${bodyText}`);
+    this.name = 'HttpStatusError';
+    this.status = status;
+    this.body = bodyText;
+  }
+}
+
 async function request(method, urlPath, body, timeoutMs = 10_000) {
   const url = `${API_URL}${urlPath}`;
   const resp = await fetch(url, {
@@ -47,7 +61,7 @@ async function request(method, urlPath, body, timeoutMs = 10_000) {
   });
   if (!resp.ok) {
     const text = await resp.text().catch(() => '');
-    throw new Error(`${method} ${url} → HTTP ${resp.status}: ${text}`);
+    throw new HttpStatusError(resp.status, method, url, text);
   }
   return resp.json();
 }
@@ -66,6 +80,12 @@ async function pollRun(runId, timeoutMs = 600_000) {
       const run = await request('GET', `/api/evaluation/runs/${runId}`);
       if (run.status === 'completed' || run.status === 'failed') return run;
     } catch (err) {
+      if (err instanceof HttpStatusError) {
+        // The server responded with a real HTTP 4xx/5xx (e.g. a bad run ID -> 404, or
+        // expired/invalid auth -> 401/403). This is a permanent failure, not a transient
+        // blip - fail fast instead of silently retrying for the full outer timeoutMs budget.
+        throw err;
+      }
       // Non-fatal: a single slow/failed poll (timeout, transient network blip, etc.) should
       // not abort the whole run - retry on the next iteration within the outer timeoutMs
       // budget, matching maybeDecorate()'s existing non-fatal logging style.
@@ -199,7 +219,13 @@ async function maybeDecorate(completedRuns) {
   }
 }
 
-main().catch(err => {
-  console.error('Error:', err.message);
-  process.exit(1);
-});
+// Only auto-run when executed directly (`node run.js` / the composite action's `run:` step),
+// not when imported as a module by run.test.js.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch(err => {
+    console.error('Error:', err.message);
+    process.exit(1);
+  });
+}
+
+export { request, pollRun, HttpStatusError };
